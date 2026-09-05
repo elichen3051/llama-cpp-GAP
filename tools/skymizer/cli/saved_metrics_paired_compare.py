@@ -150,7 +150,7 @@ META_MUST_MATCH_COMMON = ("kind", "ref_model", "dataset", "subset", "split",
                           "swa_full")
 META_MUST_MATCH_BY_KIND = {
     "vlm_kld_metrics": ("ref_mmproj", "image_min_tokens", "image_max_tokens",
-                        "media_wrapper"),
+                        "media_wrapper", "image_preprocessing"),
     "llm_kld_metrics": (),
 }
 META_MUST_MATCH = META_MUST_MATCH_COMMON + META_MUST_MATCH_BY_KIND["vlm_kld_metrics"]

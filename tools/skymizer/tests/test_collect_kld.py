@@ -24,6 +24,7 @@ def _skip_scorer_preflight(monkeypatch):
     """main() preflights the scorer binary's --vlmk-version before anything
     else; the main() tests here point --llama-vlm-kld at placeholder files,
     so stub the gate (it has its own tests in test_collect_llm_kld.py)."""
+    monkeypatch.setattr(ck, "DEFAULT_RESIZE_BACKEND", "pillow")
     monkeypatch.setattr(ck, "preflight_scorer_vlmk_version",
                         lambda path: kio.VLMK_VERSION)
 
@@ -42,6 +43,7 @@ def test_build_kld_manifest_entry(tmp_path):
         "tokens_in": str(tmp_path / "prep" / "tokens.bin"),
         "n_prefill": 42,
         "output_metrics": str(tmp_path / "m.bin"),
+        "image_metadata": str(tmp_path / "prep" / "meta.json"),
     }
 
 
@@ -86,7 +88,11 @@ def _make_row(tmp_path, npos=5, n_prefill=7, n_answer=5, vocab=11, seed=2):
 
 def test_postprocess_converts_and_reports(tmp_path):
     row = _make_row(tmp_path)
+    image_meta = {"image_preprocessing": {"version": 1, "resize_backend": "pillow"},
+                  "image_processor_config": {"generation_setting": "preserved"}}
+    (row["prep_dir"] / "meta.json").write_text(json.dumps(image_meta))
     out = ck.postprocess_kld_result(row, num_eval_tokens=-1, elapsed_s=3.5)
+    assert json.loads(row["metrics_path"].with_suffix(".preprocess.json").read_text()) == image_meta
     npz_path = row["metrics_path"].with_suffix(".npz")
     assert npz_path.exists()
     assert not row["metrics_path"].exists()      # .bin deleted after conversion
@@ -224,6 +230,7 @@ def test_scorer_argv_forwards_explicit_execution_protocol(tmp_path):
         "--ref-model", args.ref_model, "--ref-mmproj", args.ref_mmproj,
         "--cand-model", args.cand_model, "--cand-mmproj", args.cand_mmproj,
         "--manifest", str(manifest),
+        "--images-preprocessed",
         "--num-eval-tokens", "1024",
         "--image-min-tokens", "-1", "--image-max-tokens", "-1",
         "-b", "2048", "-c", "32768", "-ub", "512", "-ngl", "99",
@@ -454,10 +461,10 @@ def test_main_n_ctx_preflight_exits_before_launching_vlm_kld(tmp_path, monkeypat
     monkeypatch.setattr(vlm_prep_lib, "load_dataset_sorted", lambda *a: ds)
     monkeypatch.setattr(vlm_prep_lib, "load_tokenizer", lambda *a: object())
 
-    def fake_prep_row(row, tok, prep_dir):
+    def fake_prep_row(row, tok, prep_dir, **kwargs):
         prep_dir.mkdir(parents=True)
         (prep_dir / "scratch.txt").write_text("x")
-        return {"num_images": 1, "n_prefill": 30, "n_answer": 6}
+        return {"num_images": 1, "n_prefill": 30, "n_answer": 6, "n_past_expected": 30}
 
     monkeypatch.setattr(vlm_prep_lib, "prep_row", fake_prep_row)
     monkeypatch.setattr("sys.argv", [
@@ -506,3 +513,80 @@ def test_sort_desc_is_recorded_but_not_an_identity_field(tmp_path, monkeypatch):
     assert default_args.swa_full is False
     assert ck.build_collect_meta(default_args)["swa_full"] is False
     assert "swa_full" in ck.IDENTITY_FIELDS
+
+
+def test_preprocessing_identity_prevents_extending_legacy_or_different_backend(tmp_path):
+    meta = ck.build_collect_meta(_meta_args(tmp_path))
+    legacy = {k: v for k, v in meta.items() if k != "image_preprocessing"}
+    (tmp_path / "collect_meta.json").write_text(json.dumps(legacy))
+    with pytest.raises(SystemExit, match="image_preprocessing"):
+        ck.ensure_collect_meta(tmp_path, meta)
+    different = dict(meta, image_preprocessing={**meta["image_preprocessing"], "resize_backend": "torchvision"})
+    (tmp_path / "collect_meta.json").write_text(json.dumps(different))
+    with pytest.raises(SystemExit, match="image_preprocessing"):
+        ck.ensure_collect_meta(tmp_path, meta)
+
+
+def test_postprocess_rejects_actual_prefill_drift(tmp_path):
+    row = _make_row(tmp_path)
+    row["n_past_expected"] = row["n_prefill"]
+    with pytest.raises(ValueError, match="actual prefill position"):
+        ck.postprocess_kld_result(row, num_eval_tokens=-1, elapsed_s=0.0)
+
+
+@pytest.mark.parametrize("flag,enabled", [(None, True), ("--image-preprocessing", True),
+                                         ("--no-image-preprocessing", False)])
+def test_collector_cli_image_preprocessing_switch(flag, enabled, tmp_path, monkeypatch):
+    argv = ["collect_kld.py", "--ref-model", "ref.gguf", "--ref-mmproj", "ref-mmproj.gguf",
+            "--cand-model", "cand.gguf", "--cand-mmproj", "cand-mmproj.gguf",
+            "--dataset", "fake/dataset", "--out", str(tmp_path)]
+    monkeypatch.setattr("sys.argv", argv + ([flag] if flag else []))
+    args = ck.parse_args()
+    assert args.image_preprocessing is enabled
+    assert ("--images-preprocessed" in ck._scorer_argv(args, tmp_path / "manifest.jsonl")) is enabled
+    if not enabled:
+        assert ck.build_collect_meta(args)["image_preprocessing"]["resize_backend"] == "native"
+        assert any("native mtmd" in line for line in ck._header_lines(args))
+
+
+@pytest.mark.parametrize("enabled", [False, True])
+def test_prep_mode_controls_manifest_contract_and_position_validation(tmp_path, monkeypatch, enabled):
+    import cli.prep_vlm_score_from_hf as prep_lib
+    args = _meta_args(tmp_path, image_preprocessing=enabled, image_resize_backend="torchvision")
+    state = ck._PrepState(args)
+    tokenizer = object()
+    state.tok_cache["fake/model"] = tokenizer
+
+    def fake_prep(row, tok, directory, *, resize_backend, image_preprocessing):
+        assert tok is tokenizer and directory == tmp_path / "prep"
+        assert resize_backend == "torchvision" and image_preprocessing is enabled
+        meta = {"num_images": 1, "n_prefill": 7, "n_answer": 5}
+        if enabled:
+            meta["n_past_expected"] = 7
+        return meta
+
+    monkeypatch.setattr(prep_lib, "prep_row", fake_prep)
+    row = _make_row(tmp_path)
+    row.update(ck._prep(args, {"generation_model_name_or_path": "fake/model"}, row["prep_dir"], state))
+    entry = ck._spec().manifest_entry(row)
+    assert ("image_metadata" in entry) is enabled
+    assert ("n_past_expected" in row) is enabled
+    if not enabled:
+        assert ck.postprocess_kld_result(row, num_eval_tokens=-1, elapsed_s=0.0)[-1] == "OK"
+
+
+@pytest.mark.parametrize("first_enabled", [False, True])
+def test_collection_rejects_mixing_native_and_aligned_modes(tmp_path, first_enabled):
+    original = ck.build_collect_meta(_meta_args(tmp_path, image_preprocessing=first_enabled))
+    changed = ck.build_collect_meta(_meta_args(tmp_path, image_preprocessing=not first_enabled))
+    ck.ensure_collect_meta(tmp_path, original)
+    ck.ensure_collect_meta(tmp_path, original)
+    with pytest.raises(SystemExit, match="image_preprocessing"):
+        ck.ensure_collect_meta(tmp_path, changed)
+
+
+def test_native_collection_identity_ignores_unused_resize_backend(tmp_path):
+    pillow = ck.build_collect_meta(_meta_args(tmp_path, image_preprocessing=False, image_resize_backend="pillow"))
+    torchvision = ck.build_collect_meta(_meta_args(tmp_path, image_preprocessing=False, image_resize_backend="torchvision"))
+    assert pillow["image_preprocessing"] == torchvision["image_preprocessing"]
+    assert set(pillow["image_preprocessing"]["packages"]) == {"pillow"}

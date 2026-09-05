@@ -31,6 +31,31 @@ smallest `num_images`, `--row -1` = largest (under default `--sort-by`).
 `--row` and `--item-id` are mutually exclusive; exactly one must be supplied.
 `--row` accepts negative indices (Python semantics).
 
+#### Aligned image preprocessing
+
+With the default `--image-preprocessing`, VLM prep resizes each original image once using the dataset row's effective HF settings, including nested `vllm_mm_processor_kwargs.size` overrides. It writes lossless RGB PNGs and verifies every image's token count against the corresponding run of reference placeholder IDs. The reference text and `tokens.bin` are unchanged.
+
+Install the default resize backend with `uv sync --project tools/skymizer --extra vision`. The default is `--image-resize-backend torchvision`, matching the inspected Transformers generation environment (torch 2.11.0, torchvision 0.26.0). This is an explicit assumption for older datasets that did not record their backend. Use `--image-resize-backend pillow` when generation used the PIL backend. Kimi always uses its source processor's Pillow bicubic resize and bottom/right black padding before normalization. Backend and package versions are recorded; there is no automatic fallback.
+
+When enabled, `collect_kld.py` passes `--images-preprocessed` and each row's `image_metadata` path to the scorer. In this mode mtmd validates patch alignment and directly normalizes/encodes the RGB image: it does not resize or pad it again. `--image-min-tokens` and `--image-max-tokens` do not alter prepared images, including Kimi outputs above the nominal cap. Direct scorer calls must pass both `--images-preprocessed` and `--image-metadata DIR/meta.json`.
+
+For each side, before its forward pass, the scorer verifies the PNG dimensions, per-image token counts, M-RoPE grid coordinates where applicable, and every non-image prefix token against the stored reference IDs. Kimi's complete `image<|media_content|>` prelude is restored by mtmd. GLM-4.6V is registered with its own wrapper and temporal factor: the recorded default size 12544/9633792 corresponds to 8/6144 image tokens, not 16/12288.
+
+Each aligned `meta.json` includes `image_preprocessing` (version, backend, package versions, source/output RGB hashes, original/resized/final sizes, merged grids and token counts) and `n_past_expected`. Successful collections retain that metadata in `metrics/NNN_ITEM.preprocess.json` even when temporary prep directories are removed. `collect_meta.json.image_preprocessing` is a shard and comparison identity field. Use a fresh output directory to re-score existing vLLM references; legacy and aligned results cannot be mixed. Do not feed prepared images through the HF resize step again: Gemma and Kimi preprocessing is deterministic but not generally idempotent.
+
+Both `collect_kld.py` and standalone `prep_vlm_score_from_hf.py` accept the same switch:
+
+| Option | Images passed to mtmd | Resize and padding |
+| --- | --- | --- |
+| `--image-preprocessing` (default) | HF-aligned RGB images with geometry metadata | Prepared once in Python; mtmd preserves geometry |
+| `--no-image-preprocessing` | Original dataset images saved losslessly as RGB PNGs | Native mtmd processing, controlled by `--image-min-tokens` / `--image-max-tokens` |
+
+Disabled mode skips HF geometry checks and the aligned `n_past_expected` check. The collector omits both `--images-preprocessed` and the manifest's `image_metadata` field. Reference text, IDs, and thinking mode are unchanged. `--image-resize-backend` is ignored in this mode, and the vision extra is not required for image preparation. Always start from dataset originals; removing the scorer flag from already resized inputs would process those inputs again.
+
+Native collections record `image_preprocessing.resize_backend="native"`, Pillow's version, original sizes and RGB hashes. They also retain `.preprocess.json` sidecars, without claiming an HF grid or expected decoder position. Use separate output directories for native and aligned collections. Native mode uses the current mtmd build, including existing model fixes; it does not restore an older binary. Historical collections with no preprocessing identity remain separate from either newly recorded mode.
+
+See [validation coverage and reproducibility limits](vision-alignment-validation.md) for the tested models and datasets.
+
 #### `meta.json` schema
 
 ```json
@@ -57,10 +82,7 @@ smallest `num_images`, `--row -1` = largest (under default `--sort-by`).
 }
 ```
 
-`collect_kld.py` reads `n_prefill`. The full `image_processor_config`
-and derived `image_token_limits` are carried for diagnostics; scorer image
-token bounds come from the global `collect_kld.py --image-min-tokens` /
-`--image-max-tokens` flags, whose default `-1` lets mtmd use model metadata.
+`collect_kld.py` reads `n_prefill` and `n_past_expected`. The full `image_processor_config` and derived `image_token_limits` describe generation-time settings. Prepared image geometry is enforced by `image_preprocessing`; the global scorer token bounds do not resize prepared images.
 
 #### Validation (prep aborts non-zero on any of these)
 
@@ -72,7 +94,7 @@ token bounds come from the global `collect_kld.py --image-min-tokens` /
 - `<__media__>` marker count after decode-and-collapse != `num_images`
 - model family not registered in `MODEL_FAMILIES` (longest-prefix match;
   currently `Qwen/Qwen3-VL`, `Qwen/Qwen3.5`, `Qwen/Qwen3.6`, `google/gemma-4`,
-  and `moonshotai/Kimi-VL`)
+  `moonshotai/Kimi-VL`, and `zai-org/GLM-4.6V`)
 
 #### How `formatted_chat.txt` is constructed (decode-and-collapse)
 
@@ -107,32 +129,17 @@ integer (`n_prefill`) — once per side, through both (model, mmproj) pairs.
 | `--formatted-chat formatted_chat.txt` | `formatted_chat.txt` | Conditioning prompt with `<__media__>` markers; mtmd re-tokenizes it and segments it into text + image chunks |
 | `--tokens-in tokens.bin` | `tokens.bin` (vLLM's `input_ids` as `int32[L]`) | Source of the **answer tokens** that are teacher-forced |
 | `--n-prefill <int>` | `meta.json["n_prefill"]` (forwarded by `collect_kld.py`) | Slice index — answer tokens are `tokens_full[n_prefill:]` |
+| `--image-metadata meta.json` with `--images-preprocessed` | `meta.json` | Required geometry and reference-prefix checks for aligned input |
 | `--output-metrics <path>` | (output) | VLMK binary metric dump |
 
-In `--manifest` mode each row's five fields above are packed into one JSONL
+In `--manifest` mode each row's inputs and output path are packed into one JSONL
 entry; the contract is identical, just batched so the two models + mmprojs
 load once for the whole sweep.
 
 **Two-phase forward pass**, executed for BOTH sides per row:
 
-1. **Prefill** — mtmd tokenizes `formatted_chat.txt` afresh with the LLM's
-   tokenizer, splices in the image embeddings at each `<__media__>`, and
-   runs `mtmd_helper_eval_chunks` to fill the KV cache. The prefill *length*
-   on the llama.cpp side may differ from vLLM's `n_prefill` because each
-   side may emit a different number of vision-pad tokens per image — that's
-   expected (vision-token drift is precisely what the KLD-family metrics
-   are designed to surface). This is why `--image-min-tokens` /
-   `--image-max-tokens` matter: they let you force mtmd to use the same
-   per-image token budget vLLM used (the derived
-   `image_token_limits` block in `meta.json` carries those exact numbers
-   for inspection; pass them explicitly via `collect_kld.py
-   --image-min-tokens` / `--image-max-tokens` when you want those global
-   bounds used by the scorer). The same budget yields the same token count
-   only where mtmd's resize matches the HF processor's (Qwen, Gemma-4);
-   Kimi-VL's does not (HF pads grids past the cap; mtmd rounds to the
-   nearest grid), so its rows keep a small, common-mode drift that
-   `n_past_actual` records — see `derive_image_token_limits` in the prep
-   script.
+1. **Prefill** - mtmd tokenizes the saved prompt and inserts image embeddings. Prepared RGB geometry is preserved and every text/image chunk is checked against the reference prefix before evaluation. Gemma and Kimi use sequential positions, so `n_past_actual == n_prefill`. Qwen and GLM use M-RoPE, so their expected position count is the number of text tokens plus the sum of each image's longest merged-grid side; equal position counts alone do not prove equal grids.
+
 2. **Teacher-forced answer scoring** — the scorer takes
    `tokens_full[n_prefill:]` as the answer tokens, `llama_decode`s them
    through both models in `--tf-chunk`-sized chunks, and computes the
@@ -142,11 +149,12 @@ load once for the whole sweep.
 **Why the split:** the answer tokens come straight from the dataset's
 `input_ids` — vLLM's tokenization, frozen at ground-truth generation time —
 so the candidate is scored against the **same** target sequence as the
-reference. Any divergence in the metrics is from quantization (and possibly
-vision-token drift), not from tokenizer-version mismatch. The remaining
-`meta.json` fields (`image_processor_config`, `num_images`,
-`sum_vision_tokens`, `ref_answer`, …) are metadata for `collect_kld.py`
-and downstream analysis, not direct scorer inputs.
+reference. In aligned mode, prefix tokenization and image-grid mismatches
+abort scoring. This removes those input differences from the quantization
+comparison; it does not establish numerical equivalence between llama.cpp and
+vLLM. `meta.json.image_preprocessing` supplies the scorer's geometry contract,
+while the original processor settings and answer metadata remain available
+for downstream analysis.
 
 **Performance / teacher-forcing batching.** The answer tokens are known
 ground-truth, so they are teacher-forced in chunks (one `llama_decode` per

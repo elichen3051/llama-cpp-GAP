@@ -429,3 +429,7 @@ zero-width bootstrap CI that would report spurious "significant" verdicts).
 - The main verdict lands in a `## Results` table.
   `entropy (nats)` is candidate self entropy: it is reported per
   candidate only, not as a paired reference-vs-candidate distance.
+
+### Image preprocessing identity
+
+For VLM collections, `image_preprocessing` must match across the compared directories, including its version, selected resize backend, and package versions. `--no-image-preprocessing` collections identify their backend as `native` and cannot match an aligned collection. A missing field identifies historical preprocessing and cannot match either newly recorded mode. This check is separate from equal `n_past_actual`: M-RoPE position counts can hide different image grids. Re-score into fresh directories using the original reference IDs when migrating to aligned preprocessing.

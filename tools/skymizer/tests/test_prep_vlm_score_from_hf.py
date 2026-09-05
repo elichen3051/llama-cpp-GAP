@@ -1,7 +1,7 @@
 """Tests for prep_vlm_score_from_hf.py helpers.
 
-Hermetic: no `datasets`, `transformers`, `torch`, or PIL imports. Images and
-tokenizer behavior are tiny local fakes.
+Hermetic: no models, network access, or framework runtime. Images use Pillow;
+tokenizer behavior uses tiny local fakes.
 """
 
 import json
@@ -95,11 +95,15 @@ def _kimi_tok():
 
 
 def test_prep_row_writes_files_and_returns_meta_matching_disk(tmp_path):
-    row = _row()
+    from PIL import Image
+    ids = [10, 15] + [11] * 256 + [16, 12, 20, 21]
+    row = _row(input_ids=ids, input_tokens_len=len(ids), n_prefill_tokens=len(ids) - 2,
+               labels=[-100] * (len(ids) - 2) + ids[-2:], images=[Image.new("RGB", (512, 512))])
 
-    meta = prep.prep_row(row, _tok(), tmp_path)
+    meta = prep.prep_row(row, _tok(), tmp_path, resize_backend="pillow")
 
-    assert (tmp_path / "img_0.png").read_bytes() == b"PNG"
+    assert Image.open(tmp_path / "img_0.png").size == (512, 512)
+    assert meta["image_preprocessing"]["images"][0]["vision_tokens"] == 256
     assert np.fromfile(tmp_path / "tokens.bin", dtype=np.int32).tolist() == row["input_ids"]
     assert (tmp_path / "formatted_chat.txt").read_text(encoding="utf-8") == (
         prep.build_formatted_chat(row, _tok())
@@ -548,7 +552,7 @@ def test_derive_image_token_limits_gemma4_schema(cfg):
         "patch_size": 16,
         "pooling_kernel_size": 3,
         "max_soft_tokens": 280,
-        "image_min_tokens": -1,
+        "image_min_tokens": 1,
         "image_max_tokens": 280,
     }
     for v in limits.values():
@@ -726,3 +730,128 @@ def test_load_dataset_sorted_can_sort_descending(monkeypatch):
     prep.load_dataset_sorted("ds", "", "train", "num_images", sort_desc=True)
     assert calls == [("load", "ds", None, "train"), ("sort", ["num_images"], False),
                      ("load", "ds", None, "train"), ("sort", ["num_images"], True)]
+
+
+@pytest.mark.parametrize("family,size,extra,expected", [
+    ("Qwen2VLImageProcessor", (1280, 720), {}, ((1280, 704), (40, 22))),
+    ("Gemma4ImageProcessor", (518, 80), {}, ((2016, 288), (42, 6))),
+    ("Gemma4ImageProcessor", (152, 53), {}, ((1344, 432), (28, 9))),
+    ("KimiVLImageProcessor", (1080, 1090), {}, ((924, 924), (33, 33))),
+    ("KimiVLImageProcessor", (1793, 1793), {"in_token_limit": 16384}, ((1820, 1820), (65, 65))),
+    ("Glm46VImageProcessor", (448, 294), {}, ((448, 280), (16, 10))),
+    ("Glm46VImageProcessor", (10000, 10000), {}, ((2184, 2184), (78, 78))),
+])
+def test_hf_geometry_regressions(family, size, extra, expected):
+    from lib.vlm_image_preprocess import image_geometry
+    configs = {
+        "Qwen2VLImageProcessor": _IMG_CFG["hf_image_processor"],
+        "Gemma4ImageProcessor": {"patch_size": 16, "pooling_kernel_size": 3, "max_soft_tokens": 280},
+        "KimiVLImageProcessor": _KIMI_IMG_CFG["hf_image_processor"],
+        "Glm46VImageProcessor": {"patch_size": 14, "merge_size": 2, "temporal_patch_size": 2,
+                                 "size": {"shortest_edge": 12544, "longest_edge": 9633792}},
+    }
+    ip = {**configs[family], "image_processor_type": family, **extra}
+    _, output, grid = image_geometry(*size, ip)
+    assert (output, grid) == expected
+
+
+def test_effective_overrides_include_nested_glm_size_and_gemma_budget():
+    from lib.vlm_image_preprocess import effective_image_config
+    cfg = {"hf_image_processor": {
+        "image_processor_type": "Glm46VImageProcessor", "patch_size": 14,
+        "merge_size": 2, "temporal_patch_size": 2, "max_pixels": 9633792,
+        "size": {"shortest_edge": 12544, "longest_edge": 9633792}},
+        "vllm_mm_processor_kwargs": {"size": {"longest_edge": 6422528}}}
+    assert prep.derive_image_token_limits(cfg)["image_max_tokens"] == 4096
+    assert prep.derive_image_token_limits(cfg)["image_min_tokens"] == 8
+    cfg = {"hf_image_processor": {"image_processor_type": "Gemma4ImageProcessor",
+                                   "patch_size": 16, "pooling_kernel_size": 3, "max_soft_tokens": 280},
+           "gemma4_vision_token_config": {"max_soft_tokens": 280},
+           "vllm_mm_processor_kwargs": {"max_soft_tokens": 560}}
+    assert effective_image_config(cfg)["max_soft_tokens"] == 560
+    assert prep.derive_image_token_limits(cfg)["image_max_tokens"] == 560
+
+
+def test_kimi_padding_is_black_before_normalization():
+    from PIL import Image
+    from lib.vlm_image_preprocess import prepare_images
+    images, contract = prepare_images([Image.new("RGB", (17, 29), (255, 255, 255))],
+                                      _KIMI_IMG_CFG, "pillow")
+    assert images[0].size == (28, 56)
+    assert images[0].getpixel((16, 28)) == (255, 255, 255)
+    assert images[0].getpixel((17, 28)) == (0, 0, 0)
+    assert images[0].getpixel((0, 29)) == (0, 0, 0)
+    assert contract["images"][0]["vision_tokens"] == 2
+    assert contract["images"][0]["source_rgb_sha256"] != contract["images"][0]["rgb_sha256"]
+
+
+def test_prep_rejects_swapped_per_image_counts_even_when_sum_and_max_match(tmp_path):
+    from PIL import Image
+    prefix = [10, 163602, 4017, 163603] + [163605] * 3 + [163604]
+    prefix += [163602, 4017, 163603] + [163605] * 2 + [163604, 12]
+    ids = prefix + [20]
+    row = _row(generation_model_name_or_path="moonshotai/Kimi-VL-A3B-Instruct",
+               input_ids=ids, input_tokens_len=len(ids), n_prefill_tokens=len(prefix),
+               generated_tokens_len=1, labels=[-100] * len(prefix) + [20],
+               num_images=2, sum_vision_tokens=5, max_vision_tokens=3,
+               image_processor_config=json.dumps(_KIMI_IMG_CFG),
+               images=[Image.new("RGB", (28, 56)), Image.new("RGB", (28, 84))])
+    with pytest.raises(prep.PrepError, match="per-image reference placeholder"):
+        prep.prep_row(row, _kimi_tok(), tmp_path, resize_backend="pillow")
+    assert not (tmp_path / "tokens.bin").exists()
+
+
+def test_glm_image_wrapper_is_collapsed():
+    tok = FakeTok({10: "Question ", 11: "<|image|>", 12: " prompt",
+                   15: "<|begin_of_image|>", 16: "<|end_of_image|>"})
+    row = _row(generation_model_name_or_path="zai-org/GLM-4.6V-Flash")
+    assert prep.build_formatted_chat(row, tok) == "Question <__media__> prompt"
+    assert prep.resolve_image_pad_id(tok, row["generation_model_name_or_path"]) == 11
+
+
+def test_native_prep_preserves_original_pixels_and_reference_without_resize_dependencies(tmp_path, monkeypatch):
+    from PIL import Image
+    import lib.vlm_image_preprocess as image_prep
+
+    image = Image.new("RGB", (518, 80), (27, 59, 91))
+    ids = [10, 17] + [18] * 252 + [19, 12, 20, 21]
+    row = _row(generation_model_name_or_path="google/gemma-4-E4B-it",
+               images=[image], input_ids=ids, input_tokens_len=len(ids),
+               n_prefill_tokens=len(ids) - 2, labels=[-100] * (len(ids) - 2) + ids[-2:],
+               sum_vision_tokens=252, max_vision_tokens=252,
+               image_processor_config=json.dumps({"hf_image_processor": {
+                   "image_processor_type": "Gemma4ImageProcessor", "patch_size": 16,
+                   "pooling_kernel_size": 3, "max_soft_tokens": 280}}))
+    aligned = tmp_path / "aligned"
+    prep.prep_row(row, _gemma_tok(), aligned, resize_backend="pillow")
+    assert Image.open(aligned / "img_0.png").size == (2016, 288)
+
+    def package_version(package):
+        assert package == "pillow", "native prep must not require torch or torchvision"
+        return "test-version"
+
+    def no_geometry(*args):
+        pytest.fail("native prep must not compute HF geometry")
+
+    monkeypatch.setattr(image_prep, "version", package_version)
+    monkeypatch.setattr(image_prep, "image_geometry", no_geometry)
+    native = tmp_path / "native"
+    meta = prep.prep_row(row, _gemma_tok(), native, image_preprocessing=False)
+    restored = Image.open(native / "img_0.png")
+    assert restored.size == image.size and restored.tobytes() == image.tobytes()
+    for filename in ["tokens.bin", "formatted_chat.txt"]:
+        assert (native / filename).read_bytes() == (aligned / filename).read_bytes()
+    assert meta["image_preprocessing"]["resize_backend"] == "native"
+    assert meta["image_preprocessing"]["packages"] == {"pillow": "test-version"}
+    geometry = meta["image_preprocessing"]["images"][0]
+    assert geometry["source_rgb_sha256"] == geometry["rgb_sha256"]
+    assert "vision_tokens" not in geometry
+    assert "n_past_expected" not in meta
+
+
+@pytest.mark.parametrize("flag,enabled", [(None, True), ("--image-preprocessing", True),
+                                         ("--no-image-preprocessing", False)])
+def test_prep_cli_image_preprocessing_switch(flag, enabled, tmp_path, monkeypatch):
+    argv = ["prep_vlm_score_from_hf.py", "--row", "0", "--out", str(tmp_path)]
+    monkeypatch.setattr("sys.argv", argv + ([flag] if flag else []))
+    assert prep.parse_args().image_preprocessing is enabled

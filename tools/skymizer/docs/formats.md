@@ -43,20 +43,11 @@ dir never mixes record versions unless an operator clears the old rows by
 hand.
 
 > [!IMPORTANT]
-> `n_prefill` and `n_past_actual` are **not the same number** and are not
-> expected to match. `n_prefill` is the HF ground-truth *sequential* prefill
-> length (one entry per image-pad token) echoed from the manifest;
-> `n_past_actual` is llama.cpp's own position count after prefill, which under
-> M-RoPE counts one position per merged patch group and is much smaller.
->
-> The distinction matters: **only `n_past_actual` moves when the vision-token
-> budget changes.** Collect one dir at `--image-max-tokens 1024` and another
-> at the `-1` default and `n_prefill` is identical on both sides while the
-> images really did become different numbers of embeddings. The comparator
-> hard-fails on an `n_past_actual` mismatch, which is the content-level
-> backstop behind the `collect_meta.json` image-bounds guard. `0` means
-> *not recorded* — every dump written before the field existed — and is
-> skipped rather than compared against a real count.
+> `n_prefill` is the saved sequential reference-prefix length. `n_past_actual` is the decoder position after prefill. For aligned Gemma/Kimi inputs they match. For Qwen/GLM M-RoPE, each image advances positions by the longest merged-grid side, so `n_past_actual` is smaller and cannot alone detect a change to the shorter grid side. The aligned scorer checks each image grid and all reference-prefix IDs before evaluation; the collector also checks `n_past_expected`. A zero `n_past_actual` means an old dump did not record it.
+
+Aligned collections additionally retain `metrics/NNN_ITEM.preprocess.json`, copied from the prepared row's metadata. It records the generation config, interpolation backend/version, original and final image sizes, merged grids, and source/output RGB hashes. `collect_meta.json.image_preprocessing` prevents mixing legacy preprocessing or different backends/package versions in a comparison. The VLMK binary format remains version 2.
+
+Collections made with `--no-image-preprocessing` instead record `image_preprocessing.resize_backend="native"`. Their sidecars retain the original RGB sizes and hashes, without an HF grid or `n_past_expected`. Native and aligned identities cannot be mixed in one collection or paired comparison, and neither is silently equated to historical metadata with no identity.
 
 ### `.npz` form
 

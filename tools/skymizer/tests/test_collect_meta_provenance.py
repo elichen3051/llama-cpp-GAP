@@ -99,6 +99,7 @@ def _vlm_kld_args(tmp_path):
         split="train",
         sort_by="num_images",
         num_eval_tokens=-1,
+        image_resize_backend="pillow",
         image_min_tokens=-1,
         image_max_tokens=-1,
         tf_chunk=1,

@@ -472,6 +472,7 @@ mtmd_context_params mtmd_context_params_default() {
         /* batch_max_tokens  */ 1024,
         /* progress_callback */ nullptr,
         /* progress_callback_user_data */ nullptr,
+        /* image_preprocessed */ false,
     };
     return params;
 }
@@ -618,6 +619,20 @@ struct mtmd_context {
         }
         if (ctx_v) {
             init_vision();
+            if (ctx_params.image_preprocessed) {
+                switch (proj_type_v()) {
+                    case PROJECTOR_TYPE_QWEN2VL:
+                    case PROJECTOR_TYPE_QWEN25VL:
+                    case PROJECTOR_TYPE_QWEN3VL:
+                    case PROJECTOR_TYPE_GEMMA4V:
+                    case PROJECTOR_TYPE_KIMIVL:
+                    case PROJECTOR_TYPE_GLM4V:
+                        image_preproc = std::make_unique<mtmd_image_preprocessor_preprocessed>(ctx_v);
+                        break;
+                    default:
+                        throw std::runtime_error("preprocessed images are not supported for this projector");
+                }
+            }
         }
         if (ctx_a) {
             init_audio();
@@ -799,8 +814,8 @@ struct mtmd_context {
                 } break;
             case PROJECTOR_TYPE_KIMIVL:
                 {
-                    // <|media_start|> ... (image embeddings) ... <|media_end|>
-                    img_beg = "<|media_start|>";
+                    // <|media_start|>image<|media_content|> ... <|media_end|>
+                    img_beg = "<|media_start|>image<|media_content|>";
                     img_end = "<|media_end|>";
                     image_preproc = std::make_unique<mtmd_image_preprocessor_dyn_size>(ctx_v);
                 } break;

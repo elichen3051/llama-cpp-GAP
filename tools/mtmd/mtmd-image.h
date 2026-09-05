@@ -115,6 +115,12 @@ struct mtmd_image_preprocessor_fixed_size : mtmd_image_preprocessor {
     mtmd_image_preproc_out preprocess(const clip_image_u8 & img) const override;
 };
 
+// Normalize RGB images whose final patch-aligned geometry was prepared by the caller.
+struct mtmd_image_preprocessor_preprocessed : mtmd_image_preprocessor {
+    mtmd_image_preprocessor_preprocessed(const clip_ctx * ctx) : mtmd_image_preprocessor(ctx) {}
+    mtmd_image_preproc_out preprocess(const clip_image_u8 & img) const override;
+};
+
 // resize image to multiple of patch_size*n_merge, while preserving aspect ratio
 // if image_resize_pad is true, the resized image will be padded, otherwise it will be either stretched or center-cropped depending on image_resize_pad
 // this is used by models with native support for dynamic image size, for example: Qwen-VL, Pixtral, Kimi-VL, etc

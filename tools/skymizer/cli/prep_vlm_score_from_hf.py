@@ -23,7 +23,7 @@
 #                        per row (the per-row subprocess used to pay them N times).
 #
 # Supports the model families registered in MODEL_FAMILIES (currently
-# Qwen3-VL, Qwen3.5, Qwen3.6, Gemma 4, and Kimi-VL). A new family needs its prefix +
+# Qwen3-VL, Qwen3.5, Qwen3.6, Gemma 4, Kimi-VL, and GLM-4.6V). A new family needs its prefix +
 # image-block regex and image-pad token registered below, plus a
 # decode->re-tokenize round-trip verification before trusting its dumps.
 #
@@ -66,6 +66,10 @@ from pathlib import Path
 
 import numpy as np
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from lib.vlm_image_preprocess import DEFAULT_RESIZE_BACKEND, effective_image_config, prepare_images
+
 # `datasets` and `transformers` are imported lazily (inside load_dataset_sorted
 # and load_tokenizer) so prep_row() and the validation helpers stay importable
 # for hermetic unit tests, which run with only numpy installed.
@@ -79,16 +83,8 @@ class PrepError(ValueError):
     exit in main()."""
 
 
-# How build_formatted_chat hands image wrappers to mtmd. "stripped" = the whole
-# <|vision_start|>(<|image_pad|>)+<|vision_end|> block collapses to one
-# <__media__> and mtmd re-adds the wrapper pair itself (mtmd.cpp add_media),
-# so the scorer's token stream matches HF/vLLM exactly (Qwen, Gemma-4; for
-# Kimi-VL the collapsed block also holds a two-token prelude mtmd never emits,
-# see _KIMI_VL_IMAGE_BLOCK_RE). Dumps collected before
-# this change kept the wrappers in the text, which mtmd then duplicated
-# ("doubled": 2 extra tokens per image, ~0.016 KLD shift). Recorded in
-# collect_meta.json as a compare / shard-identity field — dirs collected under
-# different modes saw different conditioning and must not be compared.
+# mtmd restores the full model-specific wrapper around every prepared image.
+# The preprocessing version separately guards geometry, interpolation, and the Kimi prelude fix.
 MEDIA_WRAPPER_MODE = "stripped"
 
 
@@ -143,6 +139,10 @@ def parse_args():
     sel.add_argument("--row", type=int)
     sel.add_argument("--item-id", type=str)
     p.add_argument("--out", required=True, type=Path)
+    p.add_argument("--image-preprocessing", action=argparse.BooleanOptionalAction, default=True,
+                   help="align images to HF geometry (default: enabled); disable to retain original RGB sizes")
+    p.add_argument("--image-resize-backend", choices=("torchvision", "pillow"),
+                   default=DEFAULT_RESIZE_BACKEND)
     return p.parse_args()
 
 
@@ -171,25 +171,13 @@ _QWEN_VL_IMAGE_BLOCK_RE = re.compile(
 _GEMMA4_IMAGE_BLOCK_RE = re.compile(
     r"<\|image>(?:<\|image\|>)+<image\|>")
 
-# Kimi-VL rows (elichen-skymizer/kimi-vl-a3b-ins-full-ref-text-*) decode each
-# image as <|media_start|>image<|media_content|>(<|media_pad|>)+<|media_end|>:
-# the chat template's literal block, with the HF processor expanding the
-# single <|media_pad|> to one per vision token. ../mtmd/mtmd.cpp
-# (PROJECTOR_TYPE_KIMIVL) re-injects only <|media_start|>/<|media_end|>
-# around the embeddings, so the WHOLE block -- including the
-# `image<|media_content|>` prelude mtmd never emits -- collapses to one
-# marker. llama.cpp therefore conditions on two fewer text tokens per image
-# than HF did, and on a vision-token count that differs in either direction
-# (see derive_image_token_limits); the paired comparison cancels it because
-# both sides see the same prefix, and every record's n_past_actual keeps
-# the per-row drift visible. Verified 2026-09-03: decode -> re-encode of
-# input_ids[:n_prefill] exact outside the pad run on all 954 rows of both
-# kimi-vl-a3b-ins-full-ref-text datasets; llama.cpp tokenization of the
-# collapsed text equals the HF ids on 60 text segments of 30 rows; a 4-row
-# collect_kld smoke (bf16 ref vs Q4_K_M + mmproj-Q8_0) scored every row
-# (e.g. n_past 476 for n_prefill 489: -2 prelude, -11 grid rounding).
+# Kimi includes two text tokens between media_start and the image embeddings.
+# mtmd restores that complete prefix, including image<|media_content|>.
 _KIMI_VL_IMAGE_BLOCK_RE = re.compile(
     r"<\|media_start\|>image<\|media_content\|>(?:<\|media_pad\|>)+<\|media_end\|>")
+
+_GLM_VL_IMAGE_BLOCK_RE = re.compile(
+    r"<\|begin_of_image\|>(?:<\|image\|>)+<\|end_of_image\|>")
 
 MODEL_FAMILIES = {
     "Qwen/Qwen3-VL": _QWEN_VL_IMAGE_BLOCK_RE,
@@ -201,6 +189,7 @@ MODEL_FAMILIES = {
     "Qwen/Qwen3.6":  _QWEN_VL_IMAGE_BLOCK_RE,
     "google/gemma-4": _GEMMA4_IMAGE_BLOCK_RE,
     "moonshotai/Kimi-VL": _KIMI_VL_IMAGE_BLOCK_RE,
+    "zai-org/GLM-4.6V": _GLM_VL_IMAGE_BLOCK_RE,
 }
 
 # Per-image placeholder token (string form), keyed by model-name prefix.
@@ -212,6 +201,7 @@ IMAGE_PAD_TOKENS = {
     "Qwen/Qwen3.6":  "<|image_pad|>",
     "google/gemma-4": "<|image|>",
     "moonshotai/Kimi-VL": "<|media_pad|>",
+    "zai-org/GLM-4.6V": "<|image|>",
 }
 
 
@@ -305,31 +295,18 @@ def sanity_check_row(row):
 
 
 def derive_image_token_limits(cfg: dict) -> dict:
-    """Derive mtmd vision bounds from a recognized image-processor schema.
+    """Describe the generation-time bounds after applying vLLM overrides.
 
-    Qwen configs express pixel-area bounds which are inverted through patch and
-    merge sizes. Gemma 4 configs directly record max_soft_tokens; their
-    image_min_tokens=-1 means use the model metadata's lower bound. Kimi-VL
-    configs cap the PRE-merge patch count (in_token_limit) and merge
-    merge_kernel_size patches per vision token, so image_max_tokens is
-    in_token_limit // (kh * kw). The HF processor never upscales, so the
-    derived lower bound is 1 token: -1 would hand the floor to mtmd, and for
-    kimivl clip.cpp hard-codes 8..1024 (no mmproj metadata), which scales
-    images HF left below 8 tokens UP (a 77x16 OCR crop: 3 HF tokens vs 14).
-    The cap is not a per-row upper bound either: the HF rescale floors to
-    in_token_limit and then pads each side up to a merge-kernel multiple, so
-    rows carry MORE vision tokens than the cap (1100 observed in the GAP
-    rows, ~1.16x possible), while mtmd's dyn_size resize (nearest-multiple
-    rounding) yields yet another count -- accepted, common-mode drift,
-    see the _KIMI_VL_IMAGE_BLOCK_RE comment. The additional per-family
-    fields are provenance records: collectors default to -1/-1 and only
-    explicit token-limit arguments affect mtmd."""
+    These are provenance, not a resize instruction for prepared images. Kimi
+    padding can exceed its nominal cap; GLM bounds include the temporal factor.
+    """
     if not isinstance(cfg, dict):
         raise PrepError("unsupported image processor config schema")
 
-    ip = cfg.get("hf_image_processor")
-    if not isinstance(ip, dict):
-        ip = {}
+    try:
+        ip = effective_image_config(cfg)
+    except (TypeError, ValueError) as exc:
+        raise PrepError(f"invalid image processor config: {exc}") from exc
 
     if "merge_size" in ip:
         try:
@@ -342,6 +319,11 @@ def derive_image_token_limits(cfg: dict) -> dict:
             raise PrepError(
                 "invalid Qwen image processor config schema") from exc
         patch_area = patch_size * patch_size * merge_size * merge_size
+        if ip.get("image_processor_type", "").startswith("Glm46V"):
+            temporal = ip.get("temporal_patch_size")
+            if type(temporal) is not int or temporal <= 0:
+                raise PrepError("invalid GLM temporal_patch_size")
+            patch_area *= temporal
         return {
             "patch_size": patch_size,
             "merge_size": merge_size,
@@ -358,8 +340,6 @@ def derive_image_token_limits(cfg: dict) -> dict:
     )
     if is_gemma4:
         source = dict(ip)
-        if isinstance(gemma_vision_cfg, dict):
-            source.update(gemma_vision_cfg)
         try:
             patch_size = int(source["patch_size"])
             pooling_kernel_size = int(source["pooling_kernel_size"])
@@ -371,7 +351,7 @@ def derive_image_token_limits(cfg: dict) -> dict:
             "patch_size": patch_size,
             "pooling_kernel_size": pooling_kernel_size,
             "max_soft_tokens": max_soft_tokens,
-            "image_min_tokens": -1,
+            "image_min_tokens": 1,
             "image_max_tokens": max_soft_tokens,
         }
 
@@ -382,8 +362,6 @@ def derive_image_token_limits(cfg: dict) -> dict:
     )
     if is_kimi_vl:
         source = dict(ip)
-        if isinstance(kimi_vision_cfg, dict):
-            source.update(kimi_vision_cfg)
         kernel = source.get("merge_kernel_size")
         if not isinstance(kernel, (list, tuple)) or len(kernel) != 2:
             raise PrepError("invalid Kimi-VL image processor config schema: "
@@ -447,20 +425,52 @@ def build_meta(row) -> dict:
     }
 
 
-def prep_row(row, tok, out_dir: Path) -> dict:
+def prep_row(row, tok, out_dir: Path, *, resize_backend=DEFAULT_RESIZE_BACKEND,
+             image_preprocessing=True) -> dict:
     """Write the four scorer inputs for one dataset row into out_dir and return
     the meta dict (also written to meta.json).
 
-    Pure with respect to framework setup: the caller supplies the already-loaded
-    row and tokenizer, so this does only validation + file IO. Raises PrepError
+    The caller supplies the row and tokenizer. Disabling image_preprocessing
+    preserves original RGB sizes for native mtmd processing. Raises PrepError
     if the row fails validation (caller decides whether to skip or abort)."""
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
     sanity_check_row(row)
+    if len(row["images"]) != row["num_images"] or row["num_images"] < 1:
+        raise PrepError("images must match the positive num_images count")
+    meta = build_meta(row)
+    try:
+        images, preprocessing = prepare_images(
+            row["images"], meta["image_processor_config"], resize_backend, enabled=image_preprocessing)
+    except (TypeError, ValueError) as exc:
+        raise PrepError(f"image preprocessing: {exc}") from exc
+    meta["image_preprocessing"] = preprocessing
+    if image_preprocessing:
+        counts = [image["vision_tokens"] for image in preprocessing["images"]]
+        if sum(counts) != meta["sum_vision_tokens"] or max(counts) != meta["max_vision_tokens"]:
+            raise PrepError(f"HF image geometry {counts} disagrees with recorded vision token counts")
+        pad_id = resolve_image_pad_id(tok, row["generation_model_name_or_path"])
+        runs, in_run = [], False
+        for token in row["input_ids"][:row["n_prefill_tokens"]]:
+            if token == pad_id:
+                if not in_run:
+                    runs.append(0)
+                runs[-1] += 1
+                in_run = True
+            else:
+                in_run = False
+        if runs != counts:
+            raise PrepError(f"per-image reference placeholder counts {runs} != HF geometry {counts}")
+        preprocessing["image_pad_token_id"] = pad_id
+        family = effective_image_config(meta["image_processor_config"])["image_processor_type"]
+        meta["n_past_expected"] = meta["n_prefill"]
+        if family.startswith(("Qwen", "Glm")):
+            meta["n_past_expected"] += sum(max(image["grid_width"], image["grid_height"])
+                                           for image in preprocessing["images"]) - sum(counts)
 
     # (1) images -> PNG
-    for i, img in enumerate(row["images"]):
+    for i, img in enumerate(images):
         img.save(out_dir / f"img_{i}.png")
 
     # (2) input_ids -> int32 binary
@@ -471,7 +481,6 @@ def prep_row(row, tok, out_dir: Path) -> dict:
     (out_dir / "formatted_chat.txt").write_text(formatted, encoding="utf-8")
 
     # (4) meta.json
-    meta = build_meta(row)
     (out_dir / "meta.json").write_text(
         json.dumps(meta, indent=2, ensure_ascii=False), encoding="utf-8")
     return meta
@@ -494,7 +503,8 @@ def main():
         sys.exit(f"tokenizer load failed for "
                  f"{row['generation_model_name_or_path']!r}: {e}")
     try:
-        meta = prep_row(row, tok, args.out)
+        meta = prep_row(row, tok, args.out, resize_backend=args.image_resize_backend,
+                        image_preprocessing=args.image_preprocessing)
     except PrepError as e:
         sys.exit(str(e))
 

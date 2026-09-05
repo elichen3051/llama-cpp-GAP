@@ -15,6 +15,9 @@ dependencies = [
     "blobfile>=3.0.0",
 ]
 
+[project.optional-dependencies]
+vision = ["torch==2.11.0", "torchvision==0.26.0"]
+
 # Skymizer is a repository-local collection of scripts, not an installable
 # Python library. Tell uv not to invoke setuptools' ambiguous flat-layout
 # package discovery (which would otherwise mistake compare/, knowledge/, and
@@ -24,7 +27,7 @@ package = false
 
 # Developer-only dependencies use a PEP 735 dependency group instead of a
 # published `dev` extra. Users get only [project].dependencies (and may opt
-# into the GPU extra); `uv sync --group dev` gives contributors the complete
+# into the vision extra); `uv sync --group dev` gives contributors the complete
 # test/oracle environment.
 [dependency-groups]
 dev = [

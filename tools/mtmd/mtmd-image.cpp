@@ -760,6 +760,21 @@ mtmd_image_preproc_out mtmd_image_preprocessor_fixed_size::preprocess(const clip
 }
 
 //
+// mtmd_image_preprocessor_preprocessed
+//
+
+mtmd_image_preproc_out mtmd_image_preprocessor_preprocessed::preprocess(const clip_image_u8 & img) const {
+    const auto size = img.get_size();
+    const int align = hparams.patch_size * hparams.n_merge;
+    if (align <= 0 || size.width <= 0 || size.height <= 0 || size.width % align || size.height % align) {
+        throw std::runtime_error("preprocessed image dimensions must be positive multiples of patch_size * merge_size");
+    }
+    mtmd_image_preproc_out output;
+    output.append(hparams, img, true);
+    return output;
+}
+
+//
 // mtmd_image_preprocessor_dyn_size
 //
 

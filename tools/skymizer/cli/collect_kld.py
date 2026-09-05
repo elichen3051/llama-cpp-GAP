@@ -109,6 +109,7 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from cli.prep_vlm_score_from_hf import MEDIA_WRAPPER_MODE
+from lib.vlm_image_preprocess import DEFAULT_RESIZE_BACKEND, preprocessing_identity
 
 import lib.collect_core as collect_core
 from lib.dataset_fingerprint import (
@@ -130,7 +131,6 @@ from lib.collect_common import (
     preflight_scorer_vlmk_version,
     scan_output_collisions,
 )
-from lib.collect_vision import VisionBudgetReporter
 from lib.collect_meta_provenance import build_collect_provenance
 from lib.kld_metrics_io import (
     KLD_RECORD_DT,
@@ -171,7 +171,7 @@ IDENTITY_FIELDS = ["kind", "vlmk_version", "ref_model", "ref_mmproj", "cand_mode
                    "image_min_tokens", "image_max_tokens",
                    "tf_chunk", "n_ctx", "n_batch", "n_ubatch",
                    "n_gpu_layers", "n_threads", "metric_threads", "flash_attn",
-                   "swa_full", "media_wrapper"]
+                   "swa_full", "media_wrapper", "image_preprocessing"]
 
 
 def dump_stem(idx: int, item_id: str) -> str:
@@ -181,15 +181,18 @@ def dump_stem(idx: int, item_id: str) -> str:
 
 
 def build_kld_manifest_entry(prep_dir: Path, metrics_path: Path,
-                             n_images: int, n_prefill: int) -> dict:
+                             n_images: int, n_prefill: int, *, images_preprocessed=True) -> dict:
     """One JSONL entry consumed by llama-vlm-kld --manifest."""
-    return {
+    entry = {
         "images": [str(prep_dir / f"img_{i}.png") for i in range(n_images)],
         "formatted_chat": str(prep_dir / "formatted_chat.txt"),
         "tokens_in": str(prep_dir / "tokens.bin"),
         "n_prefill": n_prefill,
         "output_metrics": str(metrics_path),
     }
+    if images_preprocessed:
+        entry["image_metadata"] = str(prep_dir / "meta.json")
+    return entry
 
 
 def write_kld_manifest(path: Path, entries):
@@ -240,6 +243,9 @@ def postprocess_kld_result(row: dict, num_eval_tokens: int, elapsed_s: float):
                 f"{metrics_path}: header n_prefill={header['n_prefill']} != "
                 f"row n_prefill={row['n_prefill']}")
 
+        if "n_past_expected" in row and header["n_past_actual"] != row["n_past_expected"]:
+            raise ValueError(f"{metrics_path}: actual prefill position differs from the prepared HF grid")
+
         # Integrity cross-check: the scorer embeds each position's target token in
         # its record; they must equal this row's input_ids[n_prefill:n_prefill+npos].
         # Catches manifest/output mix-ups end-to-end.
@@ -282,6 +288,12 @@ def postprocess_kld_result(row: dict, num_eval_tokens: int, elapsed_s: float):
               file=sys.stderr)
         raise
 
+    image_meta_path = prep_dir / "meta.json"
+    if image_meta_path.exists():
+        image_meta = json.loads(image_meta_path.read_text())
+        if "image_preprocessing" in image_meta:
+            metrics_path.with_suffix(".preprocess.json").write_text(
+                json.dumps(image_meta, indent=2, ensure_ascii=False), encoding="utf-8")
     npz_path = metrics_path.with_suffix(".npz")
     convert_kld_bin_to_npz(metrics_path, npz_path)
     metrics_path.unlink()
@@ -347,6 +359,9 @@ def build_collect_meta(args, dataset_content_hash: str | None = None, *,
         "flash_attn": args.flash_attn,
         "swa_full": bool(args.swa_full),
         "media_wrapper": MEDIA_WRAPPER_MODE,
+        "image_preprocessing": preprocessing_identity(
+            getattr(args, "image_resize_backend", DEFAULT_RESIZE_BACKEND),
+            enabled=getattr(args, "image_preprocessing", True)),
         # Recorded but deliberately NOT in IDENTITY_FIELDS (the sort_desc
         # precedent): pre-existing dirs never saw this flag and must stay
         # extendable; the scorer log records every accepted mismatch.
@@ -406,12 +421,15 @@ def parse_args():
                         "cost is included for cross-runtime row selection. This is "
                         "not a KV guarantee: mtmd's actual vision token count is "
                         "C++-side; --n-ctx remains scorer capacity.")
+    p.add_argument("--image-preprocessing", action=argparse.BooleanOptionalAction, default=True,
+                   help="align images to HF geometry (default: enabled); disable for native mtmd preprocessing")
+    p.add_argument("--image-resize-backend", choices=("torchvision", "pillow"),
+                   default=DEFAULT_RESIZE_BACKEND,
+                   help="resize backend used once in prep; Kimi always uses Pillow; ignored when image preprocessing is disabled")
     p.add_argument("--image-min-tokens", type=int, default=-1,
-                   help="Lower bound on per-image vision tokens forwarded to the scorer; "
-                        "-1 = use model metadata (default).")
+                   help="Native scorer lower bound; does not resize aligned images.")
     p.add_argument("--image-max-tokens", type=int, default=-1,
-                   help="Upper bound on per-image vision tokens forwarded to the scorer; "
-                        "-1 = use model metadata (default).")
+                   help="Native scorer upper bound; does not resize aligned images.")
     p.add_argument("--n-batch", type=int, default=2048,
                    help="Scorer prefill logical batch (-b). Default 2048; must be >= --n-ubatch.")
     p.add_argument("--n-ubatch", type=int, default=2048,
@@ -569,6 +587,8 @@ def _header_lines(args):
         *( [f"  sort_by       = {args.sort_by}"
             f"{' (desc)' if args.sort_desc else ' (asc)'}"]
            if args.sort_by else [] ),
+        (f"  image_preprocessing = HF geometry, {args.image_resize_backend} resize, mtmd passthrough"
+         if args.image_preprocessing else "  image_preprocessing = native mtmd, original RGB images"),
         f"  image_min_tok = {args.image_min_tokens}",
         f"  image_max_tok = {args.image_max_tokens}",
         f"  n_batch       = {args.n_batch}",
@@ -586,13 +606,9 @@ def _header_lines(args):
 
 
 class _PrepState:
-    """Per-sweep prep state: the tokenizer cache (model_name -> tokenizer,
-    loaded once and reused across rows) and the one-shot vision-budget
-    comparison against the dataset's own limits."""
+    """Tokenizers are reused across rows in both image-processing modes."""
     def __init__(self, args):
         self.tok_cache = {}
-        self.vision_budget = VisionBudgetReporter(args.image_min_tokens,
-                                                  args.image_max_tokens)
 
 
 def _prep(args, row, prep_dir, state):
@@ -600,11 +616,16 @@ def _prep(args, row, prep_dir, state):
     model_name = row["generation_model_name_or_path"]
     if model_name not in state.tok_cache:
         state.tok_cache[model_name] = prep_lib.load_tokenizer(model_name)
-    meta = prep_lib.prep_row(row, state.tok_cache[model_name], prep_dir)
-    state.vision_budget.check(meta)
-    return {"n_images": meta["num_images"],
+    meta = prep_lib.prep_row(row, state.tok_cache[model_name], prep_dir,
+                             resize_backend=args.image_resize_backend,
+                             image_preprocessing=args.image_preprocessing)
+    info = {"n_images": meta["num_images"],
             "n_prefill": meta["n_prefill"],
-            "n_answer": meta["n_answer"]}
+            "n_answer": meta["n_answer"],
+            "images_preprocessed": args.image_preprocessing}
+    if args.image_preprocessing:
+        info["n_past_expected"] = meta["n_past_expected"]
+    return info
 
 
 def _scorer_argv(args, kld_manifest_path):
@@ -615,6 +636,7 @@ def _scorer_argv(args, kld_manifest_path):
         "--cand-model",  args.cand_model,
         "--cand-mmproj", args.cand_mmproj,
         "--manifest", str(kld_manifest_path),
+        *(["--images-preprocessed"] if getattr(args, "image_preprocessing", True) else []),
         "--num-eval-tokens", str(args.num_eval_tokens),
         "--image-min-tokens", str(args.image_min_tokens),
         "--image-max-tokens", str(args.image_max_tokens),
@@ -660,7 +682,8 @@ def _spec():
         kind_word="kld",
         write_manifest=write_kld_manifest,
         manifest_entry=lambda row: build_kld_manifest_entry(
-            row["prep_dir"], row["metrics_path"], row["n_images"], row["n_prefill"]),
+            row["prep_dir"], row["metrics_path"], row["n_images"], row["n_prefill"],
+            images_preprocessed=row["images_preprocessed"]),
         scorer_argv=_scorer_argv,
         scorer_cmd=lambda args: args.llama_vlm_kld,
         parse_done=parse_kld_done_line,

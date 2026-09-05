@@ -31,6 +31,8 @@
 //                                      output_metrics. Loads both models once.
 //                                      Takes precedence: the per-row flags
 //                                      above are ignored when given.
+//   --images-preprocessed             Consume final RGB sizes without resizing; require image metadata
+//   --image-metadata <path>            prep meta.json (manifest key: image_metadata)
 //   --image-min-tokens <int>           Lower bound; -1 = use model metadata (default -1)
 //   --image-max-tokens <int>           Upper bound; -1 = use model metadata (default -1)
 //   --num-eval-tokens <int>            Stop teacher-forcing after this many answer
@@ -183,6 +185,8 @@ struct vlm_kld_args {
     std::string tokens_in_path;
     std::string output_metrics_path;
     std::string manifest_path;
+    std::string image_metadata_path;
+    bool images_preprocessed = false;
     int n_prefill = -1;
     int image_min_tokens = -1;   // -1 = use model metadata
     int image_max_tokens = -1;
@@ -228,6 +232,8 @@ static bool parse_args(int argc, char ** argv, vlm_kld_args & a) {
         else if (k == "--n-prefill")        { if (!need_int("--n-prefill",        a.n_prefill))        return false; }
         else if (k == "--output-metrics")   { const char * v = need("--output-metrics");   if (!v) return false; a.output_metrics_path = v; }
         else if (k == "--manifest")         { const char * v = need("--manifest");         if (!v) return false; a.manifest_path = v; }
+        else if (k == "--images-preprocessed") { a.images_preprocessed = true; }
+        else if (k == "--image-metadata")   { const char * v = need("--image-metadata"); if (!v) return false; a.image_metadata_path = v; }
         else if (k == "--image-min-tokens") { if (!need_int("--image-min-tokens", a.image_min_tokens)) return false; }
         else if (k == "--image-max-tokens") { if (!need_int("--image-max-tokens", a.image_max_tokens)) return false; }
         else if (k == "--num-eval-tokens")  { if (!need_int("--num-eval-tokens",  a.num_eval_tokens))  return false; }
@@ -369,6 +375,7 @@ struct manifest_entry {
     std::string tokens_in_path;
     std::string output_metrics_path;
     int n_prefill = -1;
+    std::string image_metadata_path;
 };
 
 static bool read_manifest(const std::string & path, std::vector<manifest_entry> & entries) {
@@ -405,6 +412,9 @@ static bool read_manifest(const std::string & path, std::vector<manifest_entry> 
                 throw std::runtime_error("missing or invalid output_metrics");
             }
 
+            if (j.contains("image_metadata")) {
+                entry.image_metadata_path = j.at("image_metadata").get<std::string>();
+            }
             entry.image_paths          = j.at("images").get<std::vector<std::string>>();
             entry.formatted_chat_path  = j.at("formatted_chat").get<std::string>();
             entry.tokens_in_path       = j.at("tokens_in").get<std::string>();
@@ -483,6 +493,7 @@ static bool load_side(model_side & s, const char * tag,
     vparams.n_threads        = args.n_threads;
     vparams.flash_attn_type  = cparams.flash_attn_type;
     vparams.warmup           = true;
+    vparams.image_preprocessed = args.images_preprocessed;
     vparams.image_min_tokens = args.image_min_tokens;
     vparams.image_max_tokens = args.image_max_tokens;
     s.vctx.reset(mtmd_init_from_file(mmproj_path.c_str(), s.model.get(), vparams));
@@ -493,15 +504,66 @@ static bool load_side(model_side & s, const char * tag,
     return true;
 }
 
-// Prefill one side with the item's images + formatted chat (sequence 0 of its
-// own context). Each side loads/tokenizes the images through its OWN mtmd
-// context, so per-side vision-token counts (and hence n_past) may differ —
-// that drift is part of what the metrics measure. logits_last=true keeps the
-// last prompt position's logits (they predict answer token 0).
+// Expected geometry from HF preprocessing, checked independently on both sides.
+struct image_geometry {
+    int width, height, grid_width, grid_height, n_tokens;
+};
+
+struct image_contract {
+    llama_token pad_id = LLAMA_TOKEN_NULL;
+    std::vector<image_geometry> images;
+};
+
+static image_contract read_image_contract(const vlm_kld_args & args) {
+    if (args.images_preprocessed != !args.image_metadata_path.empty()) {
+        throw std::runtime_error("--images-preprocessed requires prep image_metadata for every row, and metadata requires that mode");
+    }
+    image_contract contract;
+    if (!args.images_preprocessed) {
+        return contract;
+    }
+    std::ifstream file(args.image_metadata_path);
+    const auto meta = nlohmann::ordered_json::parse(file);
+    const auto & preprocessing = meta.at("image_preprocessing");
+    auto integer = [](const nlohmann::ordered_json & object, const char * key, int minimum = 1) {
+        const auto & value = object.at(key);
+        if (!value.is_number_integer() || value.get<int64_t>() < minimum || value.get<int64_t>() > INT32_MAX) {
+            throw std::runtime_error(std::string("invalid image metadata integer: ") + key);
+        }
+        return value.get<int>();
+    };
+    if (integer(preprocessing, "version") != 1 || integer(meta, "n_prefill") != args.n_prefill) {
+        throw std::runtime_error("unsupported image preprocessing version or mismatched n_prefill");
+    }
+    contract.pad_id = integer(preprocessing, "image_pad_token_id", 0);
+    const auto & images = preprocessing.at("images");
+    if (!images.is_array() || images.size() != args.image_paths.size() || images.empty()) {
+        throw std::runtime_error("image metadata must have one geometry per input image");
+    }
+    for (const auto & image : images) {
+        image_geometry geometry {
+            integer(image, "width"), integer(image, "height"),
+            integer(image, "grid_width"), integer(image, "grid_height"), integer(image, "vision_tokens"),
+        };
+        if ((int64_t) geometry.grid_width * geometry.grid_height != geometry.n_tokens ||
+            geometry.width % geometry.grid_width || geometry.height % geometry.grid_height ||
+            geometry.width / geometry.grid_width != geometry.height / geometry.grid_height) {
+            throw std::runtime_error("inconsistent image grid metadata");
+        }
+        contract.images.push_back(geometry);
+    }
+    return contract;
+}
+
+// Prefill sequence 0 after checking the prepared image geometry and full reference
+// prefix. logits_last=true retains the logits predicting the first answer token.
 static bool prefill_side(model_side & s,
                          const std::vector<std::string> & image_paths,
                          const std::string & formatted,
                          int n_batch,
+                         const image_contract & contract,
+                         const std::vector<llama_token> & tokens_full,
+                         int n_prefill,
                          stderr_prefix * lp) {
     mtmd::bitmaps bmps_owned;
     bmps_owned.entries.reserve(image_paths.size());
@@ -517,6 +579,12 @@ static bool prefill_side(model_side & s,
         if (!b.ptr) {
             prefixed_fprintf(lp, "[%s] failed to load image[%zu] %s\n", s.tag, i, image_paths[i].c_str());
             return false;
+        }
+        if (!contract.images.empty()) {
+            const auto & expected = contract.images.at(i);
+            if (b.nx() != (uint32_t) expected.width || b.ny() != (uint32_t) expected.height) {
+                throw std::runtime_error("prepared image size does not match its metadata: " + image_paths[i]);
+            }
         }
         bmps_owned.entries.push_back(std::move(b));
     }
@@ -536,6 +604,54 @@ static bool prefill_side(model_side & s,
                          "in --formatted-chat must equal --image count (got %zu)\n",
                          s.tag, rc, bmps.size());
         return false;
+    }
+
+    if (!contract.images.empty()) {
+        size_t cursor = 0;
+        size_t image_index = 0;
+        for (size_t c = 0; c < chunks.size(); ++c) {
+            const auto * chunk = mtmd_input_chunks_get(chunks.ptr.get(), c);
+            const auto type = mtmd_input_chunk_get_type(chunk);
+            const size_t count = mtmd_input_chunk_get_n_tokens(chunk);
+            if (count > (size_t) n_prefill - cursor) {
+                throw std::runtime_error("mtmd prefix is longer than the reference prefix");
+            }
+            if (type == MTMD_INPUT_CHUNK_TYPE_TEXT) {
+                size_t text_count = 0;
+                const auto * text_tokens = mtmd_input_chunk_get_tokens_text(chunk, &text_count);
+                if (text_count != count || (count && !std::equal(text_tokens, text_tokens + count, tokens_full.begin() + cursor))) {
+                    throw std::runtime_error("mtmd text prefix differs from reference IDs at token " + std::to_string(cursor));
+                }
+            } else if (type == MTMD_INPUT_CHUNK_TYPE_IMAGE) {
+                if (image_index >= contract.images.size()) {
+                    throw std::runtime_error("mtmd produced an extra image chunk");
+                }
+                const auto & expected = contract.images[image_index++];
+                if (count != (size_t) expected.n_tokens) {
+                    throw std::runtime_error("mtmd image token count differs from the HF grid");
+                }
+                const auto * image = mtmd_input_chunk_get_tokens_image(chunk);
+                for (size_t i = 0; i < count; ++i) {
+                    if (tokens_full[cursor + i] != contract.pad_id) {
+                        throw std::runtime_error("image chunk does not align with reference placeholder IDs");
+                    }
+                    if (mtmd_decode_use_mrope(s.vctx.get())) {
+                        const auto pos = mtmd_image_tokens_get_decoder_pos(image, 0, i);
+                        if (pos.x != i % expected.grid_width || pos.y != i / expected.grid_width || pos.t != 0) {
+                            throw std::runtime_error("mtmd image M-RoPE grid differs from the HF grid");
+                        }
+                    }
+                }
+                prefixed_fprintf(lp, "[%s] verified image[%zu] grid=%dx%d tokens=%zu\n",
+                                 s.tag, image_index - 1, expected.grid_width, expected.grid_height, count);
+            } else {
+                throw std::runtime_error("unexpected non-image media in reference prefix");
+            }
+            cursor += count;
+        }
+        if (cursor != (size_t) n_prefill || image_index != contract.images.size()) {
+            throw std::runtime_error("mtmd prefix length or image count differs from the reference");
+        }
     }
 
     llama_pos new_n_past = 0;
@@ -595,8 +711,9 @@ static bool score_one(
     if (formatted.empty()) {
         return false;
     }
-    if (!prefill_side(ref,  args.image_paths, formatted, n_batch, lp) ||
-        !prefill_side(cand, args.image_paths, formatted, n_batch, lp)) {
+    const auto contract = read_image_contract(args);
+    if (!prefill_side(ref,  args.image_paths, formatted, n_batch, contract, tokens_full, args.n_prefill, lp) ||
+        !prefill_side(cand, args.image_paths, formatted, n_batch, contract, tokens_full, args.n_prefill, lp)) {
         return false;
     }
 
@@ -714,6 +831,7 @@ int main(int argc, char ** argv) {
         mtmd_helper_log_set(prefixed_log_callback, &prefix);
 
         vlm_kld_args ea = args;
+        ea.image_metadata_path  = e.image_metadata_path;
         ea.image_paths          = e.image_paths;
         ea.formatted_chat_path  = e.formatted_chat_path;
         ea.tokens_in_path       = e.tokens_in_path;

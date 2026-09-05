@@ -1019,3 +1019,11 @@ def test_main_rejects_bad_range_and_confidence(tmp_path):
     with pytest.raises(SystemExit, match="--bootstrap-iters"):
         _run_main(a_dir, b_dir, tmp_path, "--ci-method", "studentized",
                   "--bootstrap-iters", "0")
+
+
+def test_meta_alignment_rejects_native_against_aligned_preprocessing():
+    a = dict(BASE_META, image_preprocessing={"version": 1, "resize_backend": "native"})
+    b = dict(BASE_META, image_preprocessing={"version": 1, "resize_backend": "torchvision"})
+    assert smpc.check_kld_meta_alignment(a, dict(a, cand_model="/m/cand-b.gguf")) == []
+    with pytest.raises(smpc.AlignmentError, match="image_preprocessing"):
+        smpc.check_kld_meta_alignment(a, b)

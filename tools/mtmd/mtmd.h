@@ -122,6 +122,10 @@ struct mtmd_context_params {
     // If it returns false, model loading is immediately aborted.
     mtmd_progress_callback progress_callback;
     void * progress_callback_user_data;
+
+    // Input RGB images already have the final patch-aligned size. Skip resize and padding.
+    // Supported for Qwen-VL, Gemma4, Kimi-VL and GLM4V. Token limits do not resize these inputs.
+    bool image_preprocessed;
 };
 
 MTMD_API const char * mtmd_default_marker(void);
