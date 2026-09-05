@@ -1,0 +1,120 @@
+{
+  "citation": "",
+  "description": "",
+  "features": {
+    "source": {
+      "dtype": "string",
+      "_type": "Value"
+    },
+    "item_id": {
+      "dtype": "string",
+      "_type": "Value"
+    },
+    "origin_id": {
+      "dtype": "int64",
+      "_type": "Value"
+    },
+    "sample_seed": {
+      "dtype": "int64",
+      "_type": "Value"
+    },
+    "question": {
+      "dtype": "string",
+      "_type": "Value"
+    },
+    "images": {
+      "feature": {
+        "_type": "Image"
+      },
+      "_type": "List"
+    },
+    "num_images": {
+      "dtype": "int32",
+      "_type": "Value"
+    },
+    "ref_answer": {
+      "dtype": "string",
+      "_type": "Value"
+    },
+    "category": {
+      "dtype": "string",
+      "_type": "Value"
+    },
+    "input_ids": {
+      "feature": {
+        "dtype": "int64",
+        "_type": "Value"
+      },
+      "_type": "List"
+    },
+    "input_tokens_len": {
+      "dtype": "int64",
+      "_type": "Value"
+    },
+    "generated_texts": {
+      "dtype": "string",
+      "_type": "Value"
+    },
+    "generated_tokens_len": {
+      "dtype": "int64",
+      "_type": "Value"
+    },
+    "n_prefill_tokens": {
+      "dtype": "int64",
+      "_type": "Value"
+    },
+    "finish_reason": {
+      "dtype": "string",
+      "_type": "Value"
+    },
+    "seed": {
+      "dtype": "int64",
+      "_type": "Value"
+    },
+    "labels": {
+      "feature": {
+        "dtype": "int64",
+        "_type": "Value"
+      },
+      "_type": "List"
+    },
+    "image_fingerprint": {
+      "dtype": "string",
+      "_type": "Value"
+    },
+    "image_processor_config": {
+      "dtype": "string",
+      "_type": "Value"
+    },
+    "image_processor_config_hash": {
+      "dtype": "string",
+      "_type": "Value"
+    },
+    "sum_vision_tokens": {
+      "dtype": "int64",
+      "_type": "Value"
+    },
+    "max_vision_tokens": {
+      "dtype": "int64",
+      "_type": "Value"
+    },
+    "id": {
+      "dtype": "string",
+      "_type": "Value"
+    },
+    "generation_model_name_or_path": {
+      "dtype": "string",
+      "_type": "Value"
+    },
+    "enable_thinking": {
+      "dtype": "bool",
+      "_type": "Value"
+    },
+    "truncated_by_cap": {
+      "dtype": "bool",
+      "_type": "Value"
+    }
+  },
+  "homepage": "",
+  "license": ""
+}

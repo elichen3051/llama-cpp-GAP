@@ -1,0 +1,51 @@
+[project]
+name = "skymizer"
+version = "0.1.2"
+description = "VLM/LLM KLD metric collection and paired comparison helpers for llama.cpp"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "datasets>=4.8.5",
+    "numpy>=1.26.4",
+    "pillow>=12.2.0",
+    "transformers>=5.5.1",
+    # Kimi-VL's remote-code tokenizer (tokenization_moonshot.py) imports
+    # tiktoken, whose vocab loader imports blobfile without declaring it.
+    "tiktoken>=0.14.0",
+    "blobfile>=3.0.0",
+]
+
+# Skymizer is a repository-local collection of scripts, not an installable
+# Python library. Tell uv not to invoke setuptools' ambiguous flat-layout
+# package discovery (which would otherwise mistake compare/, knowledge/, and
+# outputs/ for three import packages).
+[tool.uv]
+package = false
+
+# Developer-only dependencies use a PEP 735 dependency group instead of a
+# published `dev` extra. Users get only [project].dependencies (and may opt
+# into the GPU extra); `uv sync --group dev` gives contributors the complete
+# test/oracle environment.
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "pytest-timeout>=2",
+    "scipy>=1.13",
+    # The bit-exact goldens (tests/test_paired_compare_engine_golden.py and
+    # friends) were generated under numpy 2.x; numpy 1.x's value-based
+    # promotion computes some engine intermediates at float32 instead of
+    # float64 and trips them at ~1e-6 relative. Developers must resolve a
+    # numpy the goldens were pinned on.
+    "numpy>=2.5.2",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# -p no:cacheprovider: no .pytest_cache (its lastfailed went 100% stale once
+# and misled a review). --strict-markers: an unregistered mark is an error.
+addopts = "-ra --strict-markers -p no:cacheprovider"
+markers = [
+    "statistical: Monte Carlo / repeated statistical validation (~39s of the suite; deselect with -m 'not statistical' while iterating)",
+    "integration: crosses process/file/binary boundaries",
+    "external_model: requires model assets, HF datasets, or an external repo",
+]

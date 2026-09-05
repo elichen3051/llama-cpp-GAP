@@ -1,0 +1,6 @@
+# Nothing under outputs/ is version-controlled: per-row metric .npz
+# collections, gguf models, and generated analysis reports all live here.
+# Keep this .gitignore as the only tracked file so the directory policy
+# travels with the repo.
+/*
+!/.gitignore
