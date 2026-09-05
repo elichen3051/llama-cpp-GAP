@@ -84,7 +84,8 @@ def _result_for_render(*, with_inputs: bool = True):
 def test_constants_and_imports():
     assert SCHEMA_VERSION == "vlm-paired-compare-v3"
     assert DEFAULT_METRICS == (
-        "nll", "kld", "reversed_kld", "js_kld", "ear", "same_top_rate", "mse_dp",
+        "nll", "kld", "reversed_kld", "js_kld", "ear", "ear_20", "ear_10", "ear_5",
+        "same_top_rate", "mse_dp",
     )
     assert POOLED_TOKEN_METRICS == ("kld", "ear", "dp")
     assert [n for n, _ in POOLED_LADDER] == [

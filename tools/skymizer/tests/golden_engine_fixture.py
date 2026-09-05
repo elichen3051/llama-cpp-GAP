@@ -19,6 +19,11 @@ from compare.engine import compare_items
 from compare.render import format_comparison_table
 
 CI_METHODS = ("t", "studentized", "bca", "percentile")
+# The metric set the stored golden was generated with (before the EAR_K
+# family joined DEFAULT_METRICS). The golden pins the ENGINE's math, not the
+# default metric list, so it stays on this fixed tuple.
+GOLDEN_METRICS = ("nll", "kld", "reversed_kld", "js_kld", "ear", "same_top_rate", "mse_dp")
+assert set(GOLDEN_METRICS) <= set(DEFAULT_METRICS)
 BOOTSTRAP_ITERS = 1000
 SEED = 20260824
 N_ITEMS = 16
@@ -111,7 +116,7 @@ def build_golden_payload():
                "results": {}, "markdown": {}}
     for method in CI_METHODS:
         res = compare_items(
-            sa, sb, w, metrics=list(DEFAULT_METRICS),
+            sa, sb, w, metrics=list(GOLDEN_METRICS),
             confidence_level=0.95, bootstrap_iters=BOOTSTRAP_ITERS,
             seed=SEED, model_a_label="A", model_b_label="B",
             ci_method=method,

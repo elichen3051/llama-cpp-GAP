@@ -6,16 +6,20 @@
 #
 # A VLMK dump holds PER-ANSWER-TOKEN fidelity metrics computed on the fly from
 # a (reference, candidate) model pair — no logits are stored. One position is
-# one packed record (see KLD_RECORD_DT; 44 bytes at the current version 2,
-# 40 bytes for legacy v1 dumps without `ear`); a 1024-position item is ~44 KiB
-# vs ~600 MiB of fp32 dense logits at vocab ~152k (Qwen3-VL).
+# one packed record (see KLD_RECORD_DT; 56 bytes at the current version 3,
+# 44 bytes for v2 dumps without `ear_20/ear_10/ear_5`, 40 bytes for legacy v1
+# dumps without `ear`); a 1024-position item is ~56 KiB vs ~600 MiB of fp32
+# dense logits at vocab ~152k (Qwen3-VL).
 #
 # Version history:
 #     v1  40-byte records (kld .. entropy_cand, target/argmax_ref/argmax_cand)
 #     v2  44-byte records: + float32 `ear` (Expected Acceptance Rate,
 #         sum min(p_ref, p_cand) = 1 - TV distance; arXiv:2605.02404) between
 #         entropy_cand and target
-# Readers accept both versions (per-version dtype dispatch); the collectors
+#     v3  56-byte records: + float32 `ear_20`, `ear_10`, `ear_5` after `ear`
+#         (EAR restricted to the reference's top-K slots, both rows
+#         renormalized on those K slots)
+# Readers accept every version (per-version dtype dispatch); the collectors
 # only WRITE the current version (their scorer binary is version-gated).
 #
 # Exposed surface:
@@ -84,7 +88,7 @@ def read_npz_member_headers(path) -> dict[str, tuple[tuple, np.dtype]]:
 
 
 VLMK_MAGIC = 0x564C4D4B   # "VLMK"
-VLMK_VERSION = 2          # writer-current version (44-byte records with ear)
+VLMK_VERSION = 3          # writer-current version (56-byte records with ear + ear_20/10/5)
 
 # Sixth word: llama.cpp's OWN position count after prefill. n_prefill (the
 # fifth) is the HF ground-truth sequential length echoed from the manifest,
@@ -98,8 +102,10 @@ KLD_HEADER_DT = np.dtype([
 ])
 
 # One record per scored answer position; field order/types mirror the packed
-# kld_record struct in vlm-kld.cpp. v1 = 40 bytes; v2 adds float32 `ear`
-# (Expected Acceptance Rate, sum min(p_ref, p_cand) = 1 - TV) -> 44 bytes.
+# kld_record struct in skymizer-vlmk-kernel.h. v1 = 40 bytes; v2 adds float32
+# `ear` (Expected Acceptance Rate, sum min(p_ref, p_cand) = 1 - TV) -> 44
+# bytes; v3 adds float32 `ear_20`, `ear_10`, `ear_5` (EAR over the reference's
+# top-K slots, both rows renormalized on them) -> 56 bytes.
 KLD_RECORD_DT_V1 = np.dtype([
     ("kld", "<f4"), ("reversed_kld", "<f4"), ("js_kld", "<f4"),
     ("nll_ref", "<f4"), ("nll_cand", "<f4"),
@@ -112,13 +118,22 @@ KLD_RECORD_DT_V2 = np.dtype([
     ("entropy_ref", "<f4"), ("entropy_cand", "<f4"), ("ear", "<f4"),
     ("target", "<i4"), ("argmax_ref", "<i4"), ("argmax_cand", "<i4"),
 ])
+KLD_RECORD_DT_V3 = np.dtype([
+    ("kld", "<f4"), ("reversed_kld", "<f4"), ("js_kld", "<f4"),
+    ("nll_ref", "<f4"), ("nll_cand", "<f4"),
+    ("entropy_ref", "<f4"), ("entropy_cand", "<f4"), ("ear", "<f4"),
+    ("ear_20", "<f4"), ("ear_10", "<f4"), ("ear_5", "<f4"),
+    ("target", "<i4"), ("argmax_ref", "<i4"), ("argmax_cand", "<i4"),
+])
 assert KLD_RECORD_DT_V1.itemsize == 40, "v1 record layout drifted"
-assert KLD_RECORD_DT_V2.itemsize == 44, "v2 record layout drifted from vlm-kld.cpp"
+assert KLD_RECORD_DT_V2.itemsize == 44, "v2 record layout drifted"
+assert KLD_RECORD_DT_V3.itemsize == 56, "v3 record layout drifted from skymizer-vlmk-kernel.h"
 
 # The ONE table the version policy derives from: readable versions are its
-# keys, the writer-current layout is its VLMK_VERSION entry. A v3 bump edits
-# this dict + VLMK_VERSION (+ the C++ constant); nothing else is hand-listed.
-_KLD_RECORD_DT_BY_VERSION = {1: KLD_RECORD_DT_V1, 2: KLD_RECORD_DT_V2}
+# keys, the writer-current layout is its VLMK_VERSION entry. A version bump
+# edits this dict + VLMK_VERSION (+ the C++ constant); nothing else is
+# hand-listed.
+_KLD_RECORD_DT_BY_VERSION = {1: KLD_RECORD_DT_V1, 2: KLD_RECORD_DT_V2, 3: KLD_RECORD_DT_V3}
 VLMK_SUPPORTED_VERSIONS = tuple(sorted(_KLD_RECORD_DT_BY_VERSION))
 assert VLMK_VERSION in _KLD_RECORD_DT_BY_VERSION, "VLMK_VERSION has no record layout"
 
@@ -160,6 +175,10 @@ def assert_kld_current_version(header: dict, path) -> dict:
 # uses these; readers of possibly-old dumps go through kld_record_dt(version).
 KLD_RECORD_DT = kld_record_dt(VLMK_VERSION)
 KLD_METRIC_KEYS = KLD_RECORD_DT.names
+# Record columns that older versions lack (v2 added `ear`, v3 the EAR_K
+# family); per-item aggregation and the comparator's default metric set
+# include them only when the dump carries them.
+VERSIONED_METRIC_KEYS = ("ear", "ear_20", "ear_10", "ear_5")
 
 # Header fields preserved in a .npz dump as 0-d uint32 arrays (magic excluded —
 # the .npz container itself plays that role).
@@ -319,9 +338,9 @@ def item_means(m, keep=None):
     """Per-item means of one VLMK dump's metric columns, over the first
     `keep` positions (None = all) -- the ONE VLMK per-item aggregation
     (saved_metrics_paired_compare's per-item scores). Every column is
-    upcast to float64 before averaging. `ear` is present only when the
-    dump carries it (VLMK
-    v2). Returns (scores, dp): the flat score dict and the signed per-token
+    upcast to float64 before averaging. `ear` (VLMK v2+) and `ear_20` /
+    `ear_10` / `ear_5` (v3+) are present only when the dump carries them.
+    Returns (scores, dp): the flat score dict and the signed per-token
     delta-p in percentage points, which callers derive tails / per-token
     columns from."""
     sl = slice(None, keep)
@@ -339,8 +358,9 @@ def item_means(m, keep=None):
         "nll_ref": float(nll_ref.mean()),
         "entropy": float(m["entropy_cand"][sl].astype(np.float64).mean()),
     }
-    if "ear" in m:
-        scores["ear"] = float(m["ear"][sl].astype(np.float64).mean())
+    for key in VERSIONED_METRIC_KEYS:
+        if key in m:
+            scores[key] = float(m[key][sl].astype(np.float64).mean())
     return scores, dp
 
 

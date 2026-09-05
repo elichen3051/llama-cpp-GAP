@@ -105,7 +105,8 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from lib.kld_metrics_io import (                             # noqa: E402
-    KLD_METRIC_KEYS, VLMK_VERSION, item_means, kld_metric_keys, load_kld_metrics,
+    KLD_METRIC_KEYS, VERSIONED_METRIC_KEYS, VLMK_VERSION, item_means, kld_metric_keys,
+    load_kld_metrics,
 )
 from lib.collect_common import manifest_row_statuses              # noqa: E402
 from compare.contracts import (                          # noqa: E402
@@ -357,7 +358,7 @@ def _side_scores(m, keep: int):
         # No scored positions: NaN means -> a hard non-finite failure downstream,
         # mirroring paired_compare's handling of npos == 0 items. Same key
         # set as the keep > 0 branch (ear only when the dump has the column).
-        nan_keys = [k for k in DEFAULT_METRICS if k != "ear" or "ear" in m]
+        nan_keys = [k for k in DEFAULT_METRICS if k not in VERSIONED_METRIC_KEYS or k in m]
         nan_keys += ["entropy", "mean_dp", "nll_ref"]
         empty = {k: np.empty(0, np.float32)
                  for k in POOLED_TOKEN_METRICS

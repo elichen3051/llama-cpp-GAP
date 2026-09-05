@@ -421,7 +421,9 @@ struct server_slot {
             const llama_token id = prompt.tokens[i];
 
             if (id != LLAMA_TOKEN_NULL) {
-                common_sampler_accept(smpl.get(), id, false);
+                if (task->params.penalize_prompt) {
+                    common_sampler_accept(smpl.get(), id, false);
+                }
                 n_text++;
             }
         }
@@ -4613,6 +4615,8 @@ static json get_res_props(const server_context_meta & meta, const common_params 
             {"audio",  meta.has_inp_audio},
         } },
         { "media_marker",                get_media_marker() },
+        { "image_min_tokens",            params.image_min_tokens },
+        { "image_max_tokens",            params.image_max_tokens },
         { "endpoint_slots",              params.endpoint_slots },
         { "endpoint_props",              params.endpoint_props },
         { "endpoint_metrics",            params.endpoint_metrics },

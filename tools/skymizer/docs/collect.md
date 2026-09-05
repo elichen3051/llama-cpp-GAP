@@ -216,7 +216,8 @@ Per-token record fields (all derivations downstream are trivial):
 | `js_kld` | f32 | Jensen-Shannon divergence, nats |
 | `nll_ref` / `nll_cand` | f32 | `−log p(target)` per side; `p(target) = exp(−nll)` |
 | `entropy_ref` / `entropy_cand` | f32 | Self entropy per side, nats |
-| `ear` | f32 | Expected Acceptance Rate: `Σ_v min(p_ref, p_cand)` = `1 − TV` ([arXiv:2605.02404](https://arxiv.org/abs/2605.02404)); VLMK v2 dumps only |
+| `ear` | f32 | Expected Acceptance Rate: `Σ_v min(p_ref, p_cand)` = `1 − TV` ([arXiv:2605.02404](https://arxiv.org/abs/2605.02404)); VLMK v2+ dumps only |
+| `ear_20` / `ear_10` / `ear_5` | f32 | EAR restricted to the reference's top-K slots: the K token ids with the largest reference logits (ties → lower id), both rows renormalized over exactly those K ids (softmax of the K logits), then `Σ_k min(p̃_ref, p̃_cand)`. 1.0 = the candidate reproduces the reference's relative preferences among its K most likely tokens; candidate mass outside the set is ignored by design. K is clamped to the vocabulary size; VLMK v3+ dumps only |
 | `target` | i32 | Teacher-forced target token id |
 | `argmax_ref` / `argmax_cand` | i32 | Per-side argmax; `same_top = (argmax_ref == argmax_cand)` |
 

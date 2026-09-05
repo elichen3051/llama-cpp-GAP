@@ -54,6 +54,7 @@ struct task_params {
     bool return_tokens   = false;
     bool return_progress = false;
     bool return_prompt_layout = false; // return the tokenized prompt layout (text token ids + media chunk spans) in `prompt_layout`
+    bool penalize_prompt      = true;  // feed prompt text tokens into the repetition/presence/frequency penalty window (llama.cpp default); false = penalize generated tokens only (vLLM/HF semantics)
 
     int32_t sse_ping_interval = 30; // seconds between SSE comment pings while the stream stays silent, -1 disables
 

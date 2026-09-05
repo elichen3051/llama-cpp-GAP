@@ -56,7 +56,12 @@ def make_records(npos=5, vocab=11, seed=0, version=kio.VLMK_VERSION):
     rng = np.random.default_rng(seed)
     record_dt = kio.kld_record_dt(version)
     rec = np.zeros(npos, dtype=record_dt)
-    for k in record_dt.names:
+    # Draw the v2-era columns first, in their v2 order, so fixtures for the
+    # pre-existing columns are bit-identical to what earlier versions of this
+    # helper produced; columns added by later versions draw afterwards.
+    legacy = [k for k in kio.KLD_RECORD_DT_V2.names if k in record_dt.names]
+    names = legacy + [k for k in record_dt.names if k not in legacy]
+    for k in names:
         if record_dt[k].kind == "f":
             rec[k] = rng.uniform(0, 5, size=npos).astype(np.float32)
         else:

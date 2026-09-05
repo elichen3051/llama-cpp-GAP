@@ -194,6 +194,7 @@ nothing paired about it.
 | `reversed_kld` | lower better | Reverse `KL(p_cand ‖ p_ref)` — mode-seeking |
 | `js_kld` | lower better | Jensen-Shannon divergence (symmetric, bounded by ln 2) |
 | `ear` | higher better | Expected Acceptance Rate ([arXiv:2605.02404](https://arxiv.org/abs/2605.02404)): per position `Σ_v min(p_ref, p_cand)` = `1 − TV distance`, averaged over the full vocabulary. `EAR 0.99` ⇒ the two models emit the same token 99% of the time under optimal coupling — the speculative-decoding acceptance probability |
+| `ear_20` / `ear_10` / `ear_5` | higher better | EAR restricted to the **reference's top-K** tokens: the K ids with the largest reference logits (ties → lower id), both rows renormalized over exactly those K ids (softmax of the K logits), then `Σ_k min(p̃_ref, p̃_cand)`. Answers "how well does the candidate reproduce the reference's relative preferences among its K most likely tokens" — `1.0` = identical shape on that set. Candidate mass placed outside the reference's top-K is ignored here by design, so read these together with `ear` (which sees the whole vocabulary). VLMK v3+ dumps only |
 | `same_top_rate` | higher better | Fraction of positions where `argmax_ref == argmax_cand` |
 | `mse_dp` | lower better | `mean((p_cand(target) − p_ref(target))²)` in pp² |
 

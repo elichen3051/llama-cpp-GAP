@@ -103,14 +103,29 @@ MEDIA_WRAPPER_MODE = "stripped"
 
 
 def load_dataset_sorted(dataset, subset, split, sort_by, sort_desc=False):
-    """Load and (optionally) sort the HF dataset. Lazy `datasets` import so the
-    module stays importable without it. subset is optional: when falsy the
-    dataset is loaded without a config name (some datasets have no subsets).
+    """Load and (optionally) sort the dataset. Lazy `datasets` import so the
+    module stays importable without it.
+
+    `dataset` is either a Hub repo id (subset optional: when falsy the dataset
+    is loaded without a config name) or a LOCAL `Dataset.save_to_disk`
+    directory (the generators' --save_path output; has a `state.json`), which
+    is loaded with `load_from_disk` so a collection scores exactly the rows the
+    generator wrote, immune to the Hub subset being re-pushed meanwhile. A
+    saved DatasetDict is indexed by `split`; a saved Dataset ignores it.
     sort_desc mirrors prep_llm_score_from_hf: default False keeps every
     existing index-keyed artifact dir valid."""
     from datasets import load_dataset
-    ds = (load_dataset(dataset, subset, split=split) if subset
-          else load_dataset(dataset, split=split))
+    local = Path(dataset)
+    if (local / "state.json").is_file() or (local / "dataset_dict.json").is_file():
+        from datasets import DatasetDict, load_from_disk
+        if subset:
+            raise ValueError(f"--subset {subset!r} does not apply to the local dataset dir {dataset}")
+        ds = load_from_disk(str(local))
+        if isinstance(ds, DatasetDict):
+            ds = ds[split]
+    else:
+        ds = (load_dataset(dataset, subset, split=split) if subset
+              else load_dataset(dataset, split=split))
     if sort_by:
         if sort_desc:
             ds = ds.sort([sort_by], reverse=True)
@@ -549,6 +564,11 @@ def build_meta(row) -> dict:
         # collector's n_past_expected (warn-only cross-check vs the scorer).
         "n_past_expected": (int(row["llamacpp_n_past_prefill"])
                             if is_llamacpp_row(row) else None),
+        # llama-server tokenizes /completion prompts with add_special=true; the
+        # scorer must replay the same flag or BOS-adding vocabs (Gemma) shift the
+        # whole prefix. Rows predating the column were Qwen (no BOS) -> false.
+        "add_special": (bool(row.get("llamacpp_add_special", False))
+                        if is_llamacpp_row(row) else False),
         "per_image_vision_token_counts": (
             [int(c) for c in row["per_image_vision_token_counts"]]
             if is_llamacpp_row(row) and row.get("per_image_vision_token_counts") is not None
@@ -565,6 +585,11 @@ def write_prep_images(row, out_dir: Path, raw_images=None) -> list:
     exactly what the generator decoded. Otherwise PIL re-encodes to PNG
     (lossless for the pixels PIL decoded, the historical behaviour)."""
     names = []
+    if raw_images is None and is_llamacpp_row(row):
+        raise PrepError(
+            "llama.cpp-generated rows must be prepped from their raw image bytes "
+            "(RawImageReader); a PIL re-encode would not reproduce the generator's "
+            "stb_image input")
     if raw_images is not None:
         if len(raw_images) != len(row["images"]):
             raise PrepError(f"{len(raw_images)} raw images for {len(row['images'])} row images")

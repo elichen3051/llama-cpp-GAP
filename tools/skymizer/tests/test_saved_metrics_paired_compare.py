@@ -628,7 +628,8 @@ def test_side_scores_keep_zero_omits_ear_for_v1_records():
     nan1, _ = smpc._side_scores(m1, 0)
     nan2, _ = smpc._side_scores(m2, 0)
     assert "ear" not in nan1 and "ear" in nan2
-    assert set(nan1) | {"ear"} == set(nan2)
+    assert not (set(kio.VERSIONED_METRIC_KEYS) & set(nan1))
+    assert set(nan1) | set(kio.VERSIONED_METRIC_KEYS) == set(nan2)
     assert set(nan2) == set(smpc._side_scores(m2, 2)[0])
 
 

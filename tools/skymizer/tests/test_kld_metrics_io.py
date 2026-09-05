@@ -27,13 +27,18 @@ def vlmk_bin(tmp_path):
 # record layout contract
 # ---------------------------------------------------------------------------
 
-def test_record_layout_is_44_bytes_in_cpp_field_order():
-    """KLD_RECORD_DT must mirror the packed kld_record struct in vlm-kld.cpp
-    (current = v2, 44 bytes with `ear`); the v1 layout stays pinned for the
-    legacy readers."""
-    assert kio.VLMK_VERSION == 2
-    assert kio.KLD_RECORD_DT.itemsize == 44
+def test_record_layout_is_56_bytes_in_cpp_field_order():
+    """KLD_RECORD_DT must mirror the packed kld_record struct in
+    skymizer-vlmk-kernel.h (current = v3, 56 bytes with `ear` and the EAR_K
+    family); the v1/v2 layouts stay pinned for the legacy readers."""
+    assert kio.VLMK_VERSION == 3
+    assert kio.KLD_RECORD_DT.itemsize == 56
     assert kio.KLD_METRIC_KEYS == (
+        "kld", "reversed_kld", "js_kld", "nll_ref", "nll_cand",
+        "entropy_ref", "entropy_cand", "ear", "ear_20", "ear_10", "ear_5",
+        "target", "argmax_ref", "argmax_cand")
+    assert kio.kld_record_dt(2).itemsize == 44
+    assert kio.kld_metric_keys(2) == (
         "kld", "reversed_kld", "js_kld", "nll_ref", "nll_cand",
         "entropy_ref", "entropy_cand", "ear",
         "target", "argmax_ref", "argmax_cand")
@@ -41,8 +46,9 @@ def test_record_layout_is_44_bytes_in_cpp_field_order():
     assert kio.kld_metric_keys(1) == (
         "kld", "reversed_kld", "js_kld", "nll_ref", "nll_cand",
         "entropy_ref", "entropy_cand", "target", "argmax_ref", "argmax_cand")
+    assert kio.VERSIONED_METRIC_KEYS == ("ear", "ear_20", "ear_10", "ear_5")
     with pytest.raises(ValueError, match="version"):
-        kio.kld_record_dt(3)
+        kio.kld_record_dt(4)
 
 
 # ---------------------------------------------------------------------------
@@ -363,3 +369,10 @@ def test_item_means_is_what_the_consumer_reports(tmp_path):
     # v1 dumps have no ear column: the aggregation does not invent one
     m1 = {k: v for k, v in m.items() if k != "ear"}
     assert "ear" not in kio.item_means(m1)[0]
+    # v2 dumps have ear but not the EAR_K family
+    m2 = {k: v for k, v in m.items() if k not in ("ear_20", "ear_10", "ear_5")}
+    s2 = kio.item_means(m2)[0]
+    assert "ear" in s2 and not ({"ear_20", "ear_10", "ear_5"} & set(s2))
+    full = kio.item_means(m)[0]
+    for key in ("ear_20", "ear_10", "ear_5"):
+        assert full[key] == float(m[key].astype(np.float64).mean())

@@ -37,6 +37,9 @@ std::vector<std::unique_ptr<field>> make_llama_cmpl_schema(const common_params &
     add((new field_bool("return_progress", params.return_progress))
         ->set_desc("Include prompt processing progress events in stream mode"));
 
+    add((new field_bool("penalize_prompt", params.penalize_prompt))
+        ->set_desc("Feed the prompt's text tokens into the repetition/presence/frequency penalty window before generation (default true). Set false to penalize generated tokens only, matching vLLM/HF presence/frequency penalty semantics"));
+
     add((new field_bool("return_prompt_layout", params.return_prompt_layout))
         ->set_desc("Return the tokenized prompt layout in the `prompt_layout` field: text chunks carry their token ids, media chunks their token/position spans and bitmap id"));
 

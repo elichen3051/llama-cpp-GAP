@@ -4,7 +4,7 @@
 // (e.g. Q4_K_M) — runs the SAME teacher-forced prompt+answer token stream through both, and
 // computes per-answer-token divergence metrics from the two full-vocab logit
 // rows while they are still in memory. Only the metrics are written to disk:
-// 44 bytes/position instead of vocab * 4 bytes/position of dense fp32 logits
+// 56 bytes/position instead of vocab * 4 bytes/position of dense fp32 logits
 // (~14,000x smaller at vocab ~152k); every metric covers the full vocabulary.
 //
 // Deliberately a STANDALONE module, independent of vlm-score.cpp (which dumps
@@ -87,7 +87,7 @@
 //                                              actually moves when the vision
 //                                              budget changes; 0 = not recorded,
 //                                              i.e. written before this field)
-// followed by n_positions packed records of 44 bytes:
+// followed by n_positions packed records of 56 bytes:
 //   float32 kld                                KL(p_ref || p_cand), nats
 //   float32 reversed_kld                       KL(p_cand || p_ref), nats
 //   float32 js_kld                             Jensen-Shannon divergence, nats
@@ -96,6 +96,10 @@
 //   float32 entropy_ref                        -sum p_ref * log p_ref
 //   float32 entropy_cand                       -sum p_cand * log p_cand
 //   float32 ear                                sum min(p_ref, p_cand) = 1 - TV distance
+//   float32 ear_20                             EAR restricted to the reference's top-20
+//                                              slots (both rows renormalized on them; v3)
+//   float32 ear_10                             same, top-10 (v3)
+//   float32 ear_5                              same, top-5 (v3)
 //   int32   target                             teacher-forced target token id
 //   int32   argmax_ref                         reference argmax token id
 //   int32   argmax_cand                        candidate argmax token id
@@ -145,7 +149,7 @@
 #endif
 
 static constexpr uint32_t VLMK_MAGIC   = 0x564C4D4B; // "VLMK"
-static constexpr uint32_t VLMK_VERSION = 2;          // v2: 44-byte records (+ ear)
+static constexpr uint32_t VLMK_VERSION = 3;          // v3: 56-byte records (+ ear_20/ear_10/ear_5); v2 = 44 (+ ear), v1 = 40
 
 
 // ---------------------------------------------------------------------------
@@ -269,7 +273,7 @@ static bool parse_args(int argc, char ** argv, vlm_kld_args & a) {
 // ---------------------------------------------------------------------------
 
 // Write the whole VLMK file at once (header + records), to <path>.tmp first,
-// fsync, then atomically rename. Metrics are tiny (44 bytes/position), so
+// fsync, then atomically rename. Metrics are tiny (56 bytes/position), so
 // unlike vlm-score's streaming vlms_writer there is no need to stream — a
 // buffered single-shot write keeps the commit logic trivially reviewable and
 // a crashed/partial run never leaves a complete-looking output behind.
@@ -466,7 +470,7 @@ static bool prefill_side(model_side & s,
 
 // Score one item: prefill both sides, teacher-force the shared answer tokens
 // through both in chunks, and compute one kld_record per answer position from
-// the two in-memory logit rows. Records are buffered (44 B/position) and the
+// the two in-memory logit rows. Records are buffered (56 B/position) and the
 // output is committed atomically at the end.
 static bool score_one(
         const vlm_kld_args & args,

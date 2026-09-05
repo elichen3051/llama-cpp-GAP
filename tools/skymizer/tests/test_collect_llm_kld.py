@@ -270,7 +270,7 @@ def test_preflight_accepts_current_version_scorer(tmp_path):
 def test_preflight_rejects_older_version_scorer(tmp_path):
     scorer = tmp_path / "scorer.py"
     _write_version_scorer(scorer, f"print({kio.VLMK_VERSION - 1})\n")
-    with pytest.raises(SystemExit, match=r"writes VLMK v1 .* rebuild"):
+    with pytest.raises(SystemExit, match=rf"writes VLMK v{kio.VLMK_VERSION - 1} .* rebuild"):
         common.preflight_scorer_vlmk_version(scorer)
 
 

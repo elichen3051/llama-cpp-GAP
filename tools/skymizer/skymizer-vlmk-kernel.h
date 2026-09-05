@@ -38,16 +38,20 @@ struct kld_record {
     float   entropy_ref;    // -sum p_ref * log p_ref
     float   entropy_cand;   // -sum p_cand * log p_cand
     float   ear;            // sum min(p_ref, p_cand) = 1 - TV (Expected Acceptance Rate)
+    float   ear_20;         // EAR over the reference's top-20 slots, both rows renormalized on them (v3)
+    float   ear_10;         // ... top-10 (v3)
+    float   ear_5;          // ... top-5 (v3)
     int32_t target;         // teacher-forced target token id
     int32_t argmax_ref;     // reference argmax token id
     int32_t argmax_cand;    // candidate argmax token id
 };
-static_assert(sizeof(kld_record) == 44, "kld_record must be 44 packed bytes (on-disk layout)");
+static_assert(sizeof(kld_record) == 56, "kld_record must be 56 packed bytes (on-disk layout)");
 
 static bool kld_record_all_finite(const kld_record & rec) {
     const float values[] = {
         rec.kld, rec.reversed_kld, rec.js_kld, rec.nll_ref,
         rec.nll_cand, rec.entropy_ref, rec.entropy_cand, rec.ear,
+        rec.ear_20, rec.ear_10, rec.ear_5,
     };
     for (float value : values) {
         if (!std::isfinite(value)) {
@@ -62,10 +66,12 @@ static bool validate_kld_record_finite(
     const float values[] = {
         rec.kld, rec.reversed_kld, rec.js_kld, rec.nll_ref,
         rec.nll_cand, rec.entropy_ref, rec.entropy_cand, rec.ear,
+        rec.ear_20, rec.ear_10, rec.ear_5,
     };
     const char * names[] = {
         "kld", "reversed_kld", "js_kld", "nll_ref",
         "nll_cand", "entropy_ref", "entropy_cand", "ear",
+        "ear_20", "ear_10", "ear_5",
     };
     for (size_t i = 0; i < sizeof(values) / sizeof(values[0]); ++i) {
         if (!std::isfinite(values[i])) {
@@ -92,6 +98,9 @@ struct kld_values {
     double  entropy_ref  = 0.0;
     double  entropy_cand = 0.0;
     double  ear          = 0.0;
+    double  ear_20       = 0.0;
+    double  ear_10       = 0.0;
+    double  ear_5        = 0.0;
     int32_t target       = 0;
     int32_t argmax_ref   = 0;
     int32_t argmax_cand  = 0;
@@ -107,6 +116,9 @@ static kld_record to_kld_record(const kld_values & v) {
     rec.entropy_ref  = (float) v.entropy_ref;
     rec.entropy_cand = (float) v.entropy_cand;
     rec.ear          = (float) v.ear;
+    rec.ear_20       = (float) v.ear_20;
+    rec.ear_10       = (float) v.ear_10;
+    rec.ear_5        = (float) v.ear_5;
     rec.target       = v.target;
     rec.argmax_ref   = v.argmax_ref;
     rec.argmax_cand  = v.argmax_cand;
@@ -135,6 +147,72 @@ static row_stats compute_row_stats(const float * x, int n) {
     }
     s.log_z = s.max + std::log(sum);
     return s;
+}
+
+// EAR_K (v3: ear_20 / ear_10 / ear_5): the Expected Acceptance Rate restricted
+// to the REFERENCE's K most likely tokens. Take the K vocab slots with the
+// largest reference logits (ties -> lower index), renormalize BOTH rows over
+// exactly those K slots (a softmax over the K logits), and sum
+// min(p~_ref, p~_cand). 1.0 = the candidate reproduces the reference's
+// relative preferences among its K most likely tokens; candidate mass outside
+// that set is ignored here by design, so read it together with `ear`. K is
+// clamped to n_vocab (for n_vocab <= K this is `ear` up to rounding). If the
+// candidate has no mass on any of the K slots the value is 0.
+static constexpr int EAR_TOPK_MAX = 20;
+
+// One pass with a sorted insertion buffer: once K slots are filled the common
+// case is a single failed compare per vocab entry. Strict `>` on entry and
+// strict `<` while shifting keep ties in ascending-index order.
+static int select_ref_topk(const float * ref, int n_vocab, int32_t * top_idx, float * top_val) {
+    const int k_max = std::min(EAR_TOPK_MAX, n_vocab);
+    int n_top = 0;
+    for (int i = 0; i < n_vocab; ++i) {
+        const float x = ref[i];
+        if (n_top == k_max && !(x > top_val[n_top - 1])) {
+            continue;
+        }
+        int j = (n_top == k_max) ? n_top - 1 : n_top;
+        while (j > 0 && top_val[j - 1] < x) {
+            top_val[j] = top_val[j - 1];
+            top_idx[j] = top_idx[j - 1];
+            --j;
+        }
+        top_val[j] = x;
+        top_idx[j] = i;
+        if (n_top < k_max) {
+            ++n_top;
+        }
+    }
+    return n_top;
+}
+
+// EAR over the first k entries of a descending top list (all in double; fixed
+// ascending-j summation order).
+static double ear_topk_value(const float * cand, const int32_t * top_idx, const float * top_val, int k) {
+    const double neg_inf = -std::numeric_limits<double>::infinity();
+    if (k <= 0) {
+        return 0.0;
+    }
+    const double r_max = top_val[0];
+    double c_max = neg_inf;
+    for (int j = 0; j < k; ++j) {
+        c_max = std::max(c_max, (double) cand[top_idx[j]]);
+    }
+    if (!(r_max > neg_inf) || !(c_max > neg_inf)) {
+        return 0.0;   // a fully masked side has no distribution on the set
+    }
+    double z_r = 0.0, z_c = 0.0;
+    for (int j = 0; j < k; ++j) {
+        z_r += std::exp((double) top_val[j] - r_max);
+        z_c += std::exp((double) cand[top_idx[j]] - c_max);
+    }
+    double ear = 0.0;
+    for (int j = 0; j < k; ++j) {
+        const double p_r = std::exp((double) top_val[j] - r_max) / z_r;
+        const double p_c = std::exp((double) cand[top_idx[j]] - c_max) / z_c;
+        ear += std::min(p_r, p_c);
+    }
+    return ear;
 }
 
 // Compute all metrics for one position from two full-vocab fp32 logit rows.
@@ -197,6 +275,15 @@ static kld_values compute_kld_values(const float * ref, const float * cand, int 
     v.target       = target;
     v.argmax_ref   = sr.argmax;
     v.argmax_cand  = sc.argmax;
+    // v3: EAR_K from a separate top-K pass; the frozen loop above is untouched.
+    {
+        int32_t top_idx[EAR_TOPK_MAX];
+        float   top_val[EAR_TOPK_MAX];
+        const int n_top = select_ref_topk(ref, n_vocab, top_idx, top_val);
+        v.ear_20 = ear_topk_value(cand, top_idx, top_val, std::min(20, n_top));
+        v.ear_10 = ear_topk_value(cand, top_idx, top_val, std::min(10, n_top));
+        v.ear_5  = ear_topk_value(cand, top_idx, top_val, std::min(5,  n_top));
+    }
     return v;
 }
 
@@ -294,6 +381,25 @@ static kld_values naive_kld_values(const std::vector<float> & ref, const std::ve
     v.target       = target;
     v.argmax_ref   = (int32_t) (std::max_element(p.begin(), p.end()) - p.begin());
     v.argmax_cand  = (int32_t) (std::max_element(q.begin(), q.end()) - q.begin());
+    // EAR_K the textbook way: rank slots by the materialized reference
+    // probability (stable sort -> lower index first on ties), renormalize by
+    // the partial sums, sum the mins. Deliberately probability-space, unlike
+    // the kernel's log-space softmax over the selected logits.
+    std::vector<int> order(n);
+    for (int i = 0; i < n; ++i) order[i] = i;
+    std::stable_sort(order.begin(), order.end(), [&p](int a, int b) { return p[a] > p[b]; });
+    auto ear_k = [&](int k) {
+        k = std::min(k, n);
+        double sp = 0.0, sq = 0.0;
+        for (int j = 0; j < k; ++j) { sp += p[order[j]]; sq += q[order[j]]; }
+        if (!(sp > 0.0) || !(sq > 0.0)) return 0.0;
+        double e = 0.0;
+        for (int j = 0; j < k; ++j) e += std::min(p[order[j]] / sp, q[order[j]] / sq);
+        return e;
+    };
+    v.ear_20 = ear_k(20);
+    v.ear_10 = ear_k(10);
+    v.ear_5  = ear_k(5);
     return v;
 }
 
@@ -341,6 +447,10 @@ static bool run_self_test() {
         ok &= self_test_close("2-token reversed_kld", rec.reversed_kld, rkld,           1e-6);
         ok &= self_test_close("2-token js_kld",       rec.js_kld,       jsd,            1e-6);
         ok &= self_test_close("2-token ear",          rec.ear,          0.75,           1e-6);
+        // K clamps to the 2-slot vocabulary, so every EAR_K equals EAR here
+        ok &= self_test_close("2-token ear_20",       rec.ear_20,       0.75,           1e-6);
+        ok &= self_test_close("2-token ear_10",       rec.ear_10,       0.75,           1e-6);
+        ok &= self_test_close("2-token ear_5",        rec.ear_5,        0.75,           1e-6);
         ok &= self_test_close("2-token nll_ref",      rec.nll_ref,      std::log(2.0),  1e-6);
         ok &= self_test_close("2-token nll_cand",     rec.nll_cand,     std::log(4.0 / 3.0), 1e-6);
         ok &= self_test_close("2-token entropy_ref",  rec.entropy_ref,  std::log(2.0),  1e-6);
@@ -367,6 +477,9 @@ static bool run_self_test() {
             ok &= self_test_close(tag, got.reversed_kld, want.reversed_kld, tol);
             ok &= self_test_close(tag, got.js_kld,       want.js_kld,       tol);
             ok &= self_test_close(tag, got.ear,          want.ear,          tol);
+            ok &= self_test_close(tag, got.ear_20,       want.ear_20,       tol);
+            ok &= self_test_close(tag, got.ear_10,       want.ear_10,       tol);
+            ok &= self_test_close(tag, got.ear_5,        want.ear_5,        tol);
             ok &= self_test_close(tag, got.nll_ref,      want.nll_ref,      tol);
             ok &= self_test_close(tag, got.nll_cand,     want.nll_cand,     tol);
             ok &= self_test_close(tag, got.entropy_ref,  want.entropy_ref,  tol);
@@ -402,6 +515,9 @@ static bool run_self_test() {
             if (got.kld < -1e-6f || got.reversed_kld < -1e-6f ||
                 got.js_kld < -1e-6f || got.js_kld > (float) std::log(2.0) + 1e-6f ||
                 got.ear < -1e-6f || got.ear > 1.0f + 1e-6f ||
+                got.ear_20 < -1e-6f || got.ear_20 > 1.0f + 1e-6f ||
+                got.ear_10 < -1e-6f || got.ear_10 > 1.0f + 1e-6f ||
+                got.ear_5  < -1e-6f || got.ear_5  > 1.0f + 1e-6f ||
                 (double) got.ear < 1.0 - std::sqrt(std::max(0.0, (double) got.kld) / 2.0) - 1e-6) {
                 fprintf(stderr, "self-test FAIL: invariant violated on trial %d "
                                 "(kld=%g rkld=%g jsd=%g ear=%g)\n",
@@ -410,7 +526,9 @@ static bool run_self_test() {
             }
             if (trial == 0 &&
                 (std::abs(got.kld) > 1e-9f || std::abs(got.reversed_kld) > 1e-9f ||
-                 std::abs(got.js_kld) > 1e-9f || std::abs(got.ear - 1.0f) > 1e-6f)) {
+                 std::abs(got.js_kld) > 1e-9f || std::abs(got.ear - 1.0f) > 1e-6f ||
+                 std::abs(got.ear_20 - 1.0f) > 1e-6f || std::abs(got.ear_10 - 1.0f) > 1e-6f ||
+                 std::abs(got.ear_5 - 1.0f) > 1e-6f)) {
                 fprintf(stderr, "self-test FAIL: identity divergences not ~0 "
                                 "(kld=%g rkld=%g jsd=%g ear=%g)\n",
                         got.kld, got.reversed_kld, got.js_kld, got.ear);
@@ -481,6 +599,9 @@ static bool run_self_test() {
             ok &= self_test_close_rel("prod reversed_kld", got.reversed_kld, want.reversed_kld, rtol);
             ok &= self_test_close_rel("prod js_kld",       got.js_kld,       want.js_kld,       rtol);
             ok &= self_test_close_rel("prod ear",          got.ear,          want.ear,          rtol);
+            ok &= self_test_close_rel("prod ear_20",       got.ear_20,       want.ear_20,       rtol);
+            ok &= self_test_close_rel("prod ear_10",       got.ear_10,       want.ear_10,       rtol);
+            ok &= self_test_close_rel("prod ear_5",        got.ear_5,        want.ear_5,        rtol);
             ok &= self_test_close_rel("prod nll_ref",      got.nll_ref,      want.nll_ref,      rtol);
             ok &= self_test_close_rel("prod nll_cand",     got.nll_cand,     want.nll_cand,     rtol);
             ok &= self_test_close_rel("prod entropy_ref",  got.entropy_ref,  want.entropy_ref,  rtol);
@@ -488,6 +609,30 @@ static bool run_self_test() {
             if (got.target != want.target || got.argmax_ref != want.argmax_ref ||
                 got.argmax_cand != want.argmax_cand) {
                 fprintf(stderr, "self-test FAIL: production-regime argmax/target mismatch\n");
+                ok = false;
+            }
+        }
+
+        // 3f) EAR_K: the candidate agrees with the reference EXACTLY on the
+        //     reference's five most likely slots and is shifted everywhere
+        //     else, so ear_5 must be 1 while ear_10 / ear_20 (which see the
+        //     shifted slots) and the full-vocab ear must not; ties in the
+        //     tail (equal logits) exercise the lower-index-first rule against
+        //     the naive stable sort.
+        {
+            std::vector<float> r(n_vocab), c(n_vocab);
+            for (int i = 0; i < n_vocab; ++i) {
+                r[i] = (i < 30) ? (float) (20 - i) : -5.0f;   // 30 distinct leaders, then a flat tail
+                c[i] = (i < 5)  ? r[i] : r[i] + 0.5f;
+            }
+            const kld_record got  = compute_kld_record(r.data(), c.data(), n_vocab, 0);
+            const kld_record want = naive_kld_record(r, c, 0);
+            check_vs_naive("topk", got, want, 2e-6);
+            if (std::abs(got.ear_5 - 1.0f) > 1e-6f || got.ear_10 > 1.0f - 1e-4f ||
+                got.ear_20 > 1.0f - 1e-4f || got.ear > 1.0f - 1e-4f) {
+                fprintf(stderr, "self-test FAIL: EAR_K top-5 agreement case "
+                                "(ear_5=%g ear_10=%g ear_20=%g ear=%g)\n",
+                        got.ear_5, got.ear_10, got.ear_20, got.ear);
                 ok = false;
             }
         }
@@ -506,7 +651,8 @@ static bool run_self_test() {
             const kld_record want = naive_kld_record(r, c, target);
             if (!std::isfinite(got.kld) || !std::isfinite(got.reversed_kld) ||
                 !std::isfinite(got.js_kld) || !std::isfinite(got.entropy_ref) ||
-                !std::isfinite(got.entropy_cand) || !std::isfinite(got.ear)) {
+                !std::isfinite(got.entropy_cand) || !std::isfinite(got.ear) ||
+                !std::isfinite(got.ear_20) || !std::isfinite(got.ear_10) || !std::isfinite(got.ear_5)) {
                 fprintf(stderr, "self-test FAIL: masked-vocab metrics not finite "
                                 "(kld=%g rkld=%g jsd=%g ent_r=%g ent_c=%g ear=%g)\n",
                         got.kld, got.reversed_kld, got.js_kld,

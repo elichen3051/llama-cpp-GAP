@@ -179,10 +179,10 @@ def test_postprocess_keeps_valid_dump_until_converted(tmp_path):
     assert row["metrics_path"].with_suffix(".npz").exists()
 
 
-def test_kld_float_keys_are_the_eight_metric_columns():
+def test_kld_float_keys_are_the_eleven_metric_columns():
     assert ck.KLD_FLOAT_KEYS == ("kld", "reversed_kld", "js_kld", "nll_ref",
                                  "nll_cand", "entropy_ref", "entropy_cand",
-                                 "ear")
+                                 "ear", "ear_20", "ear_10", "ear_5")
 
 
 def test_dump_stem_contract():
@@ -565,3 +565,44 @@ def test_build_kld_manifest_entry_uses_prep_image_files(tmp_path):
                                         image_files=["img_0.jpg", "img_1.png"])
     assert entry["images"] == [str(tmp_path / "prep" / "img_0.jpg"),
                                str(tmp_path / "prep" / "img_1.png")]
+
+
+def test_build_kld_manifest_entry_add_special_only_when_true(tmp_path):
+    base = ck.build_kld_manifest_entry(tmp_path / "p", tmp_path / "m.bin", n_images=1, n_prefill=3)
+    assert "add_special" not in base
+    entry = ck.build_kld_manifest_entry(tmp_path / "p", tmp_path / "m.bin", n_images=1, n_prefill=3,
+                                        add_special=True)
+    assert entry["add_special"] is True
+
+
+def test_resolve_image_token_budget_distinguishes_omitted_from_explicit_minus_one(capsys):
+    import types
+    cfg = json.dumps({"engine": "llama.cpp", "image_min_tokens": 64, "image_max_tokens": 16384})
+    ds = [{"generation_engine": "llama.cpp", "image_processor_config": cfg}]
+
+    # both flags omitted -> adopt the dataset's recorded budget
+    args = types.SimpleNamespace(image_min_tokens=None, image_max_tokens=None)
+    ck.resolve_image_token_budget(args, ds)
+    assert (args.image_min_tokens, args.image_max_tokens) == (64, 16384)
+    assert "adopting its recorded image token budget" in capsys.readouterr().err
+
+    # explicit -1 -1 (mmproj metadata) is NOT the same as omitted: kept verbatim
+    args = types.SimpleNamespace(image_min_tokens=-1, image_max_tokens=-1)
+    ck.resolve_image_token_budget(args, ds)
+    assert (args.image_min_tokens, args.image_max_tokens) == (-1, -1)
+    assert "adopting" not in capsys.readouterr().err
+
+    # one explicit value disables adoption; the omitted one falls back to -1
+    args = types.SimpleNamespace(image_min_tokens=8, image_max_tokens=None)
+    ck.resolve_image_token_budget(args, ds)
+    assert (args.image_min_tokens, args.image_max_tokens) == (8, -1)
+
+    # non-llama.cpp rows: omitted -> -1 -1, nothing adopted
+    args = types.SimpleNamespace(image_min_tokens=None, image_max_tokens=None)
+    ck.resolve_image_token_budget(args, [{"generation_engine": None, "image_processor_config": "{}"}])
+    assert (args.image_min_tokens, args.image_max_tokens) == (-1, -1)
+
+    # empty dataset: omitted -> -1 -1
+    args = types.SimpleNamespace(image_min_tokens=None, image_max_tokens=None)
+    ck.resolve_image_token_budget(args, [])
+    assert (args.image_min_tokens, args.image_max_tokens) == (-1, -1)

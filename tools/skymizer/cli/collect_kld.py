@@ -182,19 +182,23 @@ def dump_stem(idx: int, item_id: str) -> str:
 
 def build_kld_manifest_entry(prep_dir: Path, metrics_path: Path,
                              n_images: int, n_prefill: int,
-                             image_files=None) -> dict:
+                             image_files=None, add_special: bool = False) -> dict:
     """One JSONL entry consumed by llama-vlm-kld --manifest. `image_files`
     (from prep's meta) names the files prep actually wrote; without it the
-    historical img_{i}.png layout is assumed."""
+    historical img_{i}.png layout is assumed. `add_special` (llama-server
+    rows) makes the scorer tokenize the prefix with mtmd add_special=true."""
     if image_files is None:
         image_files = [f"img_{i}.png" for i in range(n_images)]
-    return {
+    entry = {
         "images": [str(prep_dir / name) for name in image_files],
         "formatted_chat": str(prep_dir / "formatted_chat.txt"),
         "tokens_in": str(prep_dir / "tokens.bin"),
         "n_prefill": n_prefill,
         "output_metrics": str(metrics_path),
     }
+    if add_special:
+        entry["add_special"] = True
+    return entry
 
 
 def write_kld_manifest(path: Path, entries):
@@ -220,10 +224,10 @@ def check_n_past_expected(row: dict, header: dict, metrics_path,
                           require_match: bool = False):
     """llama.cpp-generated rows carry the generator's own position count
     after prefill (n_past_expected). The scorer's n_past_actual should equal
-    it when both run the same mtmd preprocessing; a different llama.cpp build
-    or budget can legitimately differ, and old datasets are routinely scored
-    with newer scorers, so a mismatch WARNS and is recorded on the row.
-    --require-n-past-match turns it into a rejection."""
+    it when both run the same mtmd preprocessing; a mismatch means the scored
+    prefix is not the one the reference text was generated under, so by
+    default (require_match=True, i.e. without --allow-prefix-drift) the row
+    is rejected. With --allow-prefix-drift it WARNS and is recorded on the row."""
     expected = row.get("n_past_expected")
     if expected is None:
         return None
@@ -371,6 +375,9 @@ def build_collect_meta(args, dataset_content_hash: str | None = None, *,
         "max_total_tokens": getattr(args, "max_total_tokens", None),
         "image_min_tokens": args.image_min_tokens,
         "image_max_tokens": args.image_max_tokens,
+        # provenance for llama.cpp-generated datasets: whether prefix drift
+        # between generator and scorer was allowed (warn) or rejected (default)
+        "allow_prefix_drift": bool(getattr(args, "allow_prefix_drift", False)),
         "tf_chunk":  args.tf_chunk,
         "n_ctx":     args.n_ctx,
         "n_batch":   args.n_batch,
@@ -440,12 +447,16 @@ def parse_args():
                         "cost is included for cross-runtime row selection. This is "
                         "not a KV guarantee: mtmd's actual vision token count is "
                         "C++-side; --n-ctx remains scorer capacity.")
-    p.add_argument("--image-min-tokens", type=int, default=-1,
-                   help="Lower bound on per-image vision tokens forwarded to the scorer; "
-                        "-1 = use model metadata (default).")
-    p.add_argument("--image-max-tokens", type=int, default=-1,
-                   help="Upper bound on per-image vision tokens forwarded to the scorer; "
-                        "-1 = use model metadata (default).")
+    p.add_argument("--image-min-tokens", type=int, default=None,
+                   help="Lower bound on per-image vision tokens forwarded to the scorer. "
+                        "-1 = the mmproj's own metadata. Omitted (with --image-max-tokens "
+                        "also omitted) = adopt the budget a llama.cpp-generated dataset "
+                        "recorded, else -1.")
+    p.add_argument("--image-max-tokens", type=int, default=None,
+                   help="Upper bound on per-image vision tokens forwarded to the scorer. "
+                        "-1 = the mmproj's own metadata. Omitted (with --image-min-tokens "
+                        "also omitted) = adopt the budget a llama.cpp-generated dataset "
+                        "recorded, else -1.")
     p.add_argument("--n-batch", type=int, default=2048,
                    help="Scorer prefill logical batch (-b). Default 2048; must be >= --n-ubatch.")
     p.add_argument("--n-ubatch", type=int, default=2048,
@@ -485,10 +496,11 @@ def parse_args():
                         "(e.g. which id is <eos>).")
     p.add_argument("--llama-vlm-kld",
                    default=str(REPO_ROOT / "build/bin/llama-vlm-kld"))
-    p.add_argument("--require-n-past-match", action="store_true",
-                   help="Reject llama.cpp-generated rows whose scorer n_past_actual "
-                        "differs from the generator's llamacpp_n_past_prefill "
-                        "(default: warn only; producer/consumer builds may differ).")
+    p.add_argument("--allow-prefix-drift", action="store_true",
+                   help="Score llama.cpp-generated rows even when this scorer's mtmd image "
+                        "spans / n_past differ from the generator's (warn instead of reject). "
+                        "Default rejects: the paired metrics would otherwise be conditioned on a "
+                        "different prefix than the reference text was generated under.")
     p.add_argument("--keep-prep", action="store_true",
                    help="Don't delete per-row prep dir (debug)")
     return p.parse_args()
@@ -530,6 +542,10 @@ def main():
         sys.exit(f"--n-ubatch ({args.n_ubatch}) must be <= --n-batch ({args.n_batch})")
     if args.tf_chunk != -1 and args.tf_chunk < 1:
         sys.exit(f"--tf-chunk must be -1 (follow --n-ubatch) or >= 1, got {args.tf_chunk}")
+    for flag, value in (("--image-min-tokens", args.image_min_tokens),
+                        ("--image-max-tokens", args.image_max_tokens)):
+        if value is not None and value != -1 and value < 1:
+            sys.exit(f"{flag} must be -1 (mmproj metadata) or >= 1, got {value}")
     if args.n_ctx < 1:
         sys.exit(f"--n-ctx must be >= 1, got {args.n_ctx}")
     if args.n_gpu_layers < 0:
@@ -587,7 +603,47 @@ def _load_dataset(args):
     # _PrepState(args) is built after loading but only sees args; stash the
     # table so llama.cpp rows can be prepped from their raw image bytes.
     args.loaded_dataset = ds
+    resolve_image_token_budget(args, ds)
     return ds
+
+
+def resolve_image_token_budget(args, ds) -> None:
+    """Turn the CLI's --image-min/max-tokens into the ints the scorer takes.
+
+    ``None`` (flag omitted) is distinct from an explicit ``-1`` (use the
+    mmproj's metadata): when BOTH flags are omitted and the dataset was
+    generated by llama.cpp, adopt the budget the generator recorded in
+    ``image_processor_config``; otherwise every remaining ``None`` becomes -1.
+    Explicit values, -1 included, are never overwritten; the
+    VisionBudgetReporter still warns when they differ from the dataset's."""
+    if args.image_min_tokens is None and args.image_max_tokens is None:
+        adopted = _dataset_image_budget(ds)
+        if adopted is not None:
+            args.image_min_tokens, args.image_max_tokens = adopted
+            print(f"{COLLECT_LOG_PREFIX} llama.cpp-generated dataset: adopting its recorded "
+                  f"image token budget min={adopted[0]} max={adopted[1]} "
+                  "(pass --image-min-tokens/--image-max-tokens explicitly to override; "
+                  "-1 -1 = mmproj metadata)", file=sys.stderr)
+    if args.image_min_tokens is None:
+        args.image_min_tokens = -1
+    if args.image_max_tokens is None:
+        args.image_max_tokens = -1
+
+
+def _dataset_image_budget(ds):
+    """(min, max) recorded by a llama.cpp-generated dataset, else None."""
+    if len(ds) == 0:
+        return None
+    import cli.prep_vlm_score_from_hf as prep_lib
+    row = ds[0]
+    if not prep_lib.is_llamacpp_row(row):
+        return None
+    try:
+        cfg = json.loads(row["image_processor_config"])
+        limits = prep_lib.derive_image_token_limits(cfg)
+        return int(limits["image_min_tokens"]), int(limits["image_max_tokens"])
+    except (KeyError, TypeError, ValueError, prep_lib.PrepError):
+        return None
 
 
 def _stamp_meta(args, ds_hash):
@@ -664,7 +720,8 @@ def _prep(args, row, prep_dir, state):
             "n_prefill": meta["n_prefill"],
             "n_answer": meta["n_answer"],
             "image_files": meta.get("image_files"),
-            "n_past_expected": meta.get("n_past_expected")}
+            "n_past_expected": meta.get("n_past_expected"),
+            "add_special": bool(meta.get("add_special", False))}
 
 
 def _scorer_argv(args, kld_manifest_path):
@@ -690,6 +747,8 @@ def _scorer_argv(args, kld_manifest_path):
         *(["--swa-full"] if args.swa_full else []),
         *(["--allow-vocab-attr-mismatch"]
           if getattr(args, "allow_vocab_attr_mismatch", False) else []),
+        *(["--allow-prefix-drift"]
+          if getattr(args, "allow_prefix_drift", False) else []),
     ]
 
 
@@ -721,7 +780,7 @@ def _spec():
         write_manifest=write_kld_manifest,
         manifest_entry=lambda row: build_kld_manifest_entry(
             row["prep_dir"], row["metrics_path"], row["n_images"], row["n_prefill"],
-            image_files=row.get("image_files")),
+            image_files=row.get("image_files"), add_special=row.get("add_special", False)),
         scorer_argv=_scorer_argv,
         scorer_cmd=lambda args: args.llama_vlm_kld,
         parse_done=parse_kld_done_line,
@@ -730,7 +789,7 @@ def _spec():
         output_key="metrics_path",
         postprocess=lambda args, row, elapsed_s: postprocess_kld_result(
             row, args.num_eval_tokens, elapsed_s,
-            require_n_past_match=getattr(args, "require_n_past_match", False)),
+            require_n_past_match=not getattr(args, "allow_prefix_drift", False)),
         postprocessed_line=lambda row, elapsed_s:
             f"{COLLECT_LOG_PREFIX} postprocessed {row['item_id']}: "
             f"n_img={row['n_images']} n_ans={row['n_answer']} "

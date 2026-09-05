@@ -696,6 +696,7 @@ def test_build_meta_contains_expected_keys_and_int_fields():
         "generation_engine": None,
         "n_past_expected": None,
         "per_image_vision_token_counts": None,
+        "add_special": False,
     }
     for key in [
         "n_prefill",
@@ -817,7 +818,7 @@ def test_image_extension_sniffs_common_formats():
 
 
 def test_prep_row_llamacpp_writes_raw_bytes_and_records_n_past(tmp_path):
-    row = _llamacpp_row()
+    row = _llamacpp_row(llamacpp_add_special=True)
 
     meta = prep.prep_row(row, None, tmp_path, raw_images=[_JPG_BYTES])
 
@@ -826,6 +827,7 @@ def test_prep_row_llamacpp_writes_raw_bytes_and_records_n_past(tmp_path):
     assert meta["image_files"] == ["img_0.jpg"]
     assert meta["n_past_expected"] == 4
     assert meta["generation_engine"] == "llama.cpp"
+    assert meta["add_special"] is True
     assert meta["per_image_vision_token_counts"] == [2]
     assert meta["image_token_limits"]["engine"] == "llama.cpp"
     assert (tmp_path / "formatted_chat.txt").read_text(
@@ -853,3 +855,30 @@ def test_prep_row_vllm_rows_keep_png_reencode_and_null_n_past(tmp_path):
     assert meta["n_past_expected"] is None
     assert meta["generation_engine"] is None
     assert (tmp_path / "img_0.png").read_bytes() == b"PNG"
+
+
+def test_prep_row_llamacpp_requires_raw_images(tmp_path):
+    with pytest.raises(prep.PrepError, match="raw image bytes"):
+        prep.prep_row(_llamacpp_row(), None, tmp_path)
+
+
+def test_llamacpp_rows_without_add_special_column_default_false():
+    assert prep.build_meta(_llamacpp_row())["add_special"] is False
+
+
+def test_load_dataset_sorted_reads_a_local_save_to_disk_dir(tmp_path):
+    """A generator --save_path directory is scored as written: loaded with
+    load_from_disk (no Hub round trip), sorted like a Hub dataset, --subset
+    rejected because it has no meaning for a local dir."""
+    datasets = pytest.importorskip("datasets")
+    ds = datasets.Dataset.from_dict({"id": ["b", "a", "c"], "num_images": [2, 1, 3]})
+    ds.save_to_disk(str(tmp_path / "gt"))
+    got = prep.load_dataset_sorted(str(tmp_path / "gt"), None, "train", "num_images")
+    assert got["id"] == ["a", "b", "c"]
+    got = prep.load_dataset_sorted(str(tmp_path / "gt"), None, "train", "num_images", sort_desc=True)
+    assert got["id"] == ["c", "b", "a"]
+    with pytest.raises(ValueError, match="--subset"):
+        prep.load_dataset_sorted(str(tmp_path / "gt"), "smoke7-x", "train", "num_images")
+    datasets.DatasetDict({"train": ds}).save_to_disk(str(tmp_path / "gtdict"))
+    got = prep.load_dataset_sorted(str(tmp_path / "gtdict"), None, "train", None)
+    assert got["id"] == ["b", "a", "c"]
