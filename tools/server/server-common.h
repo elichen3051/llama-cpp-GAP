@@ -229,6 +229,10 @@ public:
 
     std::string detokenize(const llama_context * ctx, bool special) const;
 
+    // JSON description of the tokenized prompt: text chunks with their token ids,
+    // media chunks with their token span, position span, bitmap id and decoder grid
+    json layout_json() const;
+
     size_t get_common_prefix(const server_tokens & b) const;
 
     // split the tokens into message spans, skipping over media chunks

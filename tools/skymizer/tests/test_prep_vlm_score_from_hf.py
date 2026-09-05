@@ -692,6 +692,10 @@ def test_build_meta_contains_expected_keys_and_int_fields():
         "ref_answer": "A",
         "generated_texts_preview": "generated answer",
         "dataset_seed": 7,
+        # vLLM rows: no llama.cpp provenance (schema v1.4 keys present, null)
+        "generation_engine": None,
+        "n_past_expected": None,
+        "per_image_vision_token_counts": None,
     }
     for key in [
         "n_prefill",
@@ -726,3 +730,126 @@ def test_load_dataset_sorted_can_sort_descending(monkeypatch):
     prep.load_dataset_sorted("ds", "", "train", "num_images", sort_desc=True)
     assert calls == [("load", "ds", None, "train"), ("sort", ["num_images"], False),
                      ("load", "ds", None, "train"), ("sort", ["num_images"], True)]
+# ---------------------------------------------------------------------------
+# llama.cpp-generated rows (llm_reference_generator schema v1.4)
+# ---------------------------------------------------------------------------
+
+_LLAMACPP_IMG_CFG = {
+    "engine": "llama.cpp",
+    "llama_cpp_build": "b10820-f41f902cf",
+    "mmproj_file": "mmproj-BF16.gguf",
+    "mmproj_sha256": "ab" * 32,
+    "clip": {"clip.vision.patch_size": 16, "clip.vision.spatial_merge_size": 2},
+    "image_min_tokens": -1,
+    "image_max_tokens": -1,
+    "media_marker": "<__media__>",
+}
+
+_PNG_BYTES = b"\x89PNG\r\n\x1a\n" + b"\x00" * 8
+_JPG_BYTES = b"\xff\xd8\xff\xe0" + b"\x00" * 8
+
+
+def _llamacpp_row(**overrides):
+    import hashlib
+
+    row = _row(
+        generation_engine="llama.cpp",
+        generation_model_name_or_path="Qwen/Qwen3.5-4B",
+        llamacpp_prompt_string="Question <__media__> prompt",
+        llamacpp_media_marker="<__media__>",
+        llamacpp_prompt_layout=json.dumps({"n_tokens": 6, "n_pos": 4, "chunks": []}),
+        per_image_vision_token_counts=[2],
+        per_image_n_pos=[1],
+        llamacpp_n_past_prefill=4,
+        llamacpp_tokens_evaluated=6,
+        image_bytes_sha256=[hashlib.sha256(_JPG_BYTES).hexdigest()],
+        image_processor_config=json.dumps(_LLAMACPP_IMG_CFG),
+    )
+    row.update(overrides)
+    return row
+
+
+def test_llamacpp_row_formatted_chat_is_stored_prompt_verbatim():
+    row = _llamacpp_row()
+    # No tokenizer needed: the decode-and-collapse path is bypassed entirely.
+    assert prep.build_formatted_chat(row, None) == "Question <__media__> prompt"
+
+
+def test_llamacpp_row_normalizes_server_media_marker():
+    row = _llamacpp_row(
+        llamacpp_prompt_string="Q <__media_r4nd0m__> p",
+        llamacpp_media_marker="<__media_r4nd0m__>",
+    )
+    assert prep.build_formatted_chat(row, None) == "Q <__media__> p"
+
+
+def test_llamacpp_row_marker_count_must_match_num_images():
+    row = _llamacpp_row(llamacpp_prompt_string="no marker here")
+    with pytest.raises(prep.PrepError, match="marker count 0 != num_images 1"):
+        prep.build_formatted_chat(row, None)
+
+
+def test_llamacpp_row_missing_prompt_string_is_an_error():
+    row = _llamacpp_row(llamacpp_prompt_string=None)
+    with pytest.raises(prep.PrepError, match="llamacpp_prompt_string"):
+        prep.build_formatted_chat(row, None)
+
+
+def test_derive_image_token_limits_llamacpp_engine_passes_recorded_budget():
+    limits = prep.derive_image_token_limits(
+        dict(_LLAMACPP_IMG_CFG, image_min_tokens=64, image_max_tokens=16384)
+    )
+    assert limits == {
+        "engine": "llama.cpp",
+        "image_min_tokens": 64,
+        "image_max_tokens": 16384,
+        "llama_cpp_build": "b10820-f41f902cf",
+        "mmproj_sha256": "ab" * 32,
+    }
+
+
+def test_image_extension_sniffs_common_formats():
+    assert prep.image_extension(_PNG_BYTES) == "png"
+    assert prep.image_extension(_JPG_BYTES) == "jpg"
+    assert prep.image_extension(b"RIFF\x00\x00\x00\x00WEBPVP8 ") == "webp"
+    assert prep.image_extension(b"GIF89a\x00") == "gif"
+    assert prep.image_extension(b"junk") == "bin"
+
+
+def test_prep_row_llamacpp_writes_raw_bytes_and_records_n_past(tmp_path):
+    row = _llamacpp_row()
+
+    meta = prep.prep_row(row, None, tmp_path, raw_images=[_JPG_BYTES])
+
+    assert (tmp_path / "img_0.jpg").read_bytes() == _JPG_BYTES
+    assert not (tmp_path / "img_0.png").exists()
+    assert meta["image_files"] == ["img_0.jpg"]
+    assert meta["n_past_expected"] == 4
+    assert meta["generation_engine"] == "llama.cpp"
+    assert meta["per_image_vision_token_counts"] == [2]
+    assert meta["image_token_limits"]["engine"] == "llama.cpp"
+    assert (tmp_path / "formatted_chat.txt").read_text(
+        encoding="utf-8"
+    ) == "Question <__media__> prompt"
+    assert json.loads((tmp_path / "meta.json").read_text(encoding="utf-8")) == meta
+
+
+def test_prep_row_llamacpp_rejects_raw_bytes_that_do_not_match_sha256(tmp_path):
+    row = _llamacpp_row()
+    with pytest.raises(prep.PrepError, match="image_bytes_sha256"):
+        prep.prep_row(row, None, tmp_path, raw_images=[_PNG_BYTES])
+
+
+def test_prep_row_llamacpp_rejects_raw_image_count_mismatch(tmp_path):
+    row = _llamacpp_row()
+    with pytest.raises(prep.PrepError, match="raw images"):
+        prep.prep_row(row, None, tmp_path, raw_images=[_JPG_BYTES, _JPG_BYTES])
+
+
+def test_prep_row_vllm_rows_keep_png_reencode_and_null_n_past(tmp_path):
+    row = _row()
+    meta = prep.prep_row(row, _tok(), tmp_path)
+    assert meta["image_files"] == ["img_0.png"]
+    assert meta["n_past_expected"] is None
+    assert meta["generation_engine"] is None
+    assert (tmp_path / "img_0.png").read_bytes() == b"PNG"

@@ -666,6 +666,63 @@ void server_tokens::keep_first(size_t n) {
     tokens.resize(n);
 }
 
+json server_tokens::layout_json() const {
+    json chunks = json::array();
+    const size_t n = tokens.size();
+    size_t i = 0;
+    while (i < n) {
+        if (tokens[i] == LLAMA_TOKEN_NULL) {
+            const auto & chunk = find_chunk(i);
+            const mtmd_input_chunk * c = chunk.get();
+            const size_t n_tok = mtmd_input_chunk_get_n_tokens(c);
+            if (n_tok == 0) {
+                throw std::runtime_error("media chunk with zero tokens in server_tokens");
+            }
+            const auto type = mtmd_input_chunk_get_type(c);
+            json j = {
+                {"type",     type == MTMD_INPUT_CHUNK_TYPE_IMAGE ? "image" : "audio"},
+                {"start",    i},
+                {"n_tokens", n_tok},
+                {"n_pos",    mtmd_input_chunk_get_n_pos(c)},
+            };
+            const char * id = mtmd_input_chunk_get_id(c);
+            j["id"] = id ? std::string(id) : std::string();
+            if (type == MTMD_INPUT_CHUNK_TYPE_IMAGE) {
+                const mtmd_image_tokens * img = mtmd_input_chunk_get_tokens_image(c);
+                if (img) {
+                    // decoder grid of the last embedding token; for M-RoPE models this is
+                    // (nx-1, ny-1), for sequential-position models x == n_tokens-1 and y == 0
+                    const auto last = mtmd_image_tokens_get_decoder_pos(img, 0, n_tok - 1);
+                    j["grid_x"] = last.x + 1;
+                    j["grid_y"] = last.y + 1;
+                    j["grid_t"] = last.t + 1;
+                }
+            }
+            chunks.push_back(std::move(j));
+            i += n_tok;
+        } else {
+            const size_t start = i;
+            llama_tokens text;
+            while (i < n && tokens[i] != LLAMA_TOKEN_NULL) {
+                text.push_back(tokens[i]);
+                ++i;
+            }
+            chunks.push_back(json {
+                {"type",     "text"},
+                {"start",    start},
+                {"n_tokens", text.size()},
+                {"n_pos",    text.size()},
+                {"tokens",   text},
+            });
+        }
+    }
+    return json {
+        {"n_tokens", n},
+        {"n_pos",    pos_next()},
+        {"chunks",   chunks},
+    };
+}
+
 std::string server_tokens::detokenize(const llama_context * ctx, bool special) const {
     llama_tokens text_tokens;
     text_tokens.reserve(tokens.size());

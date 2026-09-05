@@ -181,10 +181,15 @@ def dump_stem(idx: int, item_id: str) -> str:
 
 
 def build_kld_manifest_entry(prep_dir: Path, metrics_path: Path,
-                             n_images: int, n_prefill: int) -> dict:
-    """One JSONL entry consumed by llama-vlm-kld --manifest."""
+                             n_images: int, n_prefill: int,
+                             image_files=None) -> dict:
+    """One JSONL entry consumed by llama-vlm-kld --manifest. `image_files`
+    (from prep's meta) names the files prep actually wrote; without it the
+    historical img_{i}.png layout is assumed."""
+    if image_files is None:
+        image_files = [f"img_{i}.png" for i in range(n_images)]
     return {
-        "images": [str(prep_dir / f"img_{i}.png") for i in range(n_images)],
+        "images": [str(prep_dir / name) for name in image_files],
         "formatted_chat": str(prep_dir / "formatted_chat.txt"),
         "tokens_in": str(prep_dir / "tokens.bin"),
         "n_prefill": n_prefill,
@@ -211,7 +216,35 @@ def parse_kld_done_line(line: str):
     return m.group(1), float(m.group(2))
 
 
-def postprocess_kld_result(row: dict, num_eval_tokens: int, elapsed_s: float):
+def check_n_past_expected(row: dict, header: dict, metrics_path,
+                          require_match: bool = False):
+    """llama.cpp-generated rows carry the generator's own position count
+    after prefill (n_past_expected). The scorer's n_past_actual should equal
+    it when both run the same mtmd preprocessing; a different llama.cpp build
+    or budget can legitimately differ, and old datasets are routinely scored
+    with newer scorers, so a mismatch WARNS and is recorded on the row.
+    --require-n-past-match turns it into a rejection."""
+    expected = row.get("n_past_expected")
+    if expected is None:
+        return None
+    actual = header.get("n_past_actual")
+    if actual is None or int(actual) == 0:
+        return None          # pre-n_past_actual dump: nothing to compare
+    if int(actual) == int(expected):
+        row["n_past_mismatch"] = None
+        return None
+    msg = (f"{metrics_path}: scorer n_past_actual={int(actual)} != generator "
+           f"n_past_expected={int(expected)} (the scorer's mtmd preprocessing "
+           "differs from the one the reference text was generated under)")
+    row["n_past_mismatch"] = (int(expected), int(actual))
+    if require_match:
+        raise ValueError(msg)
+    print(f"{COLLECT_LOG_PREFIX} WARNING: {msg}", file=sys.stderr)
+    return row["n_past_mismatch"]
+
+
+def postprocess_kld_result(row: dict, num_eval_tokens: int, elapsed_s: float,
+                           require_n_past_match: bool = False):
     """Validate one scored row's VLMK dump, cross-check its embedded targets
     against the row's input_ids, convert to .npz (deleting this run's .bin
     after a successful conversion), and return a manifest.csv row.
@@ -239,6 +272,7 @@ def postprocess_kld_result(row: dict, num_eval_tokens: int, elapsed_s: float):
             raise ValueError(
                 f"{metrics_path}: header n_prefill={header['n_prefill']} != "
                 f"row n_prefill={row['n_prefill']}")
+        check_n_past_expected(row, header, metrics_path, require_n_past_match)
 
         # Integrity cross-check: the scorer embeds each position's target token in
         # its record; they must equal this row's input_ids[n_prefill:n_prefill+npos].
@@ -451,6 +485,10 @@ def parse_args():
                         "(e.g. which id is <eos>).")
     p.add_argument("--llama-vlm-kld",
                    default=str(REPO_ROOT / "build/bin/llama-vlm-kld"))
+    p.add_argument("--require-n-past-match", action="store_true",
+                   help="Reject llama.cpp-generated rows whose scorer n_past_actual "
+                        "differs from the generator's llamacpp_n_past_prefill "
+                        "(default: warn only; producer/consumer builds may differ).")
     p.add_argument("--keep-prep", action="store_true",
                    help="Don't delete per-row prep dir (debug)")
     return p.parse_args()
@@ -544,8 +582,12 @@ def _load_dataset(args):
     # for unit tests without the heavy `datasets`/`transformers` dependencies
     # that prep_vlm_score_from_hf pulls in lazily.
     import cli.prep_vlm_score_from_hf as prep_lib
-    return prep_lib.load_dataset_sorted(args.dataset, args.subset, args.split,
-                                        args.sort_by, args.sort_desc)
+    ds = prep_lib.load_dataset_sorted(args.dataset, args.subset, args.split,
+                                      args.sort_by, args.sort_desc)
+    # _PrepState(args) is built after loading but only sees args; stash the
+    # table so llama.cpp rows can be prepped from their raw image bytes.
+    args.loaded_dataset = ds
+    return ds
 
 
 def _stamp_meta(args, ds_hash):
@@ -593,18 +635,36 @@ class _PrepState:
         self.tok_cache = {}
         self.vision_budget = VisionBudgetReporter(args.image_min_tokens,
                                                   args.image_max_tokens)
+        self.raw_images = None          # RawImageReader, built on first llama.cpp row
+        self.dataset = getattr(args, "loaded_dataset", None)
 
 
 def _prep(args, row, prep_dir, state):
     import cli.prep_vlm_score_from_hf as prep_lib
-    model_name = row["generation_model_name_or_path"]
-    if model_name not in state.tok_cache:
-        state.tok_cache[model_name] = prep_lib.load_tokenizer(model_name)
-    meta = prep_lib.prep_row(row, state.tok_cache[model_name], prep_dir)
+    raw_images = None
+    if prep_lib.is_llamacpp_row(row):
+        if state.raw_images is None:
+            if state.dataset is None:
+                raise prep_lib.PrepError(
+                    "llama.cpp row needs the loaded dataset for raw image bytes")
+            state.raw_images = prep_lib.RawImageReader(state.dataset)
+        raw_images = state.raw_images.get(row["item_id"])
+        tok = None          # prompt string is stored verbatim; no decode needed
+    else:
+        model_name = row["generation_model_name_or_path"]
+        if model_name not in state.tok_cache:
+            state.tok_cache[model_name] = prep_lib.load_tokenizer(model_name)
+        tok = state.tok_cache[model_name]
+    if raw_images is None:
+        meta = prep_lib.prep_row(row, tok, prep_dir)
+    else:
+        meta = prep_lib.prep_row(row, tok, prep_dir, raw_images=raw_images)
     state.vision_budget.check(meta)
     return {"n_images": meta["num_images"],
             "n_prefill": meta["n_prefill"],
-            "n_answer": meta["n_answer"]}
+            "n_answer": meta["n_answer"],
+            "image_files": meta.get("image_files"),
+            "n_past_expected": meta.get("n_past_expected")}
 
 
 def _scorer_argv(args, kld_manifest_path):
@@ -660,7 +720,8 @@ def _spec():
         kind_word="kld",
         write_manifest=write_kld_manifest,
         manifest_entry=lambda row: build_kld_manifest_entry(
-            row["prep_dir"], row["metrics_path"], row["n_images"], row["n_prefill"]),
+            row["prep_dir"], row["metrics_path"], row["n_images"], row["n_prefill"],
+            image_files=row.get("image_files")),
         scorer_argv=_scorer_argv,
         scorer_cmd=lambda args: args.llama_vlm_kld,
         parse_done=parse_kld_done_line,
@@ -668,11 +729,15 @@ def _spec():
             f"[vlm-kld]  saved metrics {Path(path).name} in {wall_s:.1f}s",
         output_key="metrics_path",
         postprocess=lambda args, row, elapsed_s: postprocess_kld_result(
-            row, args.num_eval_tokens, elapsed_s),
+            row, args.num_eval_tokens, elapsed_s,
+            require_n_past_match=getattr(args, "require_n_past_match", False)),
         postprocessed_line=lambda row, elapsed_s:
             f"{COLLECT_LOG_PREFIX} postprocessed {row['item_id']}: "
             f"n_img={row['n_images']} n_ans={row['n_answer']} "
-            f"wall={elapsed_s:.1f}s",
+            f"wall={elapsed_s:.1f}s"
+            + (f" n_past_expected={row['n_past_mismatch'][0]} "
+               f"n_past_actual={row['n_past_mismatch'][1]} (DRIFT)"
+               if row.get("n_past_mismatch") else ""),
         log_prefix=COLLECT_LOG_PREFIX,
     )
 

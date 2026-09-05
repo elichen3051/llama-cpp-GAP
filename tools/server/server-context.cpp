@@ -1879,6 +1879,11 @@ private:
         }
 
         if (incomplete) {
+            // The piece is buffered until the UTF-8 sequence completes, but the
+            // token itself (and its probs) must still be accounted for: without
+            // this, `completion_probabilities` has fewer entries than `tokens`
+            // whenever a multi-byte character is split across tokens.
+            slot.add_token(result);
             slot.has_next_token = true;
         }
 
@@ -2109,6 +2114,9 @@ private:
         }
         res->stats           = slot.stats;
         res->prompt          = slot.task->tokens.detokenize(ctx_tgt, true);
+        if (slot.task->params.return_prompt_layout) {
+            res->prompt_layout = slot.task->tokens.layout_json();
+        }
         res->response_fields = std::move(slot.task->params.response_fields);
 
         res->truncated             = slot.truncated;

@@ -506,3 +506,62 @@ def test_sort_desc_is_recorded_but_not_an_identity_field(tmp_path, monkeypatch):
     assert default_args.swa_full is False
     assert ck.build_collect_meta(default_args)["swa_full"] is False
     assert "swa_full" in ck.IDENTITY_FIELDS
+
+
+# ---------------------------------------------------------------------------
+# llama.cpp-generated rows: generator n_past vs scorer n_past_actual
+# ---------------------------------------------------------------------------
+
+def _make_llamacpp_row(tmp_path, n_past_actual, n_past_expected):
+    row = _make_row(tmp_path)
+    rec = make_records(npos=5, vocab=11, seed=2)
+    tokens = np.fromfile(row["prep_dir"] / "tokens.bin", dtype=np.int32)
+    rec["target"] = tokens[7:12]
+    write_vlmk(row["metrics_path"], rec, vocab=11, n_prefill=7, n_past_actual=n_past_actual)
+    row["n_past_expected"] = n_past_expected
+    return row
+
+
+def test_postprocess_llamacpp_row_matching_n_past_is_clean(tmp_path):
+    row = _make_llamacpp_row(tmp_path, n_past_actual=41, n_past_expected=41)
+    out = ck.postprocess_kld_result(row, num_eval_tokens=-1, elapsed_s=0.0)
+    assert out[9] == "OK"
+    assert row["n_past_mismatch"] is None
+
+
+def test_postprocess_llamacpp_row_n_past_drift_warns_by_default(tmp_path, capsys):
+    row = _make_llamacpp_row(tmp_path, n_past_actual=43, n_past_expected=41)
+    out = ck.postprocess_kld_result(row, num_eval_tokens=-1, elapsed_s=0.0)
+    assert out[9] == "OK"                       # scored, not rejected
+    assert row["n_past_mismatch"] == (41, 43)
+    assert "n_past_actual=43 != generator n_past_expected=41" in capsys.readouterr().err
+
+
+def test_postprocess_llamacpp_row_n_past_drift_rejects_when_required(tmp_path):
+    row = _make_llamacpp_row(tmp_path, n_past_actual=43, n_past_expected=41)
+    with pytest.raises(ValueError, match="n_past_actual=43"):
+        ck.postprocess_kld_result(row, num_eval_tokens=-1, elapsed_s=0.0,
+                                  require_n_past_match=True)
+    assert row["metrics_path"].with_name(row["metrics_path"].name + ".rejected").exists()
+
+
+def test_postprocess_llamacpp_row_without_n_past_actual_skips_check(tmp_path):
+    row = _make_llamacpp_row(tmp_path, n_past_actual=0, n_past_expected=41)
+    out = ck.postprocess_kld_result(row, num_eval_tokens=-1, elapsed_s=0.0)
+    assert out[9] == "OK"
+    assert "n_past_mismatch" not in row
+
+
+def test_postprocess_vllm_rows_ignore_n_past(tmp_path):
+    row = _make_row(tmp_path)
+    out = ck.postprocess_kld_result(row, num_eval_tokens=-1, elapsed_s=0.0)
+    assert out[9] == "OK"
+    assert "n_past_mismatch" not in row
+
+
+def test_build_kld_manifest_entry_uses_prep_image_files(tmp_path):
+    entry = ck.build_kld_manifest_entry(tmp_path / "prep", tmp_path / "m.bin",
+                                        n_images=2, n_prefill=42,
+                                        image_files=["img_0.jpg", "img_1.png"])
+    assert entry["images"] == [str(tmp_path / "prep" / "img_0.jpg"),
+                               str(tmp_path / "prep" / "img_1.png")]

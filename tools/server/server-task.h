@@ -53,6 +53,7 @@ struct task_params {
     bool cache_prompt    = true; // remember the prompt to avoid reprocessing all prompt
     bool return_tokens   = false;
     bool return_progress = false;
+    bool return_prompt_layout = false; // return the tokenized prompt layout (text token ids + media chunk spans) in `prompt_layout`
 
     int32_t sse_ping_interval = 30; // seconds between SSE comment pings while the stream stays silent, -1 disables
 
@@ -325,6 +326,7 @@ struct server_task_result_cmpl_final : server_task_result {
     bool include_usage;
     server_slot_stats stats;
     std::string prompt;
+    json prompt_layout; // populated when task_params.return_prompt_layout is set
 
     bool truncated;
     int32_t n_decoded;
