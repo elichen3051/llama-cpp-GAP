@@ -179,10 +179,11 @@ def test_postprocess_keeps_valid_dump_until_converted(tmp_path):
     assert row["metrics_path"].with_suffix(".npz").exists()
 
 
-def test_kld_float_keys_are_the_eleven_metric_columns():
+def test_kld_float_keys_are_the_fourteen_metric_columns():
     assert ck.KLD_FLOAT_KEYS == ("kld", "reversed_kld", "js_kld", "nll_ref",
                                  "nll_cand", "entropy_ref", "entropy_cand",
-                                 "ear", "ear_20", "ear_10", "ear_5")
+                                 "ear", "ear_20", "ear_10", "ear_5",
+                                 "ear_20_normalized", "ear_10_normalized", "ear_5_normalized")
 
 
 def test_dump_stem_contract():

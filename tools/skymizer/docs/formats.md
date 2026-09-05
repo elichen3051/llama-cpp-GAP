@@ -11,35 +11,42 @@ Little-endian, magic `"VLMK"`. 24-byte header:
 offset  size  type    field        notes
 ─────────────────────────────────────────────────────────────
 0       4     uint32  magic        0x564C4D4B ("VLMK")
-4       4     uint32  version      3 (v2 = 44-byte records without ear_20/10/5;
-                                    v1 = legacy 40-byte records without ear)
+4       4     uint32  version      4 (v3 = 56-byte interim; v2 = 44-byte records
+                                    without the EAR_K family; v1 = legacy 40-byte
+                                    records without ear)
 8       4     uint32  vocab_size   == llama_vocab_n_tokens (both models)
 12      4     uint32  n_positions  number of scored answer positions
 16      4     uint32  n_prefill    HF ground-truth sequential prefill length,
                                     echoed from the manifest
 20      4     uint32  n_past_actual llama.cpp's OWN position count after
                                     prefill; 0 = not recorded (legacy dump)
-24+     ...           n_positions × 56-byte packed records
+24+     ...           n_positions × 68-byte packed records
 ```
 
-Each record (v3, field order = the packed `kld_record` struct in
+Each record (v4, field order = the packed `kld_record` struct in
 `skymizer-vlmk-kernel.h`):
 
 ```text
 float32  kld, reversed_kld, js_kld, nll_ref, nll_cand,
-         entropy_ref, entropy_cand, ear, ear_20, ear_10, ear_5
+         entropy_ref, entropy_cand, ear,
+         ear_20, ear_10, ear_5,
+         ear_20_normalized, ear_10_normalized, ear_5_normalized
 int32    target, argmax_ref, argmax_cand
 ```
 
 Version history: **v1** = 40-byte records without the `ear` field; **v2**
 inserts `float32 ear` between `entropy_cand` and `target` (44 bytes); **v3**
-(current) inserts `float32 ear_20, ear_10, ear_5` after `ear` (56 bytes) —
-EAR restricted to the reference's top-K slots, both rows renormalized on
-exactly those slots (see `docs/compare.md`). Readers (`kld_metrics_io`, the
-comparator) accept every version; an older dir simply lacks the newer
-metrics (`saved_metrics_paired_compare` drops them from the default report
-with a persisted warning, or hard-fails if `--metrics ear_20` etc. was
-explicit). The collectors only WRITE v3: they preflight
+(a one-build interim) inserts the three RENORMALIZED top-K EARs after `ear`
+(56 bytes; read back as `ear_K_normalized`); **v4** (current) inserts
+`ear_20, ear_10, ear_5` (sum of `min(p_ref, p_cand)` over the reference's
+top-K slots with full-vocab probabilities — the top-K share of `ear`) followed
+by `ear_20_normalized, ear_10_normalized, ear_5_normalized` (both rows
+renormalized on those K slots first) after `ear` (68 bytes); see
+`docs/compare.md`. Readers (`kld_metrics_io`, the comparator) accept every
+version; an older dir simply lacks the newer metrics
+(`saved_metrics_paired_compare` drops them from the default report with a
+persisted warning, or hard-fails if `--metrics ear_20` etc. was explicit). The
+collectors only WRITE v4: they preflight
 the scorer binary's `--vlmk-version` before any work (a stale build is
 refused with a rebuild hint). An existing v1 row is simply prior output: a
 window that includes it is refused as a collision (nothing is deleted), so a

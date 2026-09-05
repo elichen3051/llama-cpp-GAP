@@ -27,15 +27,22 @@ def vlmk_bin(tmp_path):
 # record layout contract
 # ---------------------------------------------------------------------------
 
-def test_record_layout_is_56_bytes_in_cpp_field_order():
+def test_record_layout_is_68_bytes_in_cpp_field_order():
     """KLD_RECORD_DT must mirror the packed kld_record struct in
-    skymizer-vlmk-kernel.h (current = v3, 56 bytes with `ear` and the EAR_K
-    family); the v1/v2 layouts stay pinned for the legacy readers."""
-    assert kio.VLMK_VERSION == 3
-    assert kio.KLD_RECORD_DT.itemsize == 56
+    skymizer-vlmk-kernel.h (current = v4, 68 bytes with `ear` and both EAR_K
+    families); the v1/v2/v3 layouts stay pinned for the legacy readers."""
+    assert kio.VLMK_VERSION == 4
+    assert kio.KLD_RECORD_DT.itemsize == 68
     assert kio.KLD_METRIC_KEYS == (
         "kld", "reversed_kld", "js_kld", "nll_ref", "nll_cand",
         "entropy_ref", "entropy_cand", "ear", "ear_20", "ear_10", "ear_5",
+        "ear_20_normalized", "ear_10_normalized", "ear_5_normalized",
+        "target", "argmax_ref", "argmax_cand")
+    assert kio.kld_record_dt(3).itemsize == 56
+    assert kio.kld_metric_keys(3) == (
+        "kld", "reversed_kld", "js_kld", "nll_ref", "nll_cand",
+        "entropy_ref", "entropy_cand", "ear",
+        "ear_20_normalized", "ear_10_normalized", "ear_5_normalized",
         "target", "argmax_ref", "argmax_cand")
     assert kio.kld_record_dt(2).itemsize == 44
     assert kio.kld_metric_keys(2) == (
@@ -46,9 +53,11 @@ def test_record_layout_is_56_bytes_in_cpp_field_order():
     assert kio.kld_metric_keys(1) == (
         "kld", "reversed_kld", "js_kld", "nll_ref", "nll_cand",
         "entropy_ref", "entropy_cand", "target", "argmax_ref", "argmax_cand")
-    assert kio.VERSIONED_METRIC_KEYS == ("ear", "ear_20", "ear_10", "ear_5")
+    assert kio.VERSIONED_METRIC_KEYS == (
+        "ear", "ear_20", "ear_10", "ear_5",
+        "ear_20_normalized", "ear_10_normalized", "ear_5_normalized")
     with pytest.raises(ValueError, match="version"):
-        kio.kld_record_dt(4)
+        kio.kld_record_dt(5)
 
 
 # ---------------------------------------------------------------------------
@@ -370,9 +379,10 @@ def test_item_means_is_what_the_consumer_reports(tmp_path):
     m1 = {k: v for k, v in m.items() if k != "ear"}
     assert "ear" not in kio.item_means(m1)[0]
     # v2 dumps have ear but not the EAR_K family
-    m2 = {k: v for k, v in m.items() if k not in ("ear_20", "ear_10", "ear_5")}
+    family = set(kio.VERSIONED_METRIC_KEYS) - {"ear"}
+    m2 = {k: v for k, v in m.items() if k not in family}
     s2 = kio.item_means(m2)[0]
-    assert "ear" in s2 and not ({"ear_20", "ear_10", "ear_5"} & set(s2))
+    assert "ear" in s2 and not (family & set(s2))
     full = kio.item_means(m)[0]
-    for key in ("ear_20", "ear_10", "ear_5"):
+    for key in family:
         assert full[key] == float(m[key].astype(np.float64).mean())
