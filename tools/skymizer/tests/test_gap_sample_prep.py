@@ -498,3 +498,246 @@ def test_reference_driver_filters_and_reconciles_out_of_order_results(tmp_path, 
     assert cohort["eligible_ids_sha256"] == hashlib.sha256(canonical_json(["first", "last"]).encode()).hexdigest()
     assert json.loads((args.out / "excluded.jsonl").read_text())["id"] == "repeat"
     assert json.loads((args.out / "failures.jsonl").read_text())["id"] == "bad"
+
+
+@pytest.fixture
+def upload_run(tmp_path):
+    from copy import deepcopy
+    from datasets import Dataset
+    from cli import upload_reference as upload
+    from lib.reference_dataset import canonical_json, reference_features
+    from lib.reference_run import atomic_json
+    import hashlib
+    run = tmp_path / 'run'
+    run.mkdir()
+    profiles = {'dataset': {'repo': 'elichen-skymizer/vlm-prepared-dataset', 'revision': 'pinned'},
+                'seed': 1234, 'sources': ['mmmu-pro-vision'], 'generation_caps': {'instruct': 8192, 'thinking': 16384},
+                'models': {'test-model': {'model': 'test.gguf', 'mmproj': 'mmproj.gguf', 'mtp': None,
+                    'effective_sampling': {'instruct': {'seed': 1234}, 'thinking': {'seed': 1234}},
+                    'identity': {'files': [{'name': 'test.gguf', 'size': 12, 'sha256': 'c' * 64, 'role': 'llm'},
+                                           {'name': 'mmproj.gguf', 'size': 6, 'sha256': 'd' * 64, 'role': 'mmproj'}]}}}}
+    def write(size=100, mode='instruct', change=None):
+        import shutil
+        if (run / 'dataset').exists():
+            shutil.rmtree(run / 'dataset')
+        ids = [f'row-{i}' for i in range(size)]
+        cohort = {'requested': size, 'eligible': 2, 'excluded': 1, 'failed': size - 3,
+                  'native_generated': 3, 'generated': 3, 'requested_ids': ids,
+                  'eligible_ids': ids[:2], 'excluded_ids': ids[2:3], 'failed_ids': ids[3:]}
+        for key in ('requested_ids', 'eligible_ids', 'excluded_ids', 'failed_ids'):
+            cohort[key + '_sha256'] = hashlib.sha256(canonical_json(cohort[key]).encode()).hexdigest()
+        row = native_row(True)
+        metadata = json.loads(row['generation_metadata'])
+        metadata.update(cohort=cohort, sampling={'seed': 1234},
+                        chat_template_source='gguf', jinja=True, system_prompt='', chat_template_kwargs={'preserve_reasoning': 'true'}, model_files=[{'path': '/models/test.gguf', 'size': 12, 'sha256': 'c' * 64}],
+                        mmproj_path='/models/mmproj.gguf', mmproj_sha256='d' * 64,
+                        dataset_source={'path': profiles['dataset']['repo'], 'revision': 'pinned', 'split': 'train',
+                                        'subset': f'mmmu-pro-vision-subsample-{size}', 'num_rows': size},
+                        requested_enable_thinking=mode == 'thinking', thinking_column=None,
+                        n_predict=profiles['generation_caps'][mode], repetition_detector=deepcopy(upload.DETECTOR))
+        if change:
+            change(metadata)
+        for name, value in [('metadata.json', metadata), ('run_start.json', {'status': 'running'}),
+                            ('native-attempts.json', {'attempts': []}),
+                            ('run_state.json', {'status': 'complete_with_failures', 'cohort': cohort}),
+                            ('complete.json', {'status': 'complete_with_failures', 'cohort': cohort, 'rows': 2})]:
+            atomic_json(run / name, value)
+        rows = []
+        for item in ids[:2]:
+            r = deepcopy(row)
+            r['generation_chat_template_kwargs'] = json.dumps({'preserve_reasoning': 'true', 'enable_thinking': 'true' if mode == 'thinking' else 'false'})
+            r.update(id=item, item_id=item, generation_enable_thinking=mode == 'thinking', generation_metadata=canonical_json(metadata))
+            rows.append(r)
+        Dataset.from_list(rows, features=reference_features()).save_to_disk(str(run / 'dataset'))
+        (run / 'excluded.jsonl').write_text(json.dumps({'id': ids[2], 'reason': 'repetition'}) + '\n')
+        (run / 'failures.jsonl').write_text(''.join(json.dumps({'id': i, 'status': 'preparation_failed'}) + '\n' for i in ids[3:]))
+        return run, profiles
+    return write
+
+
+@pytest.mark.parametrize('size,mode', [(100, 'instruct'), (100, 'thinking'), (500, 'instruct'), (500, 'thinking')])
+def test_upload_cohort_names_and_image_parquet_roundtrip(upload_run, size, mode):
+    from cli import upload_reference as upload
+    from datasets import Dataset
+    from lib.reference_dataset import raw_images
+    run, profiles = upload_run(size, mode)
+    manifest, parquet = upload.prepare(run, 'test-model', mode, profiles)
+    assert manifest['repo'] == 'elichen-skymizer/test-model-' + ('pivot' if size == 100 else 'collect-500')
+    assert manifest['subset'] == f'mmmu-pro-vision-subsample-{size}-' + ('ins' if mode == 'instruct' else 'think')
+    assert manifest['rows'] == 2 and manifest['cohort']['requested'] == size
+    ds = Dataset.from_parquet(str(parquet))
+    assert raw_images(ds[0]) == raw_images(native_row(True))
+    assert ds[0]['generation_token_logprobs'] == [-0.5, -0.1]
+
+
+@pytest.mark.parametrize('change', [
+    lambda m: m['cohort'].update(eligible=3),
+    lambda m: m['cohort'].update(native_generated=4),
+    lambda m: m['dataset_source'].update(split='test'),
+    lambda m: m.update(n_predict=192),
+    lambda m: m['sampling'].update(seed=999),
+    lambda m: m['sampling'].update(temperature=0),
+    lambda m: m.update(chat_template_source='cli_override'),
+    lambda m: m.update(system_prompt='changed'),
+    lambda m: m.update(image_max_tokens=256),
+    lambda m: m.update(requested_enable_thinking=True),
+    lambda m: m['repetition_detector'].update(min_repeated_tokens=999),
+    lambda m: m['repetition_detector'].update(enabled=False),
+    lambda m: m['model_files'][0].update(sha256='e' * 64),
+    lambda m: m.update(mmproj_sha256='e' * 64),
+    lambda m: m['cohort']['eligible_ids'].reverse(),
+])
+def test_upload_rejects_changed_cohort_or_protocol(upload_run, change):
+    from cli import upload_reference as upload
+    run, profiles = upload_run(change=change)
+    with pytest.raises(ValueError):
+        upload.prepare(run, 'test-model', 'instruct', profiles)
+
+
+def test_upload_rejects_short_smoke(upload_run):
+    from cli import upload_reference as upload
+    run, profiles = upload_run(size=4)
+    with pytest.raises(ValueError, match='full subsample'):
+        upload.prepare(run, 'test-model', 'instruct', profiles)
+
+
+@pytest.fixture
+def fake_reference_hub(monkeypatch, tmp_path):
+    import huggingface_hub as hub
+    from huggingface_hub.errors import EntryNotFoundError, HfHubHTTPError
+    from types import SimpleNamespace
+    import httpx
+    import yaml
+    class FakeHub:
+        def __init__(self):
+            self.files = {}
+            self.head = '0'
+            self.history = {'0': {}}
+            self.conflict_once = False
+            self.commits = 0
+        def save(self):
+            self.head = str(int(self.head) + 1)
+            self.history[self.head] = self.files.copy()
+        def create_repo(self, *args, **kwargs):
+            pass
+        def repo_info(self, *args, **kwargs):
+            return SimpleNamespace(sha=self.head)
+        def list_repo_files(self, *args, revision, **kwargs):
+            return list(self.history[revision])
+        def download(self, repo, path, revision, **kwargs):
+            data = self.history[revision].get(path)
+            if data is None:
+                raise EntryNotFoundError('missing')
+            local = tmp_path / 'hub' / revision / path
+            local.parent.mkdir(parents=True, exist_ok=True)
+            local.write_bytes(data)
+            return str(local)
+        def create_commit(self, *args, operations, parent_commit, **kwargs):
+            if self.conflict_once:
+                self.conflict_once = False
+                other = {'config_name': 'other-ins', 'data_files': [{'split': 'train', 'path': 'other-ins/train.parquet'}]}
+                self.files['README.md'] = ('---\n' + yaml.safe_dump({'configs': [other]}) + '---\nBody\n').encode()
+                self.files['other-ins/train.parquet'] = b'other data'
+                self.save()
+                response = httpx.Response(409, request=httpx.Request('POST', 'https://example.test/commit'))
+                raise HfHubHTTPError('conflict', response=response)
+            assert parent_commit == self.head
+            for operation in operations:
+                content = operation.path_or_fileobj
+                self.files[operation.path_in_repo] = content if isinstance(content, bytes) else Path(content).read_bytes()
+            self.commits += 1
+            self.save()
+            return SimpleNamespace(oid=self.head)
+    api = FakeHub()
+    monkeypatch.setattr(hub, 'HfApi', lambda: api)
+    monkeypatch.setattr(hub, 'hf_hub_download', api.download)
+    return api
+
+
+def test_upload_atomic_cas_preserves_other_configs_and_idempotent(upload_run, fake_reference_hub):
+    from cli import upload_reference as upload
+    run, profiles = upload_run()
+    manifest, parquet = upload.prepare(run, 'test-model', 'instruct', profiles)
+    api = fake_reference_hub
+    api.conflict_once = True
+    receipt = upload.publish(run, manifest, parquet)
+    assert receipt['status'] == 'verified' and not receipt['already_present']
+    assert api.files['other-ins/train.parquet'] == b'other data'
+    assert 'other-ins' in api.files['README.md'].decode()
+    again = upload.publish(run, manifest, parquet)
+    assert again['already_present'] and api.commits == 1
+
+
+@pytest.mark.parametrize('kind', ['parquet', 'audit'])
+def test_upload_rejects_orphan_remote_namespace(upload_run, fake_reference_hub, kind):
+    from cli import upload_reference as upload
+    run, profiles = upload_run()
+    manifest, parquet = upload.prepare(run, 'test-model', 'instruct', profiles)
+    path = f"{manifest['subset']}/{parquet.name}" if kind == 'parquet' else f"audit/{manifest['subset']}/metadata.json"
+    api = fake_reference_hub
+    api.files[path] = b'preexisting'
+    api.save()
+    with pytest.raises(ValueError, match='already occupied'):
+        upload.publish(run, manifest, parquet)
+    assert api.commits == 0 and api.files[path] == b'preexisting'
+
+
+@pytest.mark.parametrize('corruption', ['metadata', 'readme', 'parquet', 'extra'])
+def test_upload_idempotency_checks_all_remote_artifacts(upload_run, fake_reference_hub, corruption):
+    from cli import upload_reference as upload
+    run, profiles = upload_run()
+    manifest, parquet = upload.prepare(run, 'test-model', 'instruct', profiles)
+    upload.publish(run, manifest, parquet)
+    api = fake_reference_hub
+    subset = manifest['subset']
+    if corruption == 'metadata':
+        api.files[f'audit/{subset}/metadata.json'] = b'{}'
+    elif corruption == 'readme':
+        api.files['README.md'] = b'---\nconfigs: []\n---\nWrong card\n'
+    elif corruption == 'parquet':
+        api.files[f'{subset}/{parquet.name}'] = b'changed'
+    else:
+        api.files[f'{subset}/orphan.parquet'] = b'extra'
+    api.save()
+    with pytest.raises(ValueError):
+        upload.publish(run, manifest, parquet)
+    assert api.commits == 1
+
+
+@pytest.mark.parametrize('path', ['train.parquet', 'data/train.parquet'])
+def test_upload_preserves_implicit_existing_default(upload_run, fake_reference_hub, path):
+    from cli import upload_reference as upload
+    run, profiles = upload_run()
+    manifest, parquet = upload.prepare(run, 'test-model', 'instruct', profiles)
+    api = fake_reference_hub
+    api.files[path] = b'existing default data'
+    api.files['README.md'] = b'# Existing default dataset\n'
+    api.save()
+    before = api.files.copy()
+    with pytest.raises(ValueError, match='implicit default'):
+        upload.publish(run, manifest, parquet)
+    assert api.commits == 0 and api.files == before
+
+
+@pytest.mark.parametrize('config', [
+    {'config_name': 'existing', 'data_files': '**/*.parquet'},
+    {'config_name': 'existing', 'data_files': '*/**/*.parquet'},
+    {'config_name': 'existing', 'data_files': '**/**/*.parquet'},
+    {'config_name': 'existing', 'data_dir': '.', 'data_files': '**/*.parquet'},
+    {'config_name': 'existing', 'data_dir': './', 'data_files': '**/*.parquet'},
+    {'config_name': 'existing'},
+    {'config_name': 'existing', 'data_files': '*.parquet'},
+])
+def test_upload_preserves_existing_config_membership(upload_run, fake_reference_hub, config):
+    from cli import upload_reference as upload
+    import yaml
+    run, profiles = upload_run()
+    manifest, parquet = upload.prepare(run, 'test-model', 'instruct', profiles)
+    api = fake_reference_hub
+    api.files['README.md'] = ('---\n' + yaml.safe_dump({'configs': [config]}) + '---\nExisting\n').encode()
+    api.files['data/train.parquet'] = b'existing'
+    api.save()
+    before = api.files.copy()
+    with pytest.raises(ValueError, match='existing config'):
+        upload.publish(run, manifest, parquet)
+    assert api.commits == 0 and api.files == before

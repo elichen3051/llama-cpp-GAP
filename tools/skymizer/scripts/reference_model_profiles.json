@@ -108,6 +108,131 @@
             "validation": "unmeasured-starting-point"
           }
         }
+      },
+      "identity": {
+        "files": [
+          {
+            "name": "Qwen_Qwen3.5-4B-bf16.gguf",
+            "size": 8665620192,
+            "sha256": "714270d4eb1d336bca9a8dcf0446982e45721be0399d810586a6b82e727dfee5",
+            "role": "llm"
+          },
+          {
+            "name": "mmproj-Qwen_Qwen3.5-4B-bf16.gguf",
+            "size": 675569216,
+            "sha256": "463f39bd1c291c1186c319a8c90ff8640aafa678b14cbee2232d695113dfbb66",
+            "role": "mmproj"
+          }
+        ],
+        "manifest": "s3://research-kld-benchmark/reference_model/qwen3.5-4b/manifest.json"
+      },
+      "effective_sampling": {
+        "instruct": {
+          "seed": 1234,
+          "temperature": 0.699999988079071,
+          "top_k": 20,
+          "top_p": 0.800000011920929,
+          "min_p": 0.0,
+          "typical_p": 1.0,
+          "min_keep": 0,
+          "n_prev": 64,
+          "samplers": [
+            "penalties",
+            "dry",
+            "top_n_sigma",
+            "top_k",
+            "typ_p",
+            "top_p",
+            "min_p",
+            "xtc",
+            "temperature"
+          ],
+          "sampler_chain": "logits -> penalties -> ?dry -> ?top-n-sigma -> top-k -> ?typical -> top-p -> ?min-p -> ?xtc -> temp-ext -> dist ",
+          "repeat_last_n": 64,
+          "repeat_penalty": 1.0,
+          "frequency_penalty": 0.0,
+          "presence_penalty": 1.5,
+          "penalize_prompt": true,
+          "dry_multiplier": 0.0,
+          "dry_base": 1.75,
+          "dry_allowed_length": 2,
+          "dry_penalty_last_n": 64,
+          "dry_sequence_breakers": [
+            "\n",
+            ":",
+            "\"",
+            "*"
+          ],
+          "xtc_probability": 0.0,
+          "xtc_threshold": 0.10000000149011612,
+          "dynatemp_range": 0.0,
+          "dynatemp_exponent": 1.0,
+          "top_n_sigma": -1.0,
+          "mirostat": 0,
+          "mirostat_tau": 5.0,
+          "mirostat_eta": 0.10000000149011612,
+          "adaptive_target": -1.0,
+          "adaptive_decay": 0.8999999761581421,
+          "ignore_eos": false,
+          "logit_bias": [],
+          "grammar": "",
+          "grammar_lazy": false,
+          "backend_sampling": false,
+          "user_sampling_config": 334
+        },
+        "thinking": {
+          "seed": 1234,
+          "temperature": 1.0,
+          "top_k": 20,
+          "top_p": 0.949999988079071,
+          "min_p": 0.0,
+          "typical_p": 1.0,
+          "min_keep": 0,
+          "n_prev": 64,
+          "samplers": [
+            "penalties",
+            "dry",
+            "top_n_sigma",
+            "top_k",
+            "typ_p",
+            "top_p",
+            "min_p",
+            "xtc",
+            "temperature"
+          ],
+          "sampler_chain": "logits -> penalties -> ?dry -> ?top-n-sigma -> top-k -> ?typical -> top-p -> ?min-p -> ?xtc -> ?temp-ext -> dist ",
+          "repeat_last_n": 64,
+          "repeat_penalty": 1.0,
+          "frequency_penalty": 0.0,
+          "presence_penalty": 1.5,
+          "penalize_prompt": true,
+          "dry_multiplier": 0.0,
+          "dry_base": 1.75,
+          "dry_allowed_length": 2,
+          "dry_penalty_last_n": 64,
+          "dry_sequence_breakers": [
+            "\n",
+            ":",
+            "\"",
+            "*"
+          ],
+          "xtc_probability": 0.0,
+          "xtc_threshold": 0.10000000149011612,
+          "dynatemp_range": 0.0,
+          "dynatemp_exponent": 1.0,
+          "top_n_sigma": -1.0,
+          "mirostat": 0,
+          "mirostat_tau": 5.0,
+          "mirostat_eta": 0.10000000149011612,
+          "adaptive_target": -1.0,
+          "adaptive_decay": 0.8999999761581421,
+          "ignore_eos": false,
+          "logit_bias": [],
+          "grammar": "",
+          "grammar_lazy": false,
+          "backend_sampling": false,
+          "user_sampling_config": 334
+        }
       }
     },
     "qwen3.6-35b-a3b": {
@@ -192,6 +317,137 @@
             "validation": "unmeasured-starting-point"
           }
         }
+      },
+      "identity": {
+        "files": [
+          {
+            "name": "Qwen_Qwen3.6-35B-A3B-bf16-00001-of-00002.gguf",
+            "size": 39753375712,
+            "sha256": "dbe8742f9ecf1624ac99577e174c7ae0642162232a47774c9d7fad45fbd0a75b",
+            "role": "llm"
+          },
+          {
+            "name": "Qwen_Qwen3.6-35B-A3B-bf16-00002-of-00002.gguf",
+            "size": 31312565824,
+            "sha256": "c895ee5a12392ede7ae7e9f554ed9f3d9430e8a7efc9c2c553e598b2a6108df9",
+            "role": "llm"
+          },
+          {
+            "name": "mmproj-Qwen_Qwen3.6-35B-A3B-bf16.gguf",
+            "size": 902822240,
+            "sha256": "1c625f05cd52e90abc76a5f756226c3a5fe279593379c22f6c6846c970a0cd18",
+            "role": "mmproj"
+          }
+        ],
+        "manifest": "s3://research-kld-benchmark/reference_model/qwen3.6-35b-a3b/manifest.json"
+      },
+      "effective_sampling": {
+        "instruct": {
+          "seed": 1234,
+          "temperature": 0.699999988079071,
+          "top_k": 20,
+          "top_p": 0.800000011920929,
+          "min_p": 0.0,
+          "typical_p": 1.0,
+          "min_keep": 0,
+          "n_prev": 64,
+          "samplers": [
+            "penalties",
+            "dry",
+            "top_n_sigma",
+            "top_k",
+            "typ_p",
+            "top_p",
+            "min_p",
+            "xtc",
+            "temperature"
+          ],
+          "sampler_chain": "logits -> penalties -> ?dry -> ?top-n-sigma -> top-k -> ?typical -> top-p -> ?min-p -> ?xtc -> temp-ext -> dist ",
+          "repeat_last_n": 64,
+          "repeat_penalty": 1.0,
+          "frequency_penalty": 0.0,
+          "presence_penalty": 1.5,
+          "penalize_prompt": true,
+          "dry_multiplier": 0.0,
+          "dry_base": 1.75,
+          "dry_allowed_length": 2,
+          "dry_penalty_last_n": 64,
+          "dry_sequence_breakers": [
+            "\n",
+            ":",
+            "\"",
+            "*"
+          ],
+          "xtc_probability": 0.0,
+          "xtc_threshold": 0.10000000149011612,
+          "dynatemp_range": 0.0,
+          "dynatemp_exponent": 1.0,
+          "top_n_sigma": -1.0,
+          "mirostat": 0,
+          "mirostat_tau": 5.0,
+          "mirostat_eta": 0.10000000149011612,
+          "adaptive_target": -1.0,
+          "adaptive_decay": 0.8999999761581421,
+          "ignore_eos": false,
+          "logit_bias": [],
+          "grammar": "",
+          "grammar_lazy": false,
+          "backend_sampling": false,
+          "user_sampling_config": 334
+        },
+        "thinking": {
+          "seed": 1234,
+          "temperature": 1.0,
+          "top_k": 20,
+          "top_p": 0.949999988079071,
+          "min_p": 0.0,
+          "typical_p": 1.0,
+          "min_keep": 0,
+          "n_prev": 64,
+          "samplers": [
+            "penalties",
+            "dry",
+            "top_n_sigma",
+            "top_k",
+            "typ_p",
+            "top_p",
+            "min_p",
+            "xtc",
+            "temperature"
+          ],
+          "sampler_chain": "logits -> penalties -> ?dry -> ?top-n-sigma -> top-k -> ?typical -> top-p -> ?min-p -> ?xtc -> ?temp-ext -> dist ",
+          "repeat_last_n": 64,
+          "repeat_penalty": 1.0,
+          "frequency_penalty": 0.0,
+          "presence_penalty": 1.5,
+          "penalize_prompt": true,
+          "dry_multiplier": 0.0,
+          "dry_base": 1.75,
+          "dry_allowed_length": 2,
+          "dry_penalty_last_n": 64,
+          "dry_sequence_breakers": [
+            "\n",
+            ":",
+            "\"",
+            "*"
+          ],
+          "xtc_probability": 0.0,
+          "xtc_threshold": 0.10000000149011612,
+          "dynatemp_range": 0.0,
+          "dynatemp_exponent": 1.0,
+          "top_n_sigma": -1.0,
+          "mirostat": 0,
+          "mirostat_tau": 5.0,
+          "mirostat_eta": 0.10000000149011612,
+          "adaptive_target": -1.0,
+          "adaptive_decay": 0.8999999761581421,
+          "ignore_eos": false,
+          "logit_bias": [],
+          "grammar": "",
+          "grammar_lazy": false,
+          "backend_sampling": false,
+          "user_sampling_config": 334
+        }
       }
     },
     "gemma-4-e4b-it": {
@@ -263,6 +519,131 @@
             "draft_max": 0,
             "validation": "unmeasured-starting-point"
           }
+        }
+      },
+      "identity": {
+        "files": [
+          {
+            "name": "google_gemma-4-E4B-it-bf16.gguf",
+            "size": 15053097184,
+            "sha256": "af40178d97d8d083836ef3db24ee48cbb705710e7292d870d0233d91fba0b6ac",
+            "role": "llm"
+          },
+          {
+            "name": "mmproj-google_gemma-4-E4B-it-bf16.gguf",
+            "size": 991552000,
+            "sha256": "ffa64aebf7144bbadd5a1e143b77794d88e76a81cc0168d91de0770eb49e88e0",
+            "role": "mmproj"
+          }
+        ],
+        "manifest": "s3://research-kld-benchmark/reference_model/gemma-4-e4b-it/manifest.json"
+      },
+      "effective_sampling": {
+        "instruct": {
+          "seed": 1234,
+          "temperature": 1.0,
+          "top_k": 64,
+          "top_p": 0.949999988079071,
+          "min_p": 0.05000000074505806,
+          "typical_p": 1.0,
+          "min_keep": 0,
+          "n_prev": 64,
+          "samplers": [
+            "penalties",
+            "dry",
+            "top_n_sigma",
+            "top_k",
+            "typ_p",
+            "top_p",
+            "min_p",
+            "xtc",
+            "temperature"
+          ],
+          "sampler_chain": "logits -> ?penalties -> ?dry -> ?top-n-sigma -> top-k -> ?typical -> top-p -> min-p -> ?xtc -> ?temp-ext -> dist ",
+          "repeat_last_n": 64,
+          "repeat_penalty": 1.0,
+          "frequency_penalty": 0.0,
+          "presence_penalty": 0.0,
+          "penalize_prompt": true,
+          "dry_multiplier": 0.0,
+          "dry_base": 1.75,
+          "dry_allowed_length": 2,
+          "dry_penalty_last_n": 64,
+          "dry_sequence_breakers": [
+            "\n",
+            ":",
+            "\"",
+            "*"
+          ],
+          "xtc_probability": 0.0,
+          "xtc_threshold": 0.10000000149011612,
+          "dynatemp_range": 0.0,
+          "dynatemp_exponent": 1.0,
+          "top_n_sigma": -1.0,
+          "mirostat": 0,
+          "mirostat_tau": 5.0,
+          "mirostat_eta": 0.10000000149011612,
+          "adaptive_target": -1.0,
+          "adaptive_decay": 0.8999999761581421,
+          "ignore_eos": false,
+          "logit_bias": [],
+          "grammar": "",
+          "grammar_lazy": false,
+          "backend_sampling": false,
+          "user_sampling_config": 70
+        },
+        "thinking": {
+          "seed": 1234,
+          "temperature": 1.0,
+          "top_k": 64,
+          "top_p": 0.949999988079071,
+          "min_p": 0.05000000074505806,
+          "typical_p": 1.0,
+          "min_keep": 0,
+          "n_prev": 64,
+          "samplers": [
+            "penalties",
+            "dry",
+            "top_n_sigma",
+            "top_k",
+            "typ_p",
+            "top_p",
+            "min_p",
+            "xtc",
+            "temperature"
+          ],
+          "sampler_chain": "logits -> ?penalties -> ?dry -> ?top-n-sigma -> top-k -> ?typical -> top-p -> min-p -> ?xtc -> ?temp-ext -> dist ",
+          "repeat_last_n": 64,
+          "repeat_penalty": 1.0,
+          "frequency_penalty": 0.0,
+          "presence_penalty": 0.0,
+          "penalize_prompt": true,
+          "dry_multiplier": 0.0,
+          "dry_base": 1.75,
+          "dry_allowed_length": 2,
+          "dry_penalty_last_n": 64,
+          "dry_sequence_breakers": [
+            "\n",
+            ":",
+            "\"",
+            "*"
+          ],
+          "xtc_probability": 0.0,
+          "xtc_threshold": 0.10000000149011612,
+          "dynatemp_range": 0.0,
+          "dynatemp_exponent": 1.0,
+          "top_n_sigma": -1.0,
+          "mirostat": 0,
+          "mirostat_tau": 5.0,
+          "mirostat_eta": 0.10000000149011612,
+          "adaptive_target": -1.0,
+          "adaptive_decay": 0.8999999761581421,
+          "ignore_eos": false,
+          "logit_bias": [],
+          "grammar": "",
+          "grammar_lazy": false,
+          "backend_sampling": false,
+          "user_sampling_config": 70
         }
       }
     },
@@ -336,6 +717,151 @@
             "draft_max": 0,
             "validation": "unmeasured-starting-point"
           }
+        }
+      },
+      "identity": {
+        "files": [
+          {
+            "name": "google_gemma-4-31B-it-bf16-00001-of-00002.gguf",
+            "size": 39996137216,
+            "sha256": "00d6ab955e63cde6d0306adb99455c3fab96c3254b2fbfe750b65e8e4543485a",
+            "role": "llm"
+          },
+          {
+            "name": "google_gemma-4-31B-it-bf16-00002-of-00002.gguf",
+            "size": 21417052704,
+            "sha256": "ed3ed48c668ef6b7a14ec06a56554deea9f3af5d2f245560f450ab7f25756e29",
+            "role": "llm"
+          },
+          {
+            "name": "mmproj-google_gemma-4-31B-it-bf16.gguf",
+            "size": 1200726208,
+            "sha256": "21487ff26d08f7ddd1d654d3bbfc1ae1020aab3119f5bf654742ce4697732e4e",
+            "role": "mmproj"
+          }
+        ],
+        "manifest": "s3://research-kld-benchmark/reference_model/gemma-4-31b-it/manifest.json",
+        "head_files": [
+          {
+            "name": "mtp-google_gemma-4-31B-it-Q8_0.gguf",
+            "size": 514705920,
+            "sha256": "743b2b719e448f9a06e774b4f33dd7a391a73e94d32297c7590256484562eb52"
+          }
+        ],
+        "head_source": {
+          "repo": "bartowski/google_gemma-4-31B-it-GGUF",
+          "revision": "619aca7589c72be65dd968de8602ad23d68b5c14",
+          "file": "mtp-google_gemma-4-31B-it-Q8_0.gguf",
+          "size": 514705920,
+          "sha256": "743b2b719e448f9a06e774b4f33dd7a391a73e94d32297c7590256484562eb52"
+        }
+      },
+      "effective_sampling": {
+        "instruct": {
+          "seed": 1234,
+          "temperature": 1.0,
+          "top_k": 64,
+          "top_p": 0.949999988079071,
+          "min_p": 0.05000000074505806,
+          "typical_p": 1.0,
+          "min_keep": 0,
+          "n_prev": 64,
+          "samplers": [
+            "penalties",
+            "dry",
+            "top_n_sigma",
+            "top_k",
+            "typ_p",
+            "top_p",
+            "min_p",
+            "xtc",
+            "temperature"
+          ],
+          "sampler_chain": "logits -> ?penalties -> ?dry -> ?top-n-sigma -> top-k -> ?typical -> top-p -> min-p -> ?xtc -> ?temp-ext -> dist ",
+          "repeat_last_n": 64,
+          "repeat_penalty": 1.0,
+          "frequency_penalty": 0.0,
+          "presence_penalty": 0.0,
+          "penalize_prompt": true,
+          "dry_multiplier": 0.0,
+          "dry_base": 1.75,
+          "dry_allowed_length": 2,
+          "dry_penalty_last_n": 64,
+          "dry_sequence_breakers": [
+            "\n",
+            ":",
+            "\"",
+            "*"
+          ],
+          "xtc_probability": 0.0,
+          "xtc_threshold": 0.10000000149011612,
+          "dynatemp_range": 0.0,
+          "dynatemp_exponent": 1.0,
+          "top_n_sigma": -1.0,
+          "mirostat": 0,
+          "mirostat_tau": 5.0,
+          "mirostat_eta": 0.10000000149011612,
+          "adaptive_target": -1.0,
+          "adaptive_decay": 0.8999999761581421,
+          "ignore_eos": false,
+          "logit_bias": [],
+          "grammar": "",
+          "grammar_lazy": false,
+          "backend_sampling": false,
+          "user_sampling_config": 70
+        },
+        "thinking": {
+          "seed": 1234,
+          "temperature": 1.0,
+          "top_k": 64,
+          "top_p": 0.949999988079071,
+          "min_p": 0.05000000074505806,
+          "typical_p": 1.0,
+          "min_keep": 0,
+          "n_prev": 64,
+          "samplers": [
+            "penalties",
+            "dry",
+            "top_n_sigma",
+            "top_k",
+            "typ_p",
+            "top_p",
+            "min_p",
+            "xtc",
+            "temperature"
+          ],
+          "sampler_chain": "logits -> ?penalties -> ?dry -> ?top-n-sigma -> top-k -> ?typical -> top-p -> min-p -> ?xtc -> ?temp-ext -> dist ",
+          "repeat_last_n": 64,
+          "repeat_penalty": 1.0,
+          "frequency_penalty": 0.0,
+          "presence_penalty": 0.0,
+          "penalize_prompt": true,
+          "dry_multiplier": 0.0,
+          "dry_base": 1.75,
+          "dry_allowed_length": 2,
+          "dry_penalty_last_n": 64,
+          "dry_sequence_breakers": [
+            "\n",
+            ":",
+            "\"",
+            "*"
+          ],
+          "xtc_probability": 0.0,
+          "xtc_threshold": 0.10000000149011612,
+          "dynatemp_range": 0.0,
+          "dynatemp_exponent": 1.0,
+          "top_n_sigma": -1.0,
+          "mirostat": 0,
+          "mirostat_tau": 5.0,
+          "mirostat_eta": 0.10000000149011612,
+          "adaptive_target": -1.0,
+          "adaptive_decay": 0.8999999761581421,
+          "ignore_eos": false,
+          "logit_bias": [],
+          "grammar": "",
+          "grammar_lazy": false,
+          "backend_sampling": false,
+          "user_sampling_config": 70
         }
       }
     },
@@ -413,6 +939,131 @@
             "validation": "unmeasured-starting-point"
           }
         }
+      },
+      "identity": {
+        "files": [
+          {
+            "name": "mmproj-zai-org_GLM-4.6V-Flash-bf16.gguf",
+            "size": 1840903936,
+            "sha256": "219b0fcf326d8d023004ce9fc27fa643bd73ebfb73684e8e0af742c1fd755b63",
+            "role": "mmproj"
+          },
+          {
+            "name": "zai-org_GLM-4.6V-Flash-bf16.gguf",
+            "size": 18811585376,
+            "sha256": "d3e0598b2a7071190f69309f91514596389e5b893a28a4441eb02e0606a6ec5f",
+            "role": "llm"
+          }
+        ],
+        "manifest": "s3://research-kld-benchmark/reference_model/glm-4.6v-flash/manifest.json"
+      },
+      "effective_sampling": {
+        "instruct": {
+          "seed": 1234,
+          "temperature": 0.800000011920929,
+          "top_k": 2,
+          "top_p": 0.6000000238418579,
+          "min_p": 0.05000000074505806,
+          "typical_p": 1.0,
+          "min_keep": 0,
+          "n_prev": 64,
+          "samplers": [
+            "penalties",
+            "dry",
+            "top_n_sigma",
+            "top_k",
+            "typ_p",
+            "top_p",
+            "min_p",
+            "xtc",
+            "temperature"
+          ],
+          "sampler_chain": "logits -> penalties -> ?dry -> ?top-n-sigma -> top-k -> ?typical -> top-p -> min-p -> ?xtc -> temp-ext -> dist ",
+          "repeat_last_n": 64,
+          "repeat_penalty": 1.100000023841858,
+          "frequency_penalty": 0.0,
+          "presence_penalty": 0.0,
+          "penalize_prompt": true,
+          "dry_multiplier": 0.0,
+          "dry_base": 1.75,
+          "dry_allowed_length": 2,
+          "dry_penalty_last_n": 64,
+          "dry_sequence_breakers": [
+            "\n",
+            ":",
+            "\"",
+            "*"
+          ],
+          "xtc_probability": 0.0,
+          "xtc_threshold": 0.10000000149011612,
+          "dynatemp_range": 0.0,
+          "dynatemp_exponent": 1.0,
+          "top_n_sigma": -1.0,
+          "mirostat": 0,
+          "mirostat_tau": 5.0,
+          "mirostat_eta": 0.10000000149011612,
+          "adaptive_target": -1.0,
+          "adaptive_decay": 0.8999999761581421,
+          "ignore_eos": false,
+          "logit_bias": [],
+          "grammar": "",
+          "grammar_lazy": false,
+          "backend_sampling": false,
+          "user_sampling_config": 326
+        },
+        "thinking": {
+          "seed": 1234,
+          "temperature": 0.800000011920929,
+          "top_k": 2,
+          "top_p": 0.6000000238418579,
+          "min_p": 0.05000000074505806,
+          "typical_p": 1.0,
+          "min_keep": 0,
+          "n_prev": 64,
+          "samplers": [
+            "penalties",
+            "dry",
+            "top_n_sigma",
+            "top_k",
+            "typ_p",
+            "top_p",
+            "min_p",
+            "xtc",
+            "temperature"
+          ],
+          "sampler_chain": "logits -> penalties -> ?dry -> ?top-n-sigma -> top-k -> ?typical -> top-p -> min-p -> ?xtc -> temp-ext -> dist ",
+          "repeat_last_n": 64,
+          "repeat_penalty": 1.100000023841858,
+          "frequency_penalty": 0.0,
+          "presence_penalty": 0.0,
+          "penalize_prompt": true,
+          "dry_multiplier": 0.0,
+          "dry_base": 1.75,
+          "dry_allowed_length": 2,
+          "dry_penalty_last_n": 64,
+          "dry_sequence_breakers": [
+            "\n",
+            ":",
+            "\"",
+            "*"
+          ],
+          "xtc_probability": 0.0,
+          "xtc_threshold": 0.10000000149011612,
+          "dynatemp_range": 0.0,
+          "dynatemp_exponent": 1.0,
+          "top_n_sigma": -1.0,
+          "mirostat": 0,
+          "mirostat_tau": 5.0,
+          "mirostat_eta": 0.10000000149011612,
+          "adaptive_target": -1.0,
+          "adaptive_decay": 0.8999999761581421,
+          "ignore_eos": false,
+          "logit_bias": [],
+          "grammar": "",
+          "grammar_lazy": false,
+          "backend_sampling": false,
+          "user_sampling_config": 326
+        }
       }
     },
     "gemma-4-26b-a4b-it": {
@@ -485,6 +1136,151 @@
             "draft_max": 0,
             "validation": "unmeasured-starting-point"
           }
+        }
+      },
+      "identity": {
+        "files": [
+          {
+            "name": "google_gemma-4-26B-A4B-it-bf16-00001-of-00002.gguf",
+            "size": 39538690528,
+            "sha256": "4d82522edff064ee9305dd078f7e37bb8ed31d0ebb2773791ca103a2fb5b53fb",
+            "role": "llm"
+          },
+          {
+            "name": "google_gemma-4-26B-A4B-it-bf16-00002-of-00002.gguf",
+            "size": 10966444896,
+            "sha256": "3f2790e5db81b60f45cab2a7fbd5d531a08f7a6f8360bd03c851164f43a3c4c9",
+            "role": "llm"
+          },
+          {
+            "name": "mmproj-google_gemma-4-26B-A4B-it-bf16.gguf",
+            "size": 1194828000,
+            "sha256": "b3ee6c97d5a5bb1ae9eb93bf14c1d1b51a0179a45ac1076b195931814c759e1e",
+            "role": "mmproj"
+          }
+        ],
+        "manifest": "s3://research-kld-benchmark/reference_model/gemma-4-26b-a4b-it/manifest.json",
+        "head_files": [
+          {
+            "name": "mtp-google_gemma-4-26B-A4B-it-Q8_0.gguf",
+            "size": 461785600,
+            "sha256": "318f22f2142ac43d512084b7d844641d69b71543a8dbf1b8d4dc24212f8715cb"
+          }
+        ],
+        "head_source": {
+          "repo": "bartowski/google_gemma-4-26B-A4B-it-GGUF",
+          "revision": "10f3b41bcf8d3047f4e136e7197ffc2dd1654c9d",
+          "file": "mtp-google_gemma-4-26B-A4B-it-Q8_0.gguf",
+          "size": 461785600,
+          "sha256": "318f22f2142ac43d512084b7d844641d69b71543a8dbf1b8d4dc24212f8715cb"
+        }
+      },
+      "effective_sampling": {
+        "instruct": {
+          "seed": 1234,
+          "temperature": 1.0,
+          "top_k": 64,
+          "top_p": 0.949999988079071,
+          "min_p": 0.05000000074505806,
+          "typical_p": 1.0,
+          "min_keep": 0,
+          "n_prev": 64,
+          "samplers": [
+            "penalties",
+            "dry",
+            "top_n_sigma",
+            "top_k",
+            "typ_p",
+            "top_p",
+            "min_p",
+            "xtc",
+            "temperature"
+          ],
+          "sampler_chain": "logits -> ?penalties -> ?dry -> ?top-n-sigma -> top-k -> ?typical -> top-p -> min-p -> ?xtc -> ?temp-ext -> dist ",
+          "repeat_last_n": 64,
+          "repeat_penalty": 1.0,
+          "frequency_penalty": 0.0,
+          "presence_penalty": 0.0,
+          "penalize_prompt": true,
+          "dry_multiplier": 0.0,
+          "dry_base": 1.75,
+          "dry_allowed_length": 2,
+          "dry_penalty_last_n": 64,
+          "dry_sequence_breakers": [
+            "\n",
+            ":",
+            "\"",
+            "*"
+          ],
+          "xtc_probability": 0.0,
+          "xtc_threshold": 0.10000000149011612,
+          "dynatemp_range": 0.0,
+          "dynatemp_exponent": 1.0,
+          "top_n_sigma": -1.0,
+          "mirostat": 0,
+          "mirostat_tau": 5.0,
+          "mirostat_eta": 0.10000000149011612,
+          "adaptive_target": -1.0,
+          "adaptive_decay": 0.8999999761581421,
+          "ignore_eos": false,
+          "logit_bias": [],
+          "grammar": "",
+          "grammar_lazy": false,
+          "backend_sampling": false,
+          "user_sampling_config": 70
+        },
+        "thinking": {
+          "seed": 1234,
+          "temperature": 1.0,
+          "top_k": 64,
+          "top_p": 0.949999988079071,
+          "min_p": 0.05000000074505806,
+          "typical_p": 1.0,
+          "min_keep": 0,
+          "n_prev": 64,
+          "samplers": [
+            "penalties",
+            "dry",
+            "top_n_sigma",
+            "top_k",
+            "typ_p",
+            "top_p",
+            "min_p",
+            "xtc",
+            "temperature"
+          ],
+          "sampler_chain": "logits -> ?penalties -> ?dry -> ?top-n-sigma -> top-k -> ?typical -> top-p -> min-p -> ?xtc -> ?temp-ext -> dist ",
+          "repeat_last_n": 64,
+          "repeat_penalty": 1.0,
+          "frequency_penalty": 0.0,
+          "presence_penalty": 0.0,
+          "penalize_prompt": true,
+          "dry_multiplier": 0.0,
+          "dry_base": 1.75,
+          "dry_allowed_length": 2,
+          "dry_penalty_last_n": 64,
+          "dry_sequence_breakers": [
+            "\n",
+            ":",
+            "\"",
+            "*"
+          ],
+          "xtc_probability": 0.0,
+          "xtc_threshold": 0.10000000149011612,
+          "dynatemp_range": 0.0,
+          "dynatemp_exponent": 1.0,
+          "top_n_sigma": -1.0,
+          "mirostat": 0,
+          "mirostat_tau": 5.0,
+          "mirostat_eta": 0.10000000149011612,
+          "adaptive_target": -1.0,
+          "adaptive_decay": 0.8999999761581421,
+          "ignore_eos": false,
+          "logit_bias": [],
+          "grammar": "",
+          "grammar_lazy": false,
+          "backend_sampling": false,
+          "user_sampling_config": 70
         }
       }
     }
