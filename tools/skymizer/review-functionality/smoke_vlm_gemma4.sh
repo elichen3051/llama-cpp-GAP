@@ -2,8 +2,7 @@
 set -euo pipefail
 # =============================================================================
 # smoke_vlm_gemma4.sh — end-to-end VLM-lane GPU smoke test on the gemma-4
-# model family (registered in prep_vlm_score_from_hf.MODEL_FAMILIES; see
-# gemma4-family-support-spec.md for the verified wrapper facts).
+# model family (registered in prep_vlm_score_from_hf.MODEL_FAMILIES).
 #
 # Real dataset rows only: the default dataset is the GAP collection's
 # gemma-4 ground-truth config — no locally generated look-alike rows.
