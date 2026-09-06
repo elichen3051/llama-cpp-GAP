@@ -10,6 +10,8 @@ import sys
 from pathlib import Path
 
 SKYMIZER = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(SKYMIZER))
+from lib.reference_study import reference_template, validate_reference_cohort
 
 
 def parse_args(argv=None):
@@ -41,11 +43,13 @@ def parse_args(argv=None):
 
 
 def build_command(args, profiles):
+    validate_reference_cohort(profiles, args.size)
     if args.source not in profiles["sources"]:
         raise ValueError(f"unknown source {args.source!r}; choose from {profiles['sources']}")
     if args.model not in profiles["models"]:
         raise ValueError(f"unknown production model {args.model!r}; choose from {list(profiles['models'])}")
     model = profiles["models"][args.model]
+    template = reference_template(model, args.mode)
     settings = model["runtime"][args.hardware][args.mode]
     ctx = args.ctx or settings["ctx"]
     parallel = args.parallel if args.parallel is not None else settings.get("parallel", 1)
@@ -77,6 +81,10 @@ def build_command(args, profiles):
                 "-t", str(settings["threads"]), "-tb", str(settings["threads_batch"]),
                 "-fa", "on", "-ctk", "f16", "-ctv", "f16", "-np", str(parallel), "--fit", "off",
                 "-n", str(cap), "--seed", str(profiles["seed"]), *model["sampling_args"][args.mode]]
+    if template["system_prompt"]:
+        command += ["--system-prompt", template["system_prompt"]]
+    if template["chat_template_kwargs"] != {"preserve_reasoning": "true"}:
+        command += ["--chat-template-kwargs", json.dumps({key: json.loads(value) for key, value in template["chat_template_kwargs"].items()}, ensure_ascii=False)]
     if draft:
         command += ["--spec-type", "draft-mtp", "--spec-draft-n-max", str(draft),
                     "--spec-draft-n-min", "0", "--spec-draft-p-min", "0", "-ngld", "all"]

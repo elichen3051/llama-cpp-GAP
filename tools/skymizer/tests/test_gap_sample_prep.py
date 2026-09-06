@@ -197,6 +197,58 @@ def native_row(with_image=True):
     return build_row({}, request, result, metadata, [image.getvalue()] if with_image else [])
 
 
+@pytest.mark.parametrize("tiles_per_image", [(3,), (5, 13)])
+@pytest.mark.parametrize("tile_separators", [False, True])
+def test_native_contract_distinguishes_images_from_tiles(tiles_per_image, tile_separators):
+    from copy import deepcopy
+    from lib.reference_contract import GTContractError
+    from lib.reference_dataset import validate_reference_row
+
+    row = native_row()
+    chunks, prefix = [], []
+
+    def append_chunk(kind, count):
+        chunk = {"type": kind, "start": len(prefix), "n_tokens": count, "n_pos": count}
+        if kind == "text":
+            chunk["tokens"] = [1] * count
+        else:
+            chunk.update(grid_x=16, grid_y=16, grid_t=1)
+        prefix.extend(chunk.get("tokens", [-1] * count))
+        chunks.append(chunk)
+
+    append_chunk("text", 1)
+    for count in tiles_per_image:
+        for tile in range(count):
+            if tile and tile_separators:
+                append_chunk("text", 1)
+            append_chunk("image", 256)
+        append_chunk("text", 1)
+    n_pre = len(prefix)
+    n_tiles = sum(tiles_per_image)
+    row.update(input_ids=prefix + [3, 4], labels=[-100] * n_pre + [3, 4],
+               input_tokens_len=n_pre + 2, n_prefill_tokens=n_pre,
+               llamacpp_n_past_prefill=n_pre, llamacpp_tokens_evaluated=n_pre,
+               llamacpp_prompt_layout=json.dumps({"n_tokens": n_pre, "n_pos": n_pre, "chunks": chunks}),
+               per_image_vision_token_counts=[256] * n_tiles, per_image_n_pos=[256] * n_tiles,
+               per_image_grid=[[16, 16]] * n_tiles, sum_vision_tokens=256 * n_tiles,
+               max_vision_tokens=256, num_images=len(tiles_per_image),
+               images=row["images"] * len(tiles_per_image),
+               image_bytes_sha256=row["image_bytes_sha256"] * len(tiles_per_image),
+               llamacpp_prompt_string="<__media__>" * len(tiles_per_image) + "What color?")
+    validate_reference_row(row)
+    for field, value in (
+        ("num_images", len(tiles_per_image) + 1),
+        ("llamacpp_prompt_string", "What color?"),
+        ("image_bytes_sha256", []),
+        ("per_image_vision_token_counts", [256] * (n_tiles - 1)),
+        ("input_ids", [7] + row["input_ids"][1:]),
+    ):
+        corrupted = deepcopy(row)
+        corrupted[field] = value
+        with pytest.raises(GTContractError):
+            validate_reference_row(corrupted)
+
+
 @pytest.mark.parametrize("corruption", ["bytes", "layout", "position", "vocab", "logprobs", "version"])
 def test_native_contract_rejects_replay_corruption(corruption):
     from lib.reference_dataset import validate_reference_row
@@ -362,6 +414,13 @@ def test_model_reference_launcher_keeps_gpu_source_and_mode_explicit(tmp_path):
                     "sampling_args": {"thinking": ["--temp", "1.0", "--min-p", "0"]}}}}
     command = launch.build_command(args, profiles)
     assert command[command.index("--subset") + 1] == "image-only-subsample-100"
+    profiles["cohort_size"] = 100
+    assert launch.build_command(args, profiles) == command
+    for wrong_size in (500, "100", True, None):
+        profiles["cohort_size"] = wrong_size
+        with pytest.raises(ValueError, match="profile cohort_size"):
+            launch.build_command(args, profiles)
+    del profiles["cohort_size"]
     assert command[command.index("--revision") + 1] == "pinned-sha"
     assert "--enable-thinking" in command
     assert command[command.index("-n") + 1] == "16384"
@@ -370,6 +429,29 @@ def test_model_reference_launcher_keeps_gpu_source_and_mode_explicit(tmp_path):
     assert command[command.index("-np") + 1] == "1"
     assert command[command.index("-c") + 1] == "32768"
     assert "--image-max-tokens" not in command
+    assert "--system-prompt" not in command and "--chat-template-kwargs" not in command
+    model = profiles["models"]["qwen"]
+    model["system_prompt"] = {"thinking": "Exact reasoning prompt\nKeep this text."}
+    model["chat_template_kwargs"] = {"thinking": {"reasoning_strength": "high", "current_date": "2026-09-06", "extra": [True, None, 2]}}
+    command = launch.build_command(args, profiles)
+    assert command.index("--system-prompt") > command.index("--")
+    assert command[command.index("--system-prompt") + 1] == model["system_prompt"]["thinking"]
+    assert command.index("--chat-template-kwargs") > command.index("--")
+    assert json.loads(command[command.index("--chat-template-kwargs") + 1]) == {"preserve_reasoning": True, **model["chat_template_kwargs"]["thinking"]}
+    model["semantic_modes"] = ["instruct"]
+    with pytest.raises(ValueError, match="unsupported semantic mode"):
+        launch.build_command(args, profiles)
+    model["semantic_modes"] = ["thinking"]
+    model["chat_template_kwargs"]["thinking"]["enable_thinking"] = True
+    with pytest.raises(ValueError, match="enable_thinking is selected"):
+        launch.build_command(args, profiles)
+    del model["chat_template_kwargs"]["thinking"]["enable_thinking"]
+    for key in ("system_prompt", "chat_template_kwargs"):
+        original = model[key]
+        model[key] = None
+        with pytest.raises(ValueError, match="must be mode maps"):
+            launch.build_command(args, profiles)
+        model[key] = original
     runtime["parallel"] = 2
     with pytest.raises(ValueError, match="MTP reference generation requires one sequence"):
         launch.build_command(args, profiles)
@@ -526,6 +608,7 @@ def test_reference_driver_filters_and_reconciles_out_of_order_results(tmp_path, 
     assert cohort["requested"] == 4 and cohort["generated"] == 3
     assert cohort["eligible_ids"] == ["first", "last"]
     assert cohort["excluded_ids"] == ["repeat"] and cohort["failed_ids"] == ["bad"]
+    assert (args.out / "scripts/lib/reference_study.py").read_bytes() == (gen.SKYMIZER / "lib/reference_study.py").read_bytes()
     assert list(load_from_disk(str(args.out / "dataset"))["id"]) == ["first", "last"]
     assert len((args.out / "native/generations.jsonl").read_text().splitlines()) == 3
     assert cohort["eligible_ids_sha256"] == hashlib.sha256(canonical_json(["first", "last"]).encode()).hexdigest()
@@ -549,7 +632,7 @@ def upload_run(tmp_path):
                     'effective_sampling': {'instruct': {'seed': 1234}, 'thinking': {'seed': 1234}},
                     'identity': {'files': [{'name': 'test.gguf', 'size': 12, 'sha256': 'c' * 64, 'role': 'llm'},
                                            {'name': 'mmproj.gguf', 'size': 6, 'sha256': 'd' * 64, 'role': 'mmproj'}]}}}}
-    def write(size=100, mode='instruct', change=None):
+    def write(size=100, mode='instruct', change=None, template=None, row_change=None):
         import shutil
         if (run / 'dataset').exists():
             shutil.rmtree(run / 'dataset')
@@ -568,6 +651,7 @@ def upload_run(tmp_path):
                                         'subset': f'mmmu-pro-vision-subsample-{size}', 'num_rows': size},
                         requested_enable_thinking=mode == 'thinking', thinking_column=None,
                         n_predict=profiles['generation_caps'][mode], repetition_detector=deepcopy(upload.DETECTOR))
+        metadata.update(template or {})
         if change:
             change(metadata)
         for name, value in [('metadata.json', metadata), ('run_start.json', {'status': 'running'}),
@@ -578,8 +662,10 @@ def upload_run(tmp_path):
         rows = []
         for item in ids[:2]:
             r = deepcopy(row)
-            r['generation_chat_template_kwargs'] = json.dumps({'preserve_reasoning': 'true', 'enable_thinking': 'true' if mode == 'thinking' else 'false'})
+            r['generation_chat_template_kwargs'] = json.dumps({**metadata['chat_template_kwargs'], 'enable_thinking': 'true' if mode == 'thinking' else 'false'})
             r.update(id=item, item_id=item, generation_enable_thinking=mode == 'thinking', generation_metadata=canonical_json(metadata))
+            if row_change:
+                row_change(r)
             rows.append(r)
         Dataset.from_list(rows, features=reference_features()).save_to_disk(str(run / 'dataset'))
         (run / 'excluded.jsonl').write_text(json.dumps({'id': ids[2], 'reason': 'repetition'}) + '\n')
@@ -601,6 +687,51 @@ def test_upload_cohort_names_and_image_parquet_roundtrip(upload_run, size, mode)
     ds = Dataset.from_parquet(str(parquet))
     assert raw_images(ds[0]) == raw_images(native_row(True))
     assert ds[0]['generation_token_logprobs'] == [-0.5, -0.1]
+
+
+@pytest.mark.parametrize("size,profile_size", [(100, 500), (500, 100)])
+def test_upload_rejects_profile_size_mismatch(upload_run, size, profile_size):
+    from cli import upload_reference as upload
+    run, profiles = upload_run(size=size)
+    profiles["cohort_size"] = profile_size
+    with pytest.raises(ValueError, match="profile cohort_size"):
+        upload.prepare(run, "test-model", "instruct", profiles)
+    profiles["cohort_size"] = size
+    assert upload.prepare(run, "test-model", "instruct", profiles)[0]["cohort"]["requested"] == size
+
+
+@pytest.mark.parametrize('scenario', ['fallback', 'explicit', 'metadata_prompt', 'metadata_kwargs', 'row_prompt', 'row_kwargs', 'unsupported_mode'])
+def test_upload_uses_profile_template_contract(upload_run, scenario):
+    from cli import upload_reference as upload
+    from lib.reference_study import reference_template
+    profile = {'semantic_modes': ['thinking'], 'system_prompt': {'thinking': 'Exact reasoning prompt'},
+               'chat_template_kwargs': {'thinking': {'reasoning_strength': 'high', 'current_date': '2026-09-06'}}}
+    template = reference_template(profile, 'thinking')
+    assert template['chat_template_kwargs'] == {'preserve_reasoning': 'true', 'reasoning_strength': '"high"', 'current_date': '"2026-09-06"'}
+    def change(metadata):
+        if scenario == 'metadata_prompt':
+            metadata['system_prompt'] = 'wrong'
+        if scenario == 'metadata_kwargs':
+            metadata['chat_template_kwargs']['reasoning_strength'] = '"low"'
+    def row_change(row):
+        request = json.loads(row['generation_request'])
+        request.pop('system_prompt', None)
+        if scenario in ('explicit', 'row_prompt'):
+            request['system_prompt'] = 'wrong' if scenario == 'row_prompt' else profile['system_prompt']['thinking']
+        row['generation_request'] = json.dumps(request)
+        if scenario == 'row_kwargs':
+            kwargs = json.loads(row['generation_chat_template_kwargs'])
+            kwargs['current_date'] = '"2026-09-07"'
+            row['generation_chat_template_kwargs'] = json.dumps(kwargs)
+    run, profiles = upload_run(mode='thinking', template=template, change=change, row_change=row_change)
+    profiles['models']['test-model'].update(profile)
+    if scenario == 'unsupported_mode':
+        profiles['models']['test-model']['semantic_modes'] = ['instruct']
+    if scenario in ('fallback', 'explicit'):
+        assert upload.prepare(run, 'test-model', 'thinking', profiles)[0]['rows'] == 2
+    else:
+        with pytest.raises(ValueError):
+            upload.prepare(run, 'test-model', 'thinking', profiles)
 
 
 @pytest.mark.parametrize('change', [

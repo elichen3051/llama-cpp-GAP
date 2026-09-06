@@ -246,3 +246,76 @@ def test_kld_metric_self_test_and_current_format(tool):
     version = subprocess.run([str(_binary(tool)), "--vlmk-version"],
                              capture_output=True, text=True, check=True)
     assert version.stdout.strip() == str(kio.VLMK_VERSION)
+
+
+def test_vlm_prefix_checks_adjacent_tiles_and_preserves_strict_validation(tmp_path):
+    if shutil.which("g++") is None:
+        pytest.skip("g++ unavailable")
+    source = tmp_path / "prefix.cpp"
+    source.write_text(r"""
+#define main skymizer_vlm_kld_main
+#include "vlm-kld.cpp"
+#undef main
+#include <cassert>
+struct mtmd_input_chunk {
+    mtmd_input_chunk_type type;
+    std::vector<llama_token> text;
+    size_t n;
+};
+struct mtmd_input_chunks { std::vector<mtmd_input_chunk> entries; };
+size_t mtmd_input_chunks_size(const mtmd_input_chunks * c) { return c->entries.size(); }
+const mtmd_input_chunk * mtmd_input_chunks_get(const mtmd_input_chunks * c, size_t i) { return &c->entries.at(i); }
+void mtmd_input_chunks_free(mtmd_input_chunks * c) { delete c; }
+mtmd_input_chunk_type mtmd_input_chunk_get_type(const mtmd_input_chunk * c) { return c->type; }
+size_t mtmd_input_chunk_get_n_tokens(const mtmd_input_chunk * c) { return c->n; }
+const llama_token * mtmd_input_chunk_get_tokens_text(const mtmd_input_chunk * c, size_t * n) {
+    *n = c->text.size();
+    return c->text.data();
+}
+int main() {
+    for (int tiles : {1, 3, 13}) {
+        mtmd::input_chunks chunks(new mtmd_input_chunks);
+        auto & entries = chunks.ptr->entries;
+        entries.push_back({MTMD_INPUT_CHUNK_TYPE_TEXT, {1, 2}, 2});
+        for (int i = 0; i < tiles; ++i) {
+            entries.push_back({MTMD_INPUT_CHUNK_TYPE_IMAGE, {}, 256});
+        }
+        entries.push_back({MTMD_INPUT_CHUNK_TYPE_TEXT, {3, 4}, 2});
+        entries.push_back({MTMD_INPUT_CHUNK_TYPE_IMAGE, {}, 256});
+        entries.push_back({MTMD_INPUT_CHUNK_TYPE_TEXT, {5}, 1});
+        std::vector<int32_t> tokens = {1, 2};
+        tokens.insert(tokens.end(), tiles * 256, -1);
+        tokens.insert(tokens.end(), {3, 4});
+        tokens.insert(tokens.end(), 256, -1);
+        tokens.push_back(5);
+        auto check = [&](const std::vector<int32_t> & input, bool strict) {
+            return check_prefix_against_tokens(chunks, input, input.size(), strict, "test", nullptr);
+        };
+        assert(check(tokens, true));
+        auto changed = tokens;
+        changed[tiles * 256 + 2] = 9;
+        assert(!check(changed, true));
+        assert(!check(changed, false));
+        changed = tokens;
+        changed.erase(changed.begin() + 2);
+        assert(!check(changed, true));
+        assert(check(changed, false));
+        changed.back() = 9;
+        assert(!check(changed, false));
+        changed = tokens;
+        changed.push_back(6);
+        assert(!check(changed, true));
+        changed = tokens;
+        changed[2 + tiles * 128] = -2;
+        assert(!check(changed, true));
+    }
+}
+""")
+    exe = tmp_path / "prefix"
+    includes = [SKYMIZER, REPO / "include", REPO / "ggml/include", REPO / "common", REPO / "vendor", REPO / "tools/mtmd"]
+    command = ["g++", "-std=c++17", "-O1", "-ffunction-sections", "-fdata-sections", "-Wl,--gc-sections"]
+    for directory in includes:
+        command += ["-I", str(directory)]
+    subprocess.run([*command, str(source), "-o", str(exe)], check=True)
+    result = subprocess.run([str(exe)], capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr

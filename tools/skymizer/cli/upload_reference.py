@@ -14,6 +14,7 @@ SKYMIZER = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(SKYMIZER))
 from lib.reference_dataset import validate_reference_row, sha256_file
 from lib.reference_run import atomic_json, read_records
+from lib.reference_study import reference_template, validate_reference_cohort
 
 
 AUDIT_FILES = ("metadata.json", "complete.json", "run_start.json", "excluded.jsonl", "failures.jsonl", "native-attempts.json")
@@ -48,6 +49,7 @@ def verify_model(metadata, expected):
 
 def prepare(run, model, mode, profiles):
     from datasets import load_from_disk
+    template = reference_template(profiles["models"][model], mode)
     completion = json.loads((run / "complete.json").read_text())
     metadata = json.loads((run / "metadata.json").read_text())
     state = json.loads((run / "run_state.json").read_text())
@@ -58,6 +60,7 @@ def prepare(run, model, mode, profiles):
     if not match or match[1] not in profiles["sources"]:
         raise ValueError("source must be a supported full subsample-100 or subsample-500 cohort")
     size = int(match[2])
+    validate_reference_cohort(profiles, size)
     if source["path"] != profiles["dataset"]["repo"] or source["revision"] != profiles["dataset"]["revision"] or source["split"] != "train":
         raise ValueError("source repository/revision differs from campaign profiles")
     cohort = metadata["cohort"]
@@ -84,8 +87,7 @@ def prepare(run, model, mode, profiles):
             or completion["status"] != ("complete_with_failures" if cohort["failed"] else "complete")):
         raise ValueError("completion counts/status do not reconcile")
     verify_model(metadata, profiles["models"][model])
-    defaults = {"chat_template_source": "gguf", "jinja": True, "system_prompt": "",
-                "chat_template_kwargs": {"preserve_reasoning": "true"}, "image_min_tokens": -1,
+    defaults = {"chat_template_source": "gguf", "jinja": True, **template, "image_min_tokens": -1,
                 "image_max_tokens": -1, "image_token_budget_source": "mtmd_init_params"}
     if any(metadata.get(key) != value for key, value in defaults.items()):
         raise ValueError("template or image budget differs from the native production defaults")
@@ -106,9 +108,9 @@ def prepare(run, model, mode, profiles):
         validate_reference_row(row)
         if row["generation_enable_thinking"] is not (mode == "thinking"):
             raise ValueError("mixed reasoning modes in one subset")
-        kwargs = {"preserve_reasoning": "true", "enable_thinking": "true" if mode == "thinking" else "false"}
+        kwargs = {**template["chat_template_kwargs"], "enable_thinking": "true" if mode == "thinking" else "false"}
         if (json.loads(row["generation_chat_template_kwargs"]) != kwargs
-                or json.loads(row["generation_request"]).get("system_prompt", "") != ""):
+                or json.loads(row["generation_request"]).get("system_prompt", metadata["system_prompt"]) != template["system_prompt"]):
             raise ValueError("row template differs from the native production defaults")
         if json.loads(row["generation_sampling_params"]) != sampling:
             raise ValueError("row sampling differs from the frozen production profile")

@@ -1,6 +1,34 @@
 """Shared generation and collection settings for an operator's study overview."""
 
+import json
 from pathlib import Path
+
+
+def validate_reference_cohort(profiles, size):
+    expected = profiles.get("cohort_size", size)
+    if type(expected) is not int or expected != size:
+        raise ValueError(f"profile cohort_size={expected!r} does not match requested size={size}")
+
+
+def reference_template(profile, mode):
+    modes = profile.get("semantic_modes", profile.get("sampling_args", profile.get("effective_sampling", {})))
+    if mode not in ("instruct", "thinking") or mode not in modes:
+        raise ValueError(f"unsupported semantic mode: {mode}")
+    prompts = profile.get("system_prompt", {})
+    template_kwargs = profile.get("chat_template_kwargs", {})
+    if not isinstance(prompts, dict) or not isinstance(template_kwargs, dict):
+        raise ValueError("profile system_prompt and chat_template_kwargs must be mode maps")
+    prompt = prompts.get(mode, "")
+    kwargs = template_kwargs.get(mode, {})
+    if not isinstance(prompt, str) or not isinstance(kwargs, dict) or any(not isinstance(k, str) for k in kwargs):
+        raise ValueError("profile template requires a string system prompt and a JSON object of kwargs")
+    if "enable_thinking" in kwargs:
+        raise ValueError("enable_thinking is selected by the semantic mode, not profile template kwargs")
+    return {
+        "system_prompt": prompt,
+        "chat_template_kwargs": {key: json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False)
+                                 for key, value in {"preserve_reasoning": True, **kwargs}.items()},
+    }
 
 
 def kld_runtime(profiles, model, mode, hardware):

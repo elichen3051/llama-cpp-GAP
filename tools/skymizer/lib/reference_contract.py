@@ -165,7 +165,7 @@ def _llamacpp_row_violations(
     - R10: the evaluated prompt length equals ``n_prefill_tokens``.
     - R11: the echoed prompt layout flattens to ``n_prefill_tokens`` tokens
       and its position count equals ``llamacpp_n_past_prefill``.
-    - R12: per-image vision token counts sum to ``sum_vision_tokens`` and
+    - R12: image-chunk token counts sum to ``sum_vision_tokens`` and
       the prompt string carries one media marker per image.
     - R13: sampled-token log-probs, when recorded, cover every generated token.
     """
@@ -228,7 +228,8 @@ def _llamacpp_row_violations(
         )
     marker = str(row["llamacpp_media_marker"])
     n_markers = str(row["llamacpp_prompt_string"]).count(marker) if marker else -1
-    if n_markers != len(counts):
+    # One source image can produce multiple chunks, including tiles separated by text.
+    if n_markers < 0 or len(counts) < n_markers or (n_markers == 0 and counts):
         violations.append(
             f"R12 llamacpp_prompt_string has {n_markers} media marker(s) for "
             f"{len(counts)} image chunk(s)"
@@ -241,13 +242,13 @@ def _llamacpp_row_violations(
         except TypeError:
             violations.append("R12 image_bytes_sha256 must be a sequence")
         else:
-            if len(sha_list) != len(counts):
+            if len(sha_list) != n_markers:
                 violations.append(
-                    f"R12 len(image_bytes_sha256)={len(sha_list)} != {len(counts)} image chunk(s)"
+                    f"R12 len(image_bytes_sha256)={len(sha_list)} != {n_markers} media marker(s)"
                 )
     num_images = row.get("num_images")
-    if num_images is not None and _int_or_none(num_images) != len(counts):
-        violations.append(f"R12 num_images={num_images!r} != {len(counts)} image chunk(s)")
+    if num_images is not None and _int_or_none(num_images) != n_markers:
+        violations.append(f"R12 num_images={num_images!r} != {n_markers} media marker(s)")
 
     logprobs = row.get("generation_token_logprobs")
     if logprobs is not None:

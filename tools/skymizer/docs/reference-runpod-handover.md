@@ -2,7 +2,7 @@
 
 更新日期: 2026-09-06。本文件只處理 reference 生成、驗收與交付。[VLM KLD](/home/ubuntu/llamacpp_kld_aws_handover.md) 與 [llama-perplexity / LLM KLD](/home/ubuntu/llamacpp_perplexity_llm_kld_aws_handover.md) 分開；文字橋接依目前決策延後。
 
-Qwen3.5-4B / Gemma E4B 的 100 / 500 題已另備可執行的 [小模型交接文件](/home/ubuntu/llamacpp_reference_runpod_handover_qwen_gemma_4b.md) 與兩份外部 profiles。其餘四個 SNR checkpoint 的外部 profiles、MTP 還原修正與 84-job 操作步驟在第 7 節，GPU 驗收狀態列於第 8 節。先依第 3 節設定環境，再依第 7 節核對來源、建置、還原與生成。不要直接執行舊版預設六模型 campaign。
+Qwen3.5-4B / Gemma E4B 的 100 / 500 題已另備可執行的 [小模型交接文件](/home/ubuntu/llamacpp_reference_runpod_handover_qwen_gemma_4b.md) 與兩份外部 profiles。其餘四個 SNR checkpoint 的外部 profiles、MTP 還原修正與 84-job 操作步驟在第 7 節，GPU 驗收狀態列於第 8 節。InternVL / GLM / Muse 的 100 / 500 題另見 [最終評估組交接](reference-runpod-final-handover.md)，以該文件與補充包的最終驗收狀態為準。先依第 3 節設定環境，再依第 7 節核對來源、建置、還原與生成。不要直接執行舊版預設六模型 campaign。
 
 本 AI session 起初對 `tools/skymizer` 唯讀，後經使用者明確授權實作 generation 併行。容量與兩輪長度校準保留原 NVMe frozen binary；新 AR 並行功能另編譯 binary，保存來源 hashes 並獨立驗收。兩者的證據不混用。以下一般模型命令維持原校準協定；Qwen3.5-4B / Gemma E4B 改依 [小模型交接](/home/ubuntu/llamacpp_reference_runpod_handover_qwen_gemma_4b.md) 的 parallel=4 協定。後續來源或 binary 改動需另行驗收。
 
@@ -13,8 +13,7 @@ Model family 是同一基底 checkpoint 的所有量化版本，不同 size 不�
 | 階段 | checkpoints |
 | --- | --- |
 | 先做 SNR 決策 | gemma-4-31b-it、gemma-4-e4b-it、kimi-vl-a3b-instruct、kimi-vl-a3b-thinking-2506、qwen3.5-4b、qwen3.6-35b-a3b |
-| 後做最終評估 | internvl3.5-30b-a3b、glm-4.6v-flash |
-| 暫緩 | muse-glimmer-30b，因本機空間需求先移除 |
+| 後做最終評估 | internvl3.5-30b-a3b、glm-4.6v-flash、muse-glimmer-30b；使用專用交接與外部 profiles |
 
 Gemma 26B 不在本次範圍。Pilot 為正式 `-subsample-100` config，全量為 `-subsample-500`。Reference 與 KLD 都先完成 SNR 組再做最終組。Pilot 與 500 題各自遵守此群組順序。既有 launcher 沒有這個群組 gate，派工表須先控管。
 
@@ -47,6 +46,8 @@ RunPod / AWS 都使用 NVIDIA RTX PRO 6000 Blackwell Server Edition 96 GiB。本
 
 ```bash
 cd ~/projects/llama.cpp
+export AWS_DEFAULT_REGION=us-east-2
+export AWS_REGION=us-east-2
 export SKYMIZER_RUN_ROOT=/opt/dlami/nvme/skymizer-reference
 export TMPDIR="$SKYMIZER_RUN_ROOT/tmp"
 export HF_DATASETS_CACHE="$SKYMIZER_RUN_ROOT/cache/datasets"
@@ -98,7 +99,7 @@ nvidia-smi
 | internvl3.5-30b-a3b | 9617 | 256 | 62541 | 84387 | 0/3, prefix replay failure |
 | glm-4.6v-flash | 10374 | 4067 | 22251 | 32373 | 3 rows pass |
 
-Gemma31 雙模型 4096-target 測試只餘 1452 MiB；追加 16384-target 單列測試已通過，peak 96411 MiB、餘 1476 MiB。Qwen3.6 同樣通過 16384 targets，peak 92317 MiB、餘 5570 MiB。兩個完整 metrics artifacts 的 19 fields 均有 16384 positions，float 全 finite、token IDs 合法；這是 synthetic capacity probe，其他候選與圖片 workspace 仍需驗證。[16k probe](/opt/dlami/nvme/skymizer-length-audit-20260906/RESERVE_CAPACITY_REPORT.md)。InternVL 兩模型可載入，但其相鄰 256-token 圖片 tiles 形成連續 placeholder run，現行 checker 將單一 tile 與整段 run 比較而拒絕；並非已證明 preprocessing drift 或 OOM。此為 KLD 阻塞缺口，不放寬 prefix 檢查繞過。詳見 [8-thread summary](/opt/dlami/nvme/skymizer-capacity8-audit-20260906/summary.json)。
+Gemma31 雙模型 4096-target 測試只餘 1452 MiB；追加 16384-target 單列測試已通過，peak 96411 MiB、餘 1476 MiB。Qwen3.6 同樣通過 16384 targets，peak 92317 MiB、餘 5570 MiB。兩個完整 metrics artifacts 的 19 fields 均有 16384 positions，float 全 finite、token IDs 合法；這是 synthetic capacity probe，其他候選與圖片 workspace 仍需驗證。[16k probe](/opt/dlami/nvme/skymizer-length-audit-20260906/RESERVE_CAPACITY_REPORT.md)。InternVL 兩模型可載入，但其相鄰 256-token 圖片 tiles 形成連續 placeholder run，現行 checker 將單一 tile 與整段 run 比較而拒絕；並非已證明 preprocessing drift 或 OOM。此舊 checker 問題已修正並以原 3 列、48 個實際 targets 完成 strict replay；所有 metric 有限，峰值 84905 MiB。另修正 Python R12 將 source images 與 image chunks 混為一談的檢查。修正僅在 Skymizer，未改 upstream model / mtmd；證據見最終評估組交接。詳見 [8-thread summary](/opt/dlami/nvme/skymizer-capacity8-audit-20260906/summary.json)。
 
 ## 5. 明確指定參數的本地生成
 
@@ -132,13 +133,13 @@ GGUF 未必保存明確的最大 token 數；本輪選定的 projector 會使用
 
 若每格 100 題用 2048 / 8192，14 lanes x 7 subsets 的最大 generated-token 預算為 50,176,000；每格另外 10 題從頭跑 4096 / 16384，增加 10,035,200，即最大 token 預算增加 20%。這不是 GPU 時間估計，未包含 prefill、重試及各 KLD candidates。500 的 1024 / 4096 全模型成本情境最多 125,440,000 generated tokens；六個 SNR checkpoint 已採此起始協定；最終評估組仍待整合。
 
-接受 budget 限制所造成的回答截斷與 repetition 排除，不為保留每題而持續加大 context 或重跑。非重複的 length-capped answers 保留並標記；自然 EOG 可提早停止。現行 native generator 對 `max(prompt tokens, prompt positions) + requested cap > ctx` 直接拒絕該列，尚無自動將回答上限縮至 context 餘量的行為。圖片 / prompt 不偷偷截短；容量失敗記錄在 cohort partition。Repetition 目前會剔除整列，生成越長可能排除更多列，跨 cap 比較需報告 eligible IDs 差異及共同 IDs 的敏感度分析。七組 pilot 都包含在 500 內，完整 500 不能作為選定 endpoint 後的獨立重現。在舊 c3f0e320 版本，其餘 400 題仍有原圖重用：MMMU Standard 5、MMStar 7、OCRBench v1 10、OCRBench v2 1 列，共 23 列。MMMU Standard / Vision 的 100 與 500 configs 分別有 100 / 500 組相同 item_id + origin_id，須視為相關題源的不同呈現。獨立確認須排除已參與設定選擇的 IDs，並處理題源 / 圖片群聚；原始 bytes 無匹配不證明獨立。[逐列重疊稽核](/opt/dlami/nvme/skymizer-length-audit-20260906/cohort-overlap/REPORT.md)。另有 21 個預先選定的長度校準 IDs，其中 17 個位於 500 的第 101 列之後。凡實際用於上限決策的 calibration IDs 也屬設計資料，獨立確認不能只扣除正式 pilot 100；依逐輪實際完成紀錄標記。
+接受 budget 限制所造成的回答截斷與 repetition 排除，不為保留每題而持續加大 context 或重跑。非重複的 length-capped answers 保留並標記；自然 EOG 可提早停止。現行 native generator 對 `max(prompt tokens, prompt positions) + requested cap > ctx` 直接拒絕該列，尚無自動將回答上限縮至 context 餘量的行為。圖片 / prompt 不偷偷截短；容量失敗記錄在 cohort partition。Repetition 目前會剔除整列，生成越長可能排除更多列，跨 cap 比較需報告 eligible IDs 差異及共同 IDs 的敏感度分析。七組 pilot 都包含在 500 內。使用者已確認 pilot 用於估計 SNR 訊號，500 題可以包含 pilot，不要求獨立確認集；不因包含關係額外拆 holdout 或刪題。在舊 c3f0e320 版本，其餘 400 題仍有原圖重用：MMMU Standard 5、MMStar 7、OCRBench v1 10、OCRBench v2 1 列，共 23 列。MMMU Standard / Vision 的 100 與 500 configs 分別有 100 / 500 組相同 item_id + origin_id，須視為相關題源的不同呈現。分析保留題源 / 圖片群聚資訊，並如實報告資料關係；原始 bytes 無匹配不證明獨立。[逐列重疊稽核](/opt/dlami/nvme/skymizer-length-audit-20260906/cohort-overlap/REPORT.md)。另有 21 個預先選定的長度校準 IDs，其中 17 個位於 500 的第 101 列之後。實際參與上限選擇的 calibration IDs 依逐輪紀錄標記即可，本次不要求因此排除或建立獨立確認集。
 
 長度抽查與 pilot 的共同 token prefix 必須實際核對，相同 seed 不保證完全相同 trajectory；不同時不拼接。長度抽查產物放 NVMe 獨立 audit，不混入聲稱統一 cap 的正式 HF config。舊 generation / KLD caps 與 `-pivot` 遠端資料僅作歷史來源，不能當作新協定或 native 長度證據。
 
 重新查核的完整 model-card 表、native defaults 與 Kimi / InternVL 差異見 [本機 decoding 紀錄](/home/ubuntu/models/DECODING_PARAMS.md)。既有 Gemma / GLM profiles 未指定 min_p，effective 值為 0.05；不能將官方未指定解讀為停用。Seed=1234 是實驗設定。Kimi Thinking card 推薦 temperature=0.8，但來源 generation_config 與本機 GGUF 為 0.6，本機驗模 smoke 又採 greedy；本輪長度探測採 card 的 0.8，並保存 effective sampler；這不是沿用轉換 smoke 的 greedy。
 
-Kimi Instruct 與 Thinking-2506 各只收自己的模式；兩個本機 template 都沒有 enable_thinking 分支。InternVL thinking 需要官方 R1 system prompt，不能只加 enable_thinking。直接 generator 的 --system-prompt 可以承載該 prompt，但高階 model launcher 尚未表達此差異；一般模式 sampling 也需凍結。其他六個 checkpoint 若各收 instruct / thinking，加上 Kimi 兩個單模式，共 14 個有效 lanes，每個 size 為 98 個 jobs。
+Kimi Instruct 與 Thinking-2506 各只收自己的模式；兩個本機 template 都沒有 enable_thinking 分支。InternVL thinking 需要官方 R1 system prompt，不能只加 enable_thinking。高階 model launcher 現已支援 profile 的逐模式 system_prompt / chat_template_kwargs，publisher 也核對實際 run / row 設定。Muse 固定 thinking/high 與 current_date=2026-09-06，沒有虛設 instruct 模式。完整九個 checkpoints 合計 15 個有效 lanes，每個 size 為 105 個 jobs；先前 14-lane 成本表不含 Muse。
 
 以下 Gemma 31B pilot 完整 config 指令產生本地資料並使用 MTP。先將 `SKYMIZER_GENERATION_CAP` 設為該 cohort / mode 已凍結的上限；本次 pilot profile 為 instruct=2048 / thinking=8192，未設定時此直接呼叫範例不會執行。第 7 節的 profile launcher 會自動選擇對應 cap。`ctx=32768, batch=2048, ubatch=2048` 是容量調查起點，並非全量容量合格宣告。輸出目錄必須不存在。
 
@@ -210,7 +211,7 @@ Kimi repo 名稱分別使用 `kimi-vl-a3b-instruct` 與 `kimi-vl-a3b-thinking-25
 
 ## 7. 其餘 SNR 決策模型的 100 / 500 操作
 
-本節涵蓋 Gemma31、Qwen3.6、Kimi Instruct、Kimi Thinking-2506，共 6 個有效 model/mode lanes。每個 size 為 42 jobs，合計 84 jobs、25,200 個名義請求。配合小模型的 56 jobs，SNR 組合計 140 jobs / 42,000 個名義請求。各 cohort 仍須先完成整個 SNR 組，才可啟動 InternVL / GLM 最終評估組；這份 loop 不包含最終組，也不代表其他主機上的小模型已完成。
+本節涵蓋 Gemma31、Qwen3.6、Kimi Instruct、Kimi Thinking-2506，共 6 個有效 model/mode lanes。每個 size 為 42 jobs，合計 84 jobs、25,200 個名義請求。配合小模型的 56 jobs，SNR 組合計 140 jobs / 42,000 個名義請求。各 cohort 仍須先完成整個 SNR 組，才可啟動 InternVL / GLM / Muse 最終評估組；這份 loop 不包含最終組，也不代表其他主機上的小模型已完成。
 
 補充包位於 [~/to_runpod_supplements/skymizer-remaining-snr-reference-20260906](/home/ubuntu/to_runpod_supplements/skymizer-remaining-snr-reference-20260906)。整包帶到 RunPod 的相同 home-relative 路徑；`HANDOVER.md` 是本文件副本。包內有 profiles、size/profile mapping、MTP restore patch、協定驗收腳本、來源與測試收據，不含模型 / dataset / credentials / 完整 Git history。正式輸出仍全部在 NVMe。
 
@@ -275,6 +276,8 @@ sha256sum "$SKYMIZER_REMAINING_BINARY" > "$SKYMIZER_REMAINING_ROOT/protocol/llam
   --models-dir "$SKYMIZER_REMAINING_MODELS" --download \
   | tee "$SKYMIZER_REMAINING_ROOT/protocol/model-restore.jsonl"
 ```
+
+S3 bucket region 固定 `us-east-2`；第 3 節同時設定 AWS_DEFAULT_REGION / AWS_REGION。還原器使用 profile 中的完整 object key 逐檔 aws s3 cp，沒有 ls / sync / recursive / ListObjects 呼叫。明確 region 可避免 SDK 自動以 HeadBucket 探測 region；本次沒有更改 IAM、bucket policy 或 ACL。下載所需為對應 object 的 GetObject 權限及適用的加密金鑰權限。
 
 還原計畫共 11 檔 / 200,779,298,208 bytes，包括 Gemma31 MTP head；兩份 profiles 的 identity 相同。新 CLI 在任何下載前先檢查整個 plan / 既有檔案，已存在且 hash 不符會停止並保留，不覆寫。下載暫存位於 models-dir 下的對應目錄，因此此處明確使用 NVMe。若已有本機模型，改 models-dir 後先省略 --download，只有全部 `verified_existing` 才算已驗證，`planned` 不算。此次實際新主機完整下載仍未演練。
 

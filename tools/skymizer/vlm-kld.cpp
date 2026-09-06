@@ -521,24 +521,9 @@ static bool load_side(model_side & s, const char * tag,
     return true;
 }
 
-// Prefill one side with the item's images + formatted chat (sequence 0 of its
-// own context). Each side loads/tokenizes the images through its OWN mtmd
-// context, so per-side vision-token counts (and hence n_past) may differ —
-// that drift is part of what the metrics measure. logits_last=true keeps the
-// last prompt position's logits (they predict answer token 0).
-// Compare mtmd's tokenization of the prefix against the stored
-// tokens_in[:n_prefill]. Text chunks must match token-for-token: a mismatch
-// means this scorer is not scoring the prompt the answer was generated under
-// (different tokenizer/vocab, wrong add_special, wrong formatted_chat) and is
-// always fatal. Each image chunk must span exactly the stored run of identical
-// placeholder ids at that position; a different span is vision-preprocessing
-// drift between the generator's mtmd and this one (different build or
-// --image-*-tokens budget). Drift is an error by default; --allow-prefix-drift
-// downgrades it to a WARNING for runs where the drift itself is the object of
-// study; the walk then realigns on the stored placeholder run so the text
-// after the image (and later images) is still checked. Supported
-// families always place wrapper text tokens between adjacent images, so a
-// stored pad run never covers two images.
+// Match text tokens and contiguous media spans against the stored prefix.
+// Adjacent tiles share one placeholder run; only span length drift can be allowed.
+// Text tokens and the total stored prefix must still match.
 static bool check_prefix_against_tokens(const mtmd::input_chunks & chunks,
                                         const std::vector<int32_t> & tokens,
                                         int n_prefill,
@@ -568,7 +553,15 @@ static bool check_prefix_against_tokens(const mtmd::input_chunks & chunks,
             }
             continue;
         }
-        const size_t n = mtmd_input_chunk_get_n_tokens(c);
+        size_t n = mtmd_input_chunk_get_n_tokens(c);
+        while (ci + 1 < n_chunks) {
+            const auto * next = mtmd_input_chunks_get(chunks.ptr.get(), ci + 1);
+            if (mtmd_input_chunk_get_type(next) == MTMD_INPUT_CHUNK_TYPE_TEXT) {
+                break;
+            }
+            n += mtmd_input_chunk_get_n_tokens(next);
+            ++ci;
+        }
         if (pos >= (size_t) n_prefill) {
             prefixed_fprintf(lp, "[%s] prefix mismatch: media chunk %zu starts at %zu, past n_prefill=%d\n",
                              tag, ci, pos, n_prefill);

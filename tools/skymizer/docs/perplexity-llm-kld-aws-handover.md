@@ -12,7 +12,9 @@ Model family 指同一基底 checkpoint 的所有量化版本，不包含同系�
 
 ## 2. Corpus identity 與 512-token 切窗
 
-預計測 Wikitext2 與 PG。正式版本、split、下載 revision 與 PG 的完整資料集名稱尚待固定，不能自行把 PG 解讀成某個特定 corpus。
+預計測 Wikitext2 與 PG。PG 已由使用者指定為 [scripts/get-pg.sh](/home/ubuntu/projects/llama.cpp/scripts/get-pg.sh) 的完整 Paul Graham essays corpus，預期約 127 篇，採完整清單而非抽取少數 essays。該 script 從 aaronsw 的 pgessays RSS 取得 URLs，再依 html2text / tail / sed / fmt -w 80 的流程串接 pg.txt。正式準備時固定 RSS snapshot、完整 URL 順序、工具版本、成功篇數及 pg.txt SHA256；實際篇數以凍結清單為準，不把約 127 當成靜默截取上限。這些是後續 corpus 準備與驗收工作，PG 的來源選擇已定案。Wikitext2 的版本與兩份 corpus 的實際 bytes 另於準備時凍結。
+
+本次讀取的 get-pg.sh SHA256 為 `54c349a1b4ba8019d7fe7a8fe1b033325d73486c387025189b005077f6cd30be`。腳本在執行目錄寫入 pg.txt 與中間檔，且使用追加方式產生逐篇檔案；正式執行用 NVMe 上新的空目錄，避免混入先前執行結果。本次尚未下載 essays 或執行文字橋接。
 
 每份 corpus 需要保存來源、精確 revision、檔案 SHA256、文件順序、換行 / 文件分隔、任何前處理，以及原始 bytes。兩個文字 scorer 讀同一份凍結文字檔，使用同一基底 GGUF tokenizer / vocabulary。不要各自下載、清理或串接內容。
 

@@ -48,6 +48,7 @@ def build_row(source, request, result, metadata, images):
     ids = result["input_ids"]
     n_pre = result["n_prefill_tokens"]
     image_chunks = [c for c in result["prompt_layout"]["chunks"] if c["type"] == "image"]
+    # Legacy per_image_* columns describe native chunks, which may be tiles of one image.
     counts = [c["n_tokens"] for c in image_chunks]
     processor = {
         "engine": "llama.cpp",

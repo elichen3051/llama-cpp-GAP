@@ -159,7 +159,7 @@ def generate(args):
         snapshot = out / "scripts"
         snapshot.mkdir()
         for relative in ("cli/generate_reference.py", "cli/generate_model_reference.py", "lib/reference_run.py",
-                         "lib/reference_dataset.py", "lib/reference_contract.py", "lib/collect_meta_provenance.py",
+                         "lib/reference_dataset.py", "lib/reference_contract.py", "lib/reference_study.py", "lib/collect_meta_provenance.py",
                          "scripts/reference_model_profiles.json", "reference.cpp", "skymizer-repetition.h"):
             path = SKYMIZER / relative
             if path.is_file():
