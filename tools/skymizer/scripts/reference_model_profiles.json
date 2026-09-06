@@ -680,29 +680,29 @@
           "instruct": {
             "ctx": 32768,
             "batch": 2048,
-            "ubatch": 512,
+            "ubatch": 2048,
             "threads": 8,
             "threads_batch": 8,
             "draft_max": 8,
-            "validation": "measured-short-proxy",
-            "trial": "mtp8-ub512"
+            "validation": "measured-proxy-and-full-holdout",
+            "trial": "mtp8-ub2048-capacity"
           },
           "thinking": {
             "ctx": 32768,
             "batch": 2048,
-            "ubatch": 512,
+            "ubatch": 2048,
             "threads": 8,
             "threads_batch": 8,
             "draft_max": 8,
-            "validation": "measured-short-proxy",
-            "trial": "mtp8-ub512"
+            "validation": "measured-proxy-and-full-holdout",
+            "trial": "mtp8-ub2048-capacity"
           }
         },
         "h100": {
           "instruct": {
             "ctx": 32768,
             "batch": 2048,
-            "ubatch": 512,
+            "ubatch": 2048,
             "threads": 8,
             "threads_batch": 8,
             "draft_max": 0,
@@ -711,7 +711,7 @@
           "thinking": {
             "ctx": 32768,
             "batch": 2048,
-            "ubatch": 512,
+            "ubatch": 2048,
             "threads": 8,
             "threads_batch": 8,
             "draft_max": 0,
@@ -1099,29 +1099,29 @@
           "instruct": {
             "ctx": 32768,
             "batch": 2048,
-            "ubatch": 512,
+            "ubatch": 2048,
             "threads": 8,
             "threads_batch": 8,
             "draft_max": 3,
-            "validation": "measured-short-proxy",
-            "trial": "mtp3-ub512"
+            "validation": "measured-proxy-and-full-holdout",
+            "trial": "mtp3-ub2048-capacity"
           },
           "thinking": {
             "ctx": 32768,
             "batch": 2048,
-            "ubatch": 512,
+            "ubatch": 2048,
             "threads": 8,
             "threads_batch": 8,
             "draft_max": 3,
-            "validation": "measured-short-proxy",
-            "trial": "mtp3-ub512"
+            "validation": "measured-proxy-and-full-holdout",
+            "trial": "mtp3-ub2048-capacity"
           }
         },
         "h100": {
           "instruct": {
             "ctx": 32768,
             "batch": 2048,
-            "ubatch": 512,
+            "ubatch": 2048,
             "threads": 8,
             "threads_batch": 8,
             "draft_max": 0,
@@ -1130,7 +1130,7 @@
           "thinking": {
             "ctx": 32768,
             "batch": 2048,
-            "ubatch": 512,
+            "ubatch": 2048,
             "threads": 8,
             "threads_batch": 8,
             "draft_max": 0,

@@ -269,6 +269,11 @@ struct reference_context {
                     tokens.insert(tokens.end(), text_ids.begin(), text_ids.end());
                 } else {
                     require(mtmd_input_chunk_get_type(c) == MTMD_INPUT_CHUNK_TYPE_IMAGE, "only text and images are supported");
+                    if (mtmd_decode_use_non_causal(vision.get(), c)) {
+                        require(n <= llama_n_batch(ctx) && n <= llama_n_ubatch(ctx),
+                                "non-causal image exceeds batch/ubatch capacity: need at least " + std::to_string(n) +
+                                " tokens in both -b and -ub");
+                    }
                     item["type"] = "image";
                     const auto * img = mtmd_input_chunk_get_tokens_image(c);
                     auto pos = mtmd_image_tokens_get_decoder_pos(img, 0, n - 1);
@@ -627,6 +632,7 @@ int main(int argc, char ** argv) {
             } catch (const std::exception & error) {
                 const std::string message = error.what();
                 const bool data_error = message.find("exceeds context") != std::string::npos ||
+                    message.find("non-causal image exceeds") != std::string::npos ||
                     message.find("cannot read image") != std::string::npos || message.find("template") != std::string::npos ||
                     message.find("question") != std::string::npos;
                 event({{"event", "row_failed"}, {"id", id}, {"index", count - 1}, {"error", message}, {"retryable", !data_error}});
