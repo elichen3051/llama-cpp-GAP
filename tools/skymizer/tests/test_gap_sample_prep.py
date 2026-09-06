@@ -776,7 +776,7 @@ def test_upload_preserves_existing_config_membership(upload_run, fake_reference_
     assert api.commits == 0 and api.files == before
 
 
-@pytest.mark.parametrize('scenario', ['plan', 'restore_and_skip', 'existing_mismatch', 'download_mismatch'])
+@pytest.mark.parametrize('scenario', ['plan', 'restore_and_skip', 'existing_mismatch', 'download_mismatch', 'head_plan', 'head_restore_and_skip', 'head_existing_mismatch', 'head_download_mismatch', 'head_missing_identity', 'head_unsafe_path'])
 def test_reference_model_restore_keeps_verified_nested_paths(tmp_path, monkeypatch, scenario):
     from cli import restore_reference_models as restore
     import hashlib
@@ -787,6 +787,15 @@ def test_reference_model_restore_keeps_verified_nested_paths(tmp_path, monkeypat
              for n, role in [('part1.gguf', 'llm'), ('part2.gguf', 'llm'), ('projector.gguf', 'mmproj')]]
     profile = {'models': {'test': {'model': 'test/nested/part1.gguf', 'mmproj': 'test/projector.gguf',
                                  'identity': {'manifest': 's3://research-kld-benchmark/reference_model/test/manifest.json', 'files': files}}}}
+    model = profile['models']['test']
+    with_head = scenario.startswith('head_')
+    if with_head:
+        model.update(mtp='sidecar', head='test/mtp/head.gguf')
+        model['identity']['head_files'] = [{'name': 'head.gguf', 'size': len(data), 'sha256': hashlib.sha256(data).hexdigest()}]
+    if scenario == 'head_missing_identity':
+        model['identity']['head_files'] = []
+    elif scenario == 'head_unsafe_path':
+        model['head'] = '../head.gguf'
     path = tmp_path / 'profiles.json'
     path.write_text(json.dumps(profile))
     command = ['restore', '--profiles', str(path), '--models-dir', str(root)]
@@ -794,32 +803,44 @@ def test_reference_model_restore_keeps_verified_nested_paths(tmp_path, monkeypat
     def download(args, check):
         assert args[:3] == ['aws', 's3', 'cp'] and check
         calls.append(args[3])
-        Path(args[4]).write_bytes(b'bad' if scenario == 'download_mismatch' else data)
+        bad = scenario == 'download_mismatch' or (scenario == 'head_download_mismatch' and args[3].endswith('/head.gguf'))
+        Path(args[4]).write_bytes(b'bad' if bad else data)
     monkeypatch.setattr(restore.subprocess, 'run', download)
-    if scenario != 'plan':
+    if scenario not in ('plan', 'head_plan'):
         command.append('--download')
     monkeypatch.setattr(sys, 'argv', command)
-    if scenario == 'existing_mismatch':
-        existing = root / 'test/projector.gguf'
+    if scenario in ('head_missing_identity', 'head_unsafe_path'):
+        with pytest.raises(ValueError, match='MTP head|must stay under'):
+            restore.main()
+        assert not calls and not list(root.rglob('*.gguf'))
+    elif scenario in ('existing_mismatch', 'head_existing_mismatch'):
+        existing = root / ('test/mtp/head.gguf' if scenario == 'head_existing_mismatch' else 'test/projector.gguf')
         existing.parent.mkdir(parents=True)
         existing.write_bytes(b'existing')
         with pytest.raises(ValueError, match='existing file differs'):
             restore.main()
         assert existing.read_bytes() == b'existing' and not calls
-    elif scenario == 'download_mismatch':
+    elif scenario in ('download_mismatch', 'head_download_mismatch'):
         with pytest.raises(ValueError, match='full-file size/SHA256'):
             restore.main()
-        assert not list(root.rglob('*.gguf'))
+        if scenario == 'download_mismatch':
+            assert not list(root.rglob('*.gguf'))
+        else:
+            assert len(calls) == 4 and not (root / 'test/mtp/head.gguf').exists()
+            assert (root / 'test/projector.gguf').read_bytes() == data
     else:
         restore.main()
-        if scenario == 'plan':
+        if scenario in ('plan', 'head_plan'):
             assert not calls and not list(root.rglob('*.gguf'))
         else:
-            assert len(calls) == 3
-            for name in ('test/nested/part1.gguf', 'test/nested/part2.gguf', 'test/projector.gguf'):
+            names = ['test/nested/part1.gguf', 'test/nested/part2.gguf', 'test/projector.gguf']
+            if with_head:
+                names.append('test/mtp/head.gguf')
+            assert len(calls) == len(names)
+            for name in names:
                 assert (root / name).read_bytes() == data
             restore.main()
-            assert len(calls) == 3
+            assert len(calls) == len(names)
 
 
 @pytest.mark.parametrize("mode,cap", [("instruct", 2048), ("thinking", 4096)])

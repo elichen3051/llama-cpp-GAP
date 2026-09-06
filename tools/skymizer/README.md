@@ -1,7 +1,7 @@
 # Skymizer — VLM/LLM KLD metrics & paired comparison
 
 Generate reference datasets and evaluate quantization fidelity with llama.cpp.
-Operator handovers: [RunPod reference generation](docs/reference-runpod-handover.md) and [AWS KLD collection](docs/kld-aws-handover.md).
+Operator handovers: [RunPod reference generation](docs/reference-runpod-handover.md), [AWS VLM KLD collection](docs/kld-aws-handover.md), and [AWS llama-perplexity / LLM KLD collection](docs/perplexity-llm-kld-aws-handover.md).
 `llama-reference` renders GGUF chat templates, tokenizes with the GGUF vocabulary,
 and generates text/image trajectories directly with llama.cpp and mtmd.
 [Native reference generation](docs/reference.md) needs neither llama-server nor an HF tokenizer.
