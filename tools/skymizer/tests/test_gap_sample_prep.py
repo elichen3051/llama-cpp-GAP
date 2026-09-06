@@ -741,3 +741,49 @@ def test_upload_preserves_existing_config_membership(upload_run, fake_reference_
     with pytest.raises(ValueError, match='existing config'):
         upload.publish(run, manifest, parquet)
     assert api.commits == 0 and api.files == before
+
+
+@pytest.mark.parametrize('scenario', ['plan', 'restore_and_skip', 'existing_mismatch', 'download_mismatch'])
+def test_reference_model_restore_keeps_verified_nested_paths(tmp_path, monkeypatch, scenario):
+    from cli import restore_reference_models as restore
+    import hashlib
+    import sys
+    root = tmp_path / 'models'
+    data = b'weights'
+    files = [{'name': n, 'size': len(data), 'sha256': hashlib.sha256(data).hexdigest(), 'role': role}
+             for n, role in [('part1.gguf', 'llm'), ('part2.gguf', 'llm'), ('projector.gguf', 'mmproj')]]
+    profile = {'models': {'test': {'model': 'test/nested/part1.gguf', 'mmproj': 'test/projector.gguf',
+                                 'identity': {'manifest': 's3://research-kld-benchmark/reference_model/test/manifest.json', 'files': files}}}}
+    path = tmp_path / 'profiles.json'
+    path.write_text(json.dumps(profile))
+    command = ['restore', '--profiles', str(path), '--models-dir', str(root)]
+    calls = []
+    def download(args, check):
+        assert args[:3] == ['aws', 's3', 'cp'] and check
+        calls.append(args[3])
+        Path(args[4]).write_bytes(b'bad' if scenario == 'download_mismatch' else data)
+    monkeypatch.setattr(restore.subprocess, 'run', download)
+    if scenario != 'plan':
+        command.append('--download')
+    monkeypatch.setattr(sys, 'argv', command)
+    if scenario == 'existing_mismatch':
+        existing = root / 'test/projector.gguf'
+        existing.parent.mkdir(parents=True)
+        existing.write_bytes(b'existing')
+        with pytest.raises(ValueError, match='existing file differs'):
+            restore.main()
+        assert existing.read_bytes() == b'existing' and not calls
+    elif scenario == 'download_mismatch':
+        with pytest.raises(ValueError, match='full-file size/SHA256'):
+            restore.main()
+        assert not list(root.rglob('*.gguf'))
+    else:
+        restore.main()
+        if scenario == 'plan':
+            assert not calls and not list(root.rglob('*.gguf'))
+        else:
+            assert len(calls) == 3
+            for name in ('test/nested/part1.gguf', 'test/nested/part2.gguf', 'test/projector.gguf'):
+                assert (root / name).read_bytes() == data
+            restore.main()
+            assert len(calls) == 3

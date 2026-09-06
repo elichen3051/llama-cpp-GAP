@@ -196,3 +196,31 @@ Native results keep repetition offsets, unit length, repeat count, repeated span
 `--row-timeout` defaults to 1800 seconds without a row-journal update, including model startup. The supervisor kills and waits for a timed-out native process before restarting. `--native-timeout` optionally limits total time per native process. Intentional SIGINT/SIGTERM records interruption and stops the child; it does not trigger infinite retries. Every attempt and partial trailing record remains available for diagnosis. Interior journal corruption, changed execution/settings, or irreconcilable IDs fail the job rather than silently accepting uncertain data.
 
 Native `--no-repetition-stop` disables both online and final repetition checks for controlled diagnostics. Production profiles use the default enabled policy. Native `--continue-on-error` enables recoverable row continuation; the Python driver supplies it automatically. The standalone binary's `--help` also lists ordinary llama.cpp options.
+
+## Production profiles, shared GPU queue, and publication
+
+`generate_model_reference.py` uses `scripts/reference_model_profiles.json` for one BF16 model, source subset, and mode. It pins the prepared dataset revision, model-card sampling, default image budget, and generation caps: 8192 instruct or 16384 thinking. The profile records pinned model/projector hashes, which restoration, campaign validation, and publication verify. Later KLD uses at most 2048 or 4096 generated positions respectively. The profile selects MTP only where the local speed tests support it; H100 entries are unmeasured starting points.
+
+Non-causal image attention requires the complete image chunk to fit in both `-b` and `-ub`. The producer rejects an insufficient capacity before decoding and records a recoverable row failure. Gemma 4 26B/31B use ubatch2048 to accommodate their default image budget. Do not split such an image into smaller causal batches to bypass the requirement. Apply sufficient image capacity to a later VLM scorer too, with identical settings for both paired candidates.
+
+A campaign job is one model/source/mode. One worker per selected GPU takes jobs from a shared queue; each native process has one sequence. Two separate upload workers allow GPU generation to advance while uploads run. A single host can use four or six GPU identifiers; separate hosts can select disjoint models with `--models` and keep their own output directories.
+
+```bash
+.venv/bin/python tools/skymizer/cli/run_reference_campaign.py \
+  --out ~/gap/native-reference-pivot --size 100 --gpus 0,1,2,3 --hardware pro6000
+```
+
+The campaign defaults to all six production models, seven sources, both modes, and upload enabled: 84 jobs, each requesting 100 rows. Use size500 and a new directory for collect-500. A diagnostic run can use `--sources mmmu-pro-vision --num-samples 1 --no-upload`; short runs cannot be published into formal configs. Keep the host/GPU identity and hardware profile consistent inside one campaign.
+
+`--resume` checks the frozen plan, archived scripts, executable/libraries, completed artifacts and upload receipts. A lock prevents two owners of the same campaign directory. It does not reserve GPUs across different directories or hosts. The archive contains the scripts actually executed, profiles, source revision/full tracked diff, untracked-file hashes, dependency information and GPU details. Preserve any untracked source content outside the archived Skymizer files separately.
+
+Ordinary row/job/upload failures do not stop the remaining queue. Generation jobs have a 48-hour whole-process timeout, including data preparation; uploads have a one-hour timeout and three attempts. `--job-timeout`, `--upload-timeout` and `--kill-grace` can change these before freezing the plan. Cancellation and timeouts terminate child process groups, then kill descendants after the grace period. Native recovery retains completed rows within one driver invocation. A host restart or interrupted Python driver reruns that whole job in a new attempt directory. Completed cohorts with failed rows remain final; modified or missing completed artifacts require investigation.
+
+`upload_reference.py` validates the full source cohort, exact eligible/excluded/failed partition, BF16 identities, mode/cap, native template/image policy and frozen effective sampling. It publishes to `elichen-skymizer/<model>-pivot` or `<model>-collect-500`, with the original source config plus `-ins`/`-think` and split `train`. Only eligible rows are published; exclusions and failures remain in the audit, without replacement samples. Non-repeating capped answers remain eligible for later quality review.
+
+Publication adds parquet, dataset-card mapping and audit files in one compare-and-swap Hub commit. Occupied namespaces or existing configs that would absorb the new files fail closed. Repeating the same upload verifies every audit file, parquet hash and README mapping at the pinned commit. `upload/receipt.json` records verified publication; a process exit alone is insufficient. Full native logs and attempt scripts remain in the local campaign archive and should be copied to research storage by the operator.
+
+Campaign `status.json` reconciles every planned job. Exit0 means all jobs completed without row failures and any requested uploads were verified; exit2 means processing finished with failures; exit130 means interrupted. Include operator notes with host/GPU, exact commands, UTC times, restart reasons, outstanding jobs and verified Hub revisions. Do not remove failed attempts or mark missing work complete.
+
+
+`restore_reference_models.py --profiles tools/skymizer/scripts/reference_model_profiles.json` plans BF16 model/projector restoration from the archived S3 keys into the nested profile paths. Add `--download` to fetch missing files with AWS CLI. It checks complete file SHA256 and sizes, skips verified existing files, rejects existing mismatches before downloading, and installs verified temporary files without overwriting another writer. Gemma sidecar heads are separate pinned HF downloads listed in the profile; they are not included in the BF16 S3 restore.

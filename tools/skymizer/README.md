@@ -31,6 +31,10 @@ tools/skymizer/
 │   └── 04_power_analysis.sh  [vlm|llm]   optional sample-size planning
 ├── cli/                    the Python entry points the scripts drive
 │   ├── generate_reference.py     native GGUF reference dataset generator
+│   ├── generate_model_reference.py  pinned model/source/mode launcher
+│   ├── run_reference_campaign.py    shared GPU queue and archived attempts
+│   ├── upload_reference.py          audited atomic Hub publication
+│   ├── restore_reference_models.py  verified BF16 model restoration
 │   ├── collect_kld.py            VLM collector (one (ref, cand) pair)
 │   ├── collect_llm_kld.py        LLM collector
 │   ├── saved_metrics_paired_compare.py   two metric dirs → report
