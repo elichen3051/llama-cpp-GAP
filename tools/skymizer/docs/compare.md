@@ -50,8 +50,21 @@ seed, so they resample the same item indices.
 > interval actually rules out. Pass `--equivalence-margin M` (in the primary
 > metric's own units) to have the primary cell tested for equivalence
 > properly: a CI lying entirely inside ±M is an equivalence result at that
-> margin (the interval-inclusion form of TOST) and is reported as
-> `EQUIVALENT`.
+> margin. A CI can exclude zero and still fit inside that practical margin: the directional verdict is retained and `equivalence_established=true` reports equivalence independently. If the CI also contains zero, the categorical verdict is `EQUIVALENT`. The JSON records the actual interval confidence, margin, bound and one-sided `equivalence_alpha=(1-confidence_level)/2`. A 95% interval therefore corresponds to one-sided alpha 0.025; it is more conservative than conventional alpha 0.05 TOST using a 90% interval.
+
+### Fixed text corpora and grouped inference
+
+The same entry point accepts full-window `collect_llm_kld.py` results prepared by `prepare_perplexity_corpus.py`. Use `--unit window`, `--unit article`, or `--unit block --block-windows 8`. Article and block modes require all original corpus windows and targets. They validate each paired window before merging records, preserve all scored targets, and use the resulting groups for degrees of freedom and bootstrap resampling. Window-level `item` mode remains the compatibility default for corpus data. See the [text bridge handover](perplexity-llm-kld-aws-handover.md) for source bytes, native tokenization, BOS and boundary-token assignment.
+
+For G groups, paired differences d_g and target counts w_g:
+
+- Equal-group estimate: `mean(d_g)`; standard error: `sd(d_g, ddof=1)/sqrt(G)`.
+- Token-weighted estimate: `theta=sum(w_g*d_g)/sum(w_g)`; with `u_g=w_g*(d_g-theta)`, squared standard error is `G*sum(u_g**2)/((G-1)*sum(w_g)**2)`.
+- Pooled PPL is `exp(pooled mean NLL)`, never the arithmetic mean of per-group PPL values.
+
+The token-weighted standard error is a ratio linearization; its t calibration is approximate. Fixed WikiText/PG windows and adjacent articles or blocks can remain dependent. CI and test calculations treat groups as independent sampling units; residual dependence can invalidate coverage and p-values. Grouping does not prove independence, and these are conditional comparisons of a fixed corpus, not automatically confirmatory inference to a population of independently sampled questions. Choose grouping, block size, primary metric and weighting before inspecting outcomes. Position buckets are disabled after article/block concatenation because a concatenated group position is not an original answer position.
+
+The engine rejects fewer than two groups, nonfinite scores, invalid weights and unrepresentable derived PPL values instead of producing a verdict. The legacy random-subsampling and variance loaders use the main collection/runtime/pairing guards and refuse failed or nonfinite rows. Their planning results remain conditional on the observed panel. The variance decomposition omits token autocovariance; its sample-size calculation is a t-quantile approximation, not exact noncentral-t power inversion. Zero effect with zero variance has no defined SNR or finite detection sample size.
 
 #### Interval construction (`--ci-method`, default `t`)
 

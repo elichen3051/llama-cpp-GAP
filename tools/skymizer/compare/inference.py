@@ -8,7 +8,7 @@ from typing import Any, Mapping, Sequence
 
 import numpy as np
 
-from compare.contracts import CI_METHODS, DEFAULT_CI_METHOD
+from compare.contracts import CI_METHODS, DEFAULT_CI_METHOD, NonFiniteMetricError
 from compare.student_t import t_ppf, t_two_sided_p
 
 # Paired statistics engine (ported from llm_quant_fidelity/paired_compare.py)
@@ -56,6 +56,9 @@ def _compute_decision(
     interval-inclusion form of TOST, a CI contained in (-m, m) IS an
     equivalence result at margin m; pass `equivalence_margin` and a cell that
     clears it is reported as EQUIVALENT rather than merely inconclusive.
+    Statistical difference and equivalence are separate facts. Directional
+    verdicts retain priority when the CI excludes the null. Interval inclusion
+    uses this CI's confidence level, with one-sided alpha = (1 - level) / 2.
     """
     if score_direction not in ("lower_is_better", "higher_is_better"):
         raise ValueError(
@@ -63,22 +66,35 @@ def _compute_decision(
             f"got {score_direction!r}"
         )
 
+    if not all(math.isfinite(v) for v in (delta_estimate, ci_lower, ci_upper, null_value)):
+        raise NonFiniteMetricError("non-finite estimate or confidence interval; paired comparison aborted")
+    if ci_lower > ci_upper:
+        raise ValueError("confidence interval lower endpoint exceeds upper endpoint")
+    if not 0.0 < confidence_level < 1.0:
+        raise ValueError("confidence_level must be in (0, 1)")
+    if equivalence_margin is not None and (not math.isfinite(equivalence_margin) or equivalence_margin <= 0.0):
+        raise ValueError("equivalence_margin must be finite and positive")
     contains_null = ci_lower <= null_value <= ci_upper
     is_delta = null_value == 0.0
     fmt = (lambda v: f"{v:+.6f}") if is_delta else (lambda v: f"{v:.6f}")
     null_str = "0" if is_delta else f"{null_value:g}"
     bounds_str = f"[{fmt(ci_lower)}, {fmt(ci_upper)}]"
     level = _format_confidence_level(confidence_level)
+    bound = max(abs(ci_lower - null_value), abs(ci_upper - null_value))
+    equivalence = {
+        "equivalence_bound": bound,
+        "equivalence_margin": equivalence_margin,
+        "equivalence_established": None if equivalence_margin is None else bound < equivalence_margin,
+        "equivalence_alpha": None if equivalence_margin is None else (1.0 - confidence_level) / 2.0,
+    }
 
     if contains_null:
-        bound = max(abs(ci_lower - null_value), abs(ci_upper - null_value))
         out = {
             "verdict": "inconclusive",
             "statistically_distinguishable_from_null": False,
             "null_value": null_value,
             "confidence_level": confidence_level,
-            "equivalence_bound": bound,
-            "equivalence_margin": equivalence_margin,
+            **equivalence,
             "reason": (f"{level} CI {bounds_str} contains {null_str}; the data "
                        f"bound |Δ| ≤ {bound:.6g} and establish nothing "
                        "tighter"),
@@ -95,12 +111,16 @@ def _compute_decision(
         verdict = "B closer" if b_smaller else "A closer"
     else:
         verdict = "A closer" if b_smaller else "B closer"
+    reason = f"{level} CI {bounds_str} excludes {null_str}"
+    if equivalence["equivalence_established"]:
+        reason += f"; CI also lies inside +/-{equivalence_margin:g} (equivalent at that margin)"
     return {
         "verdict": verdict,
         "statistically_distinguishable_from_null": True,
         "null_value": null_value,
         "confidence_level": confidence_level,
-        "reason": f"{level} CI {bounds_str} excludes {null_str}",
+        **equivalence,
+        "reason": reason,
     }
 
 
@@ -119,19 +139,25 @@ def _statistic_and_se(diffs: np.ndarray, weights: np.ndarray, weighting: str):
     (u has mean exactly 0 by construction, which is why the sum of squares
     needs no re-centring.)
 
-    SE == 0 (one item, or a constant sample) is returned as 0.0; the caller
-    treats that as "not studentizable"."""
+    A constant sample returns SE = 0.0; the caller treats it as not
+    studentizable. Invalid arithmetic cannot use that fallback."""
     n = diffs.size
     if n < 2:
-        return (float(diffs.mean()) if weighting == "item"
-                else float((weights * diffs).sum() / weights.sum())), 0.0
-    if weighting == "item":
-        theta = float(diffs.mean())
-        return theta, float(diffs.std(ddof=1) / math.sqrt(n))
-    wsum = float(weights.sum())
-    theta = float((weights * diffs).sum() / wsum)
-    u = weights * (diffs - theta)
-    return theta, float(math.sqrt(n * float((u * u).sum()) / (n - 1)) / wsum)
+        raise ValueError("paired comparison requires at least two items")
+    with np.errstate(over="ignore", invalid="ignore", divide="ignore"):
+        if weighting == "item":
+            theta = float(diffs.mean())
+            se = float(diffs.std(ddof=1) / math.sqrt(n))
+        else:
+            wsum = float(weights.sum())
+            theta = float((weights * diffs).sum() / wsum)
+            u = weights * (diffs - theta)
+            se = float(math.sqrt(n * float((u * u).sum()) / (n - 1)) / wsum)
+    if not math.isfinite(theta) or not math.isfinite(se):
+        raise NonFiniteMetricError("non-finite estimate or standard error; paired comparison aborted")
+    if se == 0.0 and np.any(diffs != diffs[0]):
+        raise NonFiniteMetricError("standard error underflow for nonconstant differences; paired comparison aborted")
+    return theta, se
 
 
 def _bca_shape(boot: np.ndarray, estimate: float, jackknife: np.ndarray):
@@ -145,12 +171,17 @@ def _bca_shape(boot: np.ndarray, estimate: float, jackknife: np.ndarray):
         return None                      # z0 = +/-inf: no usable bias correction
     z0 = NormalDist().inv_cdf(below)
     centered = jackknife.mean() - jackknife
-    denom = float((centered ** 2).sum()) ** 1.5
-    if not np.isfinite(denom) or denom <= 0.0:
+    try:
+        denom = float((centered ** 2).sum()) ** 1.5
+    except OverflowError as error:
+        raise NonFiniteMetricError("non-finite BCa acceleration; paired comparison aborted") from error
+    if not np.isfinite(denom):
+        raise NonFiniteMetricError("non-finite BCa acceleration; paired comparison aborted")
+    if denom <= 0.0:
         return None                      # constant jackknife: no acceleration
     a = float((centered ** 3).sum()) / (6.0 * denom)
     if not np.isfinite(a):
-        return None
+        raise NonFiniteMetricError("non-finite BCa acceleration; paired comparison aborted")
     return z0, a
 
 
@@ -328,7 +359,7 @@ def _student_t_delta(diffs: np.ndarray, weights: np.ndarray, *,
     result is a deterministic function of the deltas, independent of seed
     and of --bootstrap-iters (recorded as 0).
 
-    Degenerate sample (n < 2, or every delta identical so SE == 0): the
+    Degenerate sample (every delta identical so SE == 0): the
     interval collapses to the point [theta, theta] and p is 0 (theta != 0)
     or 1 (theta == 0) -- the limit of the t test as SE -> 0 -- and the JSON
     says so in `fallback`, mirroring the bootstrap methods' zero-spread
@@ -337,7 +368,7 @@ def _student_t_delta(diffs: np.ndarray, weights: np.ndarray, *,
     df = n - 1
     delta, delta_se = _statistic_and_se(diffs, weights, weighting)
     fallback = None
-    if df >= 1 and delta_se > 0.0 and np.isfinite(delta_se):
+    if delta_se > 0.0:
         alpha = 1.0 - confidence_level
         q = t_ppf(1.0 - alpha / 2.0, df)
         lower, upper = delta - q * delta_se, delta + q * delta_se
@@ -345,9 +376,11 @@ def _student_t_delta(diffs: np.ndarray, weights: np.ndarray, *,
     else:
         lower = upper = delta
         p_value = 1.0 if delta == 0.0 else 0.0
-        fallback = ("the sample has no spread (n < 2 or identical deltas), "
+        fallback = ("the sample has no spread (identical deltas), "
                     "so the t interval is the point estimate and p is its "
                     "SE -> 0 limit")
+    if not all(math.isfinite(v) for v in (lower, upper, p_value)):
+        raise NonFiniteMetricError("non-finite confidence interval or p-value; paired comparison aborted")
     ci = {
         "method": f"paired_{weighting}_weighted_student_t",
         "ci_method": "t",
@@ -406,12 +439,23 @@ def _paired_bootstrap_delta(
         raise ValueError(f"ci_method must be one of {CI_METHODS}; got {ci_method!r}")
     if baseline_values.shape != candidate_values.shape:
         raise ValueError("baseline_values and candidate_values must have the same shape")
-    if baseline_values.size == 0:
-        raise ValueError("paired comparison requires at least one item")
+    if baseline_values.ndim != 1 or baseline_values.size < 2:
+        raise ValueError("paired comparison requires at least two items in one dimension")
+    if weights.shape != baseline_values.shape or not np.all(np.isfinite(weights)) or np.any(weights <= 0.0):
+        raise ValueError("weights must align with scores and contain finite positive values")
+    if not np.all(np.isfinite(baseline_values)) or not np.all(np.isfinite(candidate_values)):
+        raise NonFiniteMetricError("non-finite metric scores; paired comparison aborted")
+    if not 0.0 < confidence_level < 1.0:
+        raise ValueError("confidence_level must be in (0, 1)")
+    if not isinstance(bootstrap_iters, (int, np.integer)) or bootstrap_iters < (0 if ci_method == "t" else 2):
+        raise ValueError("bootstrap_iters must be a nonnegative integer, with at least two draws for bootstrap intervals")
     if weighting not in ("item", "token"):
         raise ValueError(f"weighting must be 'item' or 'token'; got {weighting!r}")
 
-    diffs = candidate_values - baseline_values
+    with np.errstate(over="ignore", invalid="ignore"):
+        diffs = candidate_values - baseline_values
+    if not np.all(np.isfinite(diffs)):
+        raise NonFiniteMetricError("non-finite paired differences; paired comparison aborted")
 
     if ci_method == "t":
         return _student_t_delta(diffs, weights, weighting=weighting,
@@ -432,6 +476,8 @@ def _paired_bootstrap_delta(
         else:
             boot[i], boot_se[i] = _statistic_and_se(diffs[idx], weights[idx],
                                                     weighting)
+    if not np.all(np.isfinite(boot)):
+        raise NonFiniteMetricError("non-finite bootstrap estimates; paired comparison aborted")
 
     alpha = 1.0 - confidence_level
     levels = (alpha / 2.0, 1.0 - alpha / 2.0)
@@ -453,6 +499,8 @@ def _paired_bootstrap_delta(
                         "interval used instead")
         else:
             t_star = (boot[usable] - delta) / boot_se[usable]
+            if not np.all(np.isfinite(t_star)):
+                raise NonFiniteMetricError("non-finite studentized bootstrap pivots; paired comparison aborted")
             t_hi, t_lo = np.quantile(t_star, [1.0 - alpha / 2.0, alpha / 2.0])
             # NOTE the crossed order: the bootstrap-t interval is
             # [theta - t_(1-a/2) * SE, theta - t_(a/2) * SE]. Writing it the
@@ -475,7 +523,8 @@ def _paired_bootstrap_delta(
             keep = den - weights
             with np.errstate(divide="ignore", invalid="ignore"):
                 jack = np.where(keep > 0.0, (num - weights * diffs) / keep, np.nan)
-            jack = jack[np.isfinite(jack)]
+            if not np.all(np.isfinite(jack)):
+                raise NonFiniteMetricError("non-finite BCa jackknife estimates; paired comparison aborted")
         jack = np.asarray(jack, dtype=float)
         bca_shape = _bca_shape(boot, delta, jack)
         endpoints = _bca_endpoints(boot, delta, jack, confidence_level)
@@ -497,6 +546,9 @@ def _paired_bootstrap_delta(
         boot, delta, ci_method=used,
         z0=(bca_shape or (None, None))[0], accel=(bca_shape or (None, None))[1],
         t_star=t_star, delta_se=delta_se)
+    bootstrap_std = float(boot.std(ddof=1)) if bootstrap_iters > 1 else 0.0
+    if p_value is None or not all(math.isfinite(v) for v in (lower, upper, p_value, bootstrap_std)):
+        raise NonFiniteMetricError("non-finite bootstrap interval, p-value, or standard deviation; paired comparison aborted")
     ci = {
         "method": f"paired_{weighting}_weighted_bootstrap_{used}",
         "ci_method": used,
@@ -513,7 +565,7 @@ def _paired_bootstrap_delta(
         "estimate": delta,
         "ci": ci,
         "p_value": p_value,
-        "bootstrap_std": float(boot.std(ddof=1)) if bootstrap_iters > 1 else 0.0,
+        "bootstrap_std": bootstrap_std,
     }
 
 
@@ -541,6 +593,8 @@ def _build_weighting_block(
     else:
         baseline_mean = float((weights * baseline_values).sum() / weights.sum())
         candidate_mean = float((weights * candidate_values).sum() / weights.sum())
+    if not math.isfinite(baseline_mean) or not math.isfinite(candidate_mean):
+        raise NonFiniteMetricError("non-finite metric mean; paired comparison aborted")
 
     ci = delta_result["ci"]
     decision = _compute_decision(
@@ -574,19 +628,29 @@ def _classify_consensus(
     return "disagree"
 
 
+def _exp_nll(value: float) -> float:
+    try:
+        result = math.exp(value)
+    except OverflowError as error:
+        raise NonFiniteMetricError(f"PPL exceeds floating-point range for log-scale NLL {value:g}; comparison aborted") from error
+    if not math.isfinite(result):
+        raise NonFiniteMetricError(f"PPL exceeds floating-point range for log-scale NLL {value:g}; comparison aborted")
+    return result
+
+
 def _ppl_ratio_block(nll_weighting_block: Mapping[str, Any], linked_to: str) -> dict[str, Any]:
     delta = nll_weighting_block["delta_candidate_minus_baseline"]
     nll_ci = nll_weighting_block["ci_delta"]
     return {
-        "estimate": math.exp(delta),
+        "estimate": _exp_nll(delta),
         "ci": {
             "method": nll_ci["method"],
             "ci_method": nll_ci.get("ci_method"),
             "confidence_level": nll_ci["confidence_level"],
-            "lower": math.exp(nll_ci["lower"]),
-            "upper": math.exp(nll_ci["upper"]),
+            "lower": _exp_nll(nll_ci["lower"]),
+            "upper": _exp_nll(nll_ci["upper"]),
             "bootstrap_iters": nll_ci["bootstrap_iters"],
-            "contains_one": bool(math.exp(nll_ci["lower"]) <= 1.0 <= math.exp(nll_ci["upper"])),
+            "contains_one": bool(nll_ci["lower"] <= 0.0 <= nll_ci["upper"]),
         },
         "decision": {"verdict": f"(linked to {linked_to} above)", "linked_to": linked_to},
     }
@@ -597,8 +661,8 @@ def _ppl_block(nll_weighting_block: Mapping[str, Any], linked_to: str) -> dict[s
     mean of per-token PPLs). Display-only -- exp is monotonic, so the verdict is
     identical to nll's; the statistically-tested PPL change is ppl_ratio (b / a).
     """
-    baseline_ppl = math.exp(nll_weighting_block["baseline_mean"])
-    candidate_ppl = math.exp(nll_weighting_block["candidate_mean"])
+    baseline_ppl = _exp_nll(nll_weighting_block["baseline_mean"])
+    candidate_ppl = _exp_nll(nll_weighting_block["candidate_mean"])
     return {
         "baseline_ppl": baseline_ppl,
         "candidate_ppl": candidate_ppl,

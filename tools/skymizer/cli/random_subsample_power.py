@@ -110,23 +110,37 @@ def parse_args(argv=None):
 
 
 def load_population(a_dir: Path, b_dir: Path):
-    """All matched, finite items: ([scores_a], [scores_b], [weights], [keys])."""
-    matched, _ = smpc.find_metric_items(a_dir, b_dir)
-    if not matched:
-        sys.exit("no matched items between the two dirs")
-    scores_a, scores_b, weights, keys = [], [], [], []
-    for key in matched:
-        sa, sb, _tok_a, _tok_b, keep, finite, drift, _versions = smpc.score_item(
-            key, a_dir, b_dir, -1)
-        if drift is not None:
-            sys.exit(f"reference drift on {key}: {drift['msg']}")
-        if not finite:
-            continue
-        scores_a.append(sa)
-        scores_b.append(sb)
-        weights.append(keep)
-        keys.append(key)
-    return scores_a, scores_b, weights, keys
+    """Load the complete paired population under the production guards."""
+    try:
+        with smpc.comparison_locks((a_dir, b_dir)):
+            for role, root in (("candidate-a", a_dir), ("candidate-b", b_dir)):
+                smpc.require_collection_success(root, role)
+            a_meta = smpc.load_kld_collect_meta(a_dir)
+            b_meta = smpc.load_kld_collect_meta(b_dir)
+            smpc.require_execution_alignment(a_meta, b_meta)
+            for warning in smpc.check_kld_meta_alignment(a_meta, b_meta):
+                print(f"WARNING: {warning}", file=sys.stderr)
+            smpc.require_common_budget_skips({"candidate-a": a_dir, "candidate-b": b_dir})
+            matched, drops = smpc.find_metric_items(a_dir, b_dir)
+            smpc.require_complete_item_alignment(drops, allow_interaction=False)
+            if not matched:
+                sys.exit("no matched items between the two dirs")
+            scores_a, scores_b, weights, keys = [], [], [], []
+            for key in matched:
+                sa, sb, _tok_a, _tok_b, keep, finite, drift, _versions = smpc.score_item(
+                    key, a_dir, b_dir, -1)
+                if drift is not None:
+                    sys.exit(f"reference drift on {key}: {drift['msg']}")
+                if not finite:
+                    sys.exit(f"{key}: non-finite metric score; subsampling aborted")
+                scores_a.append(sa)
+                scores_b.append(sb)
+                weights.append(keep)
+                keys.append(key)
+            smpc.require_min_items(scores_a, matched)
+            return scores_a, scores_b, weights, keys
+    except ValueError as error:
+        sys.exit(str(error))
 
 
 def wilson_lower(hits: int, n: int, z: float = 1.959963985) -> float:

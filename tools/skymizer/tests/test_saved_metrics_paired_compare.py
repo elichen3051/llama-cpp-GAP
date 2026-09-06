@@ -1123,3 +1123,158 @@ def test_ear64_report_uses_saved_prefix_means_and_higher_is_better(tmp_path):
         assert block["token_weighted"]["baseline_mean"] == pytest.approx(np.average(means, weights=weights), abs=1e-12)
         assert block["item_weighted"]["delta_candidate_minus_baseline"] > 0
         assert block["item_weighted"]["decision"]["verdict"] == "B closer"
+
+
+def _make_corpus_pair(tmp_path):
+    from lib.text_corpus import corpus_row, digest_json
+    from test_prep_llm_score_from_hf import _corpus_protocol
+    protocol = _corpus_protocol()
+    from lib.text_corpus import token_digest
+    protocol.update(stream_tokens=35, stream_sha256=token_digest(list(range(1, 9)) * 4 + [9, 10, 1]),
+                    vocabulary={**protocol["vocabulary"], "size": 11})
+    assignments = ([0, 0, 1], [1, 1, 1], [1, 2, 2], [2, 2, 2])
+    rows = [corpus_row(protocol, [1, 2, 3, 4, 5, 6, 7, 8], i, list(ids)) for i, ids in enumerate(assignments)]
+    corpus = {"protocol": protocol, "windows": [json.loads(row["corpus_window"]) for row in rows]}
+    directories = []
+    for role, seed in (("a", 10), ("b", 20)):
+        directory = tmp_path / role
+        (directory / "metrics").mkdir(parents=True)
+        keys = []
+        for i, row in enumerate(rows):
+            key = f"{i:03d}_{row['id']}"
+            keys.append(key)
+            records = _make_item(npos=3, seed=seed + i, ref_seed=100 + i)
+            records["target"] = row["input_ids"][5:]
+            records["kld"] = np.arange(i * 3, i * 3 + 3) / 100 + (0.01 if role == "b" else 0)
+            path = directory / "metrics" / f"{key}.bin"
+            write_vlmk(path, records, vocab=11, n_prefill=5, n_past_actual=8)
+            kio.convert_kld_bin_to_npz(path, path.with_suffix(".npz"))
+            path.unlink()
+        completed_collection(directory, keys)
+        meta = {**BASE_META, "kind": "llm_kld_metrics", "sort_by": "", "cand_model": f"/m/{role}.gguf",
+                "n_ctx": 8, "n_batch": 8, "n_ubatch": 8, "tf_chunk": -1, "n_threads": 8, "metric_threads": 8,
+                "perplexity_window": True, "corpus_protocol": protocol,
+                "corpus_windows_sha256": digest_json(corpus)}
+        (directory / "collect_meta.json").write_text(json.dumps(meta))
+        (directory / "corpus_windows.json").write_text(json.dumps(corpus))
+        directories.append(directory)
+    return directories
+
+
+@pytest.mark.parametrize("unit,n_units", [("window", 4), ("article", 3), ("block", 2)])
+def test_corpus_aggregation_preserves_pooled_targets_and_labels(tmp_path, unit, n_units):
+    a, b = _make_corpus_pair(tmp_path)
+    rc, report, path = _run_main(a, b, tmp_path, "--unit", unit, "--block-windows", "2", "--metrics", "kld")
+    assert rc == 0
+    result = json.loads(path.read_text())
+    assert result["n_items"] == n_units
+    assert result["sampling"]["n_windows"] == 4
+    assert result["sampling"]["unit"] == unit
+    assert "model-generated answer trajectory" not in report.read_text()
+    assert "may remain dependent" in report.read_text()
+    assert "independent sampling units" in result["sampling"]["scope"]
+    assert "conditional fixed-corpus" in result["multiplicity"]["policy"]
+    assert result["metrics"]["kld"]["token_weighted"]["baseline_mean"] == pytest.approx(0.055)
+    if unit == "article":
+        expected = np.mean([0.005, 0.04, 0.09])
+        assert result["metrics"]["kld"]["item_weighted"]["baseline_mean"] == pytest.approx(expected)
+    if unit != "window":
+        assert "position_strata" not in result
+
+
+def test_corpus_aggregation_rejects_partial_population_and_changed_targets(tmp_path):
+    a, b = _make_corpus_pair(tmp_path)
+    with pytest.raises(SystemExit, match="complete corpus window set"):
+        _run_main(a, b, tmp_path, "--unit", "article", "--end", "3")
+    for directory in (a, b):
+        path = next((directory / "metrics").glob("*.npz"))
+        with np.load(path) as data:
+            values = dict(data)
+        values["target"][-1] = 9
+        np.savez(path, **values)
+    with pytest.raises(SystemExit, match="targets or runtime shape"):
+        _run_main(a, b, tmp_path, "--unit", "block", "--block-windows", "2")
+
+
+@pytest.mark.parametrize("field", ["n_ctx", "n_threads", "metric_threads", "n_gpu_layers", "flash_attn"])
+def test_pairing_rejects_runtime_changes_even_with_identical_reference_columns(tmp_path, field):
+    a, b = _make_pair(tmp_path, meta_b_overrides={field: "changed"})
+    with pytest.raises(SystemExit, match=field):
+        _run_main(a, b, tmp_path)
+
+
+def test_perplexity_bridge_verifies_binary_tokens_and_quantized_reference(tmp_path):
+    import argparse
+    import struct
+    from cli.verify_perplexity_bridge import read_ppl_header, verify
+    a, _ = _make_corpus_pair(tmp_path)
+    meta = json.loads((a / "collect_meta.json").read_text())
+    prepared = tmp_path / "prepared"
+    prepared.mkdir()
+    (prepared / "manifest.json").write_text(json.dumps({"protocol": meta["corpus_protocol"]}))
+    stream = list(range(1, 9)) * 4 + [9, 10, 1]
+    (prepared / "stream.json").write_text(json.dumps(stream))
+    records = [kio.load_kld_metrics(path)[0] for path in sorted((a / "metrics").glob("*.npz"))]
+    encoded = np.zeros((4, 3, 16), dtype="<u2")
+    quantized = []
+    for index, row in enumerate(records):
+        params = np.tile(np.array([0.001, -2.0], dtype="<f4"), (3, 1))
+        encoded[index, :, :4] = params.view("<u2")
+        codes = np.rint((2.0 - row["nll_ref"]) / 0.001).astype("<u2")
+        encoded[index, np.arange(3), row["target"] + 4] = codes
+        quantized.extend(-(params[:, 0] * codes + params[:, 1]))
+    path = tmp_path / "ppl.bin"
+    path.write_bytes(b"_logits_" + struct.pack("<III", 8, 11, 4)
+                     + np.array(stream[:32], dtype="<i4").tobytes() + encoded.tobytes())
+    assert read_ppl_header(path)["tokens"].reshape(-1).tolist() == stream[:32]
+    ref_mean = np.concatenate([row["nll_ref"] for row in records]).astype(float).mean()
+    cand_mean = np.concatenate([row["nll_cand"] for row in records]).astype(float).mean()
+    kld_mean = np.concatenate([row["kld"] for row in records]).astype(float).mean()
+    shape = "n_ctx=8, batch_size=8, n_seq=1\nn_threads = 8 (n_threads_batch = 8)\nmetric_threads = 8\n"
+    ref_log, cand_log = tmp_path / "ref.log", tmp_path / "cand.log"
+    ref_log.write_text(shape + f"Final estimate: PPL = {math.exp(ref_mean):.4f}\n")
+    cand_log.write_text(shape + f"Mean PPL(Q) : {math.exp(cand_mean):.6f}\nMean PPL(base) : {math.exp(np.mean(quantized)):.6f}\nMean KLD: {kld_mean:.6f}\n")
+    args = argparse.Namespace(llm_collection=a, prepared=prepared, ppl_logits=path,
+                              ppl_reference_log=ref_log, ppl_candidate_log=cand_log, nll_tolerance=1e-5)
+    from lib.collect_common import acquire_out_lock
+    with acquire_out_lock(a):
+        with pytest.raises(ValueError, match="collector is still active"):
+            verify(args)
+    result = verify(args)
+    assert result["status"] == "passed" and result["targets"] == 12
+    assert result["quantized_reference"]["max_abs_target_error"] < 0.00051
+    raw = path.read_bytes()
+    for bad in (raw[:-1], raw + b"x", b"badmagic" + raw[8:]):
+        path.write_bytes(bad)
+        with pytest.raises(ValueError):
+            read_ppl_header(path)
+    path.write_bytes(raw)
+    cand_log.write_text(cand_log.read_text().replace("metric_threads = 8", "metric_threads = 4"))
+    with pytest.raises(ValueError, match="threads must agree"):
+        verify(args)
+
+
+def test_grouped_allowed_drift_counts_the_contributing_source_window(tmp_path):
+    a, b = _make_corpus_pair(tmp_path)
+    path = next((b / "metrics").glob("*.npz"))
+    with np.load(path) as data:
+        values = dict(data)
+    values["nll_ref"][0] += np.float32(0.001)
+    np.savez(path, **values)
+    rc, _, report = _run_main(a, b, tmp_path, "--unit", "article", "--allow-ref-drift", "--metrics", "kld")
+    assert rc == 0
+    result = json.loads(report.read_text())
+    assert result["alignment"]["ref_drift"]["n_used"] == 1
+    assert result["alignment"]["ref_drift"]["n_items"] == 1
+
+
+def test_perplexity_header_checks_size_before_allocating_tokens(tmp_path, monkeypatch):
+    import struct
+    from cli.verify_perplexity_bridge import read_ppl_header
+    path = tmp_path / "bad-ppl.bin"
+    path.write_bytes(b"_logits_" + struct.pack("<III", 512, 262144, 2**32 - 1))
+    def forbidden_read(*args, **kwargs):
+        pytest.fail("unvalidated header drove an allocation")
+    monkeypatch.setattr(np, "fromfile", forbidden_read)
+    with pytest.raises(ValueError, match="incomplete or has trailing"):
+        read_ppl_header(path)

@@ -150,11 +150,12 @@ def stem_sort_key(stem: str):
 META_MUST_MATCH_COMMON = ("kind", "ref_model", "dataset", "subset", "split",
                           "sort_by", "sort_desc", "num_eval_tokens",
                           "max_total_tokens", "tf_chunk", "n_batch", "n_ubatch",
-                          "swa_full")
+                          "swa_full", "n_ctx", "n_gpu_layers", "n_threads",
+                          "metric_threads", "flash_attn")
 META_MUST_MATCH_BY_KIND = {
     "vlm_kld_metrics": ("ref_mmproj", "image_min_tokens", "image_max_tokens",
                         "media_wrapper"),
-    "llm_kld_metrics": (),
+    "llm_kld_metrics": ("perplexity_window", "corpus_protocol", "corpus_windows_sha256"),
 }
 META_MUST_MATCH = META_MUST_MATCH_COMMON + META_MUST_MATCH_BY_KIND["vlm_kld_metrics"]
 
@@ -483,6 +484,10 @@ def parse_args(argv=None):
             "Exclusive item end after matching; default or -1 = all "
             "matched items. Values past the matched count warn and "
             "use all available items."))
+    p.add_argument("--unit", choices=("item", "window", "article", "block"), default="item",
+                   help="Paired sampling unit; corpus item mode means one original PPL window.")
+    p.add_argument("--block-windows", type=int, default=8,
+                   help="Original consecutive corpus windows per block (default: 8).")
     p.add_argument("--allow-ref-drift", action="store_true",
                    help="Downgrade the bit-identical-reference check to a warning "
                         "(use when the two runs crossed a build/GPU change; the "
@@ -501,6 +506,8 @@ def main(argv=None) -> int:
     argv_for_metadata = metadata_argv(argv, "saved_metrics_paired_compare.py")
     args = parse_args(argv)
     validate_shared_paired_args(args)
+    if args.block_windows < 1:
+        sys.exit("--block-windows must be >= 1")
     try:
         with comparison_locks((args.candidate_a, args.candidate_b)):
             return _main_locked(args, argv_for_metadata)
@@ -555,6 +562,21 @@ def _main_locked(args, argv_for_metadata):
         print(end_warning, file=sys.stderr)
     matched = matched[args.start:end]
 
+    corpus_protocol, corpus_windows, groups = None, None, None
+    if a_meta.get("perplexity_window"):
+        from lib.text_corpus import CorpusGroups, load_corpus_map
+        corpus_protocol, corpus_windows = load_corpus_map(args.candidate_a, a_meta)
+        if load_corpus_map(args.candidate_b, b_meta) != (corpus_protocol, corpus_windows):
+            raise ValueError("candidate corpus window maps differ")
+        if args.num_eval_tokens != -1:
+            raise ValueError("corpus comparisons require all stored scoring targets")
+        if args.unit in ("article", "block"):
+            if set(matched) != set(corpus_windows):
+                raise ValueError("article/block aggregation requires the complete corpus window set; do not slice or omit windows")
+            groups = CorpusGroups(args.unit, args.block_windows)
+    elif args.unit != "item":
+        raise ValueError("window/article/block units require a frozen corpus collection")
+
     scores_a, scores_b, weights, used = [], [], [], []
     # Per-token columns for the pooled distribution ladders. Keyed lazily off
     # the first kept item so a dir of v1 dumps (no `ear` column) simply has no
@@ -563,6 +585,24 @@ def _main_locked(args, argv_for_metadata):
     token_b: dict[str, list[np.ndarray]] = {}
     drifts: list[dict] = []
     versions_seen = {"candidate-a": set(), "candidate-b": set()}
+    def append_unit(key, sa, sb, tok_a, tok_b, keep):
+        nonlocal token_a, token_b
+        scores_a.append(sa)
+        scores_b.append(sb)
+        cols = sorted(set(tok_a) & set(tok_b))
+        if not token_a:
+            token_a = {c: [] for c in cols}
+            token_b = {c: [] for c in cols}
+        elif sorted(token_a) != cols:
+            sys.exit(f"{key}: per-token columns {cols} differ from the earlier "
+                     f"items' {sorted(token_a)}; the two dirs mix VLMK versions "
+                     "(re-collect so every dump carries the same columns)")
+        for c in cols:
+            token_a[c].append(tok_a[c])
+            token_b[c].append(tok_b[c])
+        weights.append(keep)
+        used.append(key)
+
     for key in matched:
         try:
             sa, sb, tok_a, tok_b, keep, finite, drift, versions = score_item(
@@ -585,21 +625,16 @@ def _main_locked(args, argv_for_metadata):
             sys.exit(
                 f"{key}: non-finite metric score(s) ({'; '.join(bad)}); "
                 "paired inference aborted")
-        scores_a.append(sa)
-        scores_b.append(sb)
-        cols = sorted(set(tok_a) & set(tok_b))
-        if not token_a:
-            token_a = {c: [] for c in cols}
-            token_b = {c: [] for c in cols}
-        elif sorted(token_a) != cols:
-            sys.exit(f"{key}: per-token columns {cols} differ from the earlier "
-                     f"items' {sorted(token_a)}; the two dirs mix VLMK versions "
-                     "(re-collect so every dump carries the same columns)")
-        for c in cols:
-            token_a[c].append(tok_a[c])
-            token_b[c].append(tok_b[c])
-        weights.append(keep)
-        used.append(key)
+        if corpus_protocol is not None:
+            from lib.text_corpus import check_corpus_metrics
+            ma, ha = load_kld_metrics(args.candidate_a / "metrics" / f"{key}.npz")
+            mb, hb = load_kld_metrics(args.candidate_b / "metrics" / f"{key}.npz")
+            window = check_corpus_metrics(key, ma, ha, corpus_protocol, corpus_windows)
+            check_corpus_metrics(key, mb, hb, corpus_protocol, corpus_windows)
+            if groups is not None:
+                groups.add(window, ma, mb)
+                continue
+        append_unit(key, sa, sb, tok_a, tok_b, keep)
 
     if drifts:
         for d in drifts:
@@ -612,7 +647,8 @@ def _main_locked(args, argv_for_metadata):
                 "build / GPU / --tf-chunk / -ub?). The paired verdict premise is "
                 "broken. Re-collect one side, or pass --allow-ref-drift to "
                 "compare anyway (approximately paired).")
-    used_set = set(used)
+    # Drift keys name the source windows, before any article/block grouping.
+    used_set = set(matched)
     # Persisted drift summary: the artifact must be able to distinguish 1-ulp
     # batching noise from a completely different reference model — stderr is
     # gone by the time anyone reads an archived report.
@@ -625,6 +661,12 @@ def _main_locked(args, argv_for_metadata):
             "argmax_ref_flips": sum(d["argmax_flips"] for d in drifts),
         }
 
+    if groups is not None:
+        for key, (ma, mb) in groups.records():
+            keep = len(ma["target"])
+            sa, tok_a = _side_scores(ma, keep)
+            sb, tok_b = _side_scores(mb, keep)
+            append_unit(key, sa, sb, tok_a, tok_b, keep)
     require_min_items(scores_a, matched)
 
     # Which metric columns each dir carries follows from its dumps' VLMK
@@ -681,8 +723,19 @@ def _main_locked(args, argv_for_metadata):
         primary_metric=args.primary_metric,
         primary_weighting=args.primary_weighting,
         equivalence_margin=args.equivalence_margin,
-        position_buckets=args.position_buckets,
+        position_buckets=None if groups is not None else args.position_buckets,
         token_metrics_a=token_a, token_metrics_b=token_b, item_keys=used)
+    if corpus_protocol is not None:
+        result["sampling"] = {
+            "unit": args.unit if groups is not None else "window",
+            "n_units": len(used), "n_windows": len(matched),
+            "block_windows": args.block_windows if args.unit == "block" else None,
+            "protocol": corpus_protocol,
+            "scope": "Conditional comparison of the fixed corpus; windows and adjacent groups may remain dependent. CI and test calculations treat groups as independent sampling units; residual dependence can invalidate coverage and p-values.",
+        }
+        result["multiplicity"]["policy"] = "One primary endpoint for a conditional fixed-corpus comparison; inferential validity depends on independent sampling units. Remaining endpoints are exploratory."
+        if "per_item_tails" in result:
+            result["per_item_tails"]["unit"] = "per-group quantile/maximum; witness position indexes the group's concatenated scored targets"
     result["reference_label"] = ref_label
     result["metrics_source"] = metrics_source
     result["vlmk_versions"] = {role.replace("-", "_"): sorted(vs)
@@ -717,7 +770,8 @@ def _main_locked(args, argv_for_metadata):
         },
     }
     result["alignment"] = {
-        "n_matched": len(used),
+        "n_matched": len(matched),
+        "n_statistical_units": len(used),
         "collection_complete": True,
         "execution_identity_verified": True,
         "drops": drops,

@@ -91,7 +91,9 @@ _SCALAR_FIELDS = (("n_prefill_tokens", b"pre"),
                   ("generation_schema_version", b"schema"),
                   ("generation_metadata", b"generation"),
                   ("generation_request", b"request"),
-                  ("generation_sampling_params", b"sampling"))
+                  ("generation_sampling_params", b"sampling"),
+                  ("corpus_protocol", b"corpus"),
+                  ("corpus_window", b"window"))
 
 DATASET_HASH_SCHEME = "ds-v3"
 

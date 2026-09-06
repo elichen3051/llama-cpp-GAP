@@ -2,6 +2,8 @@
 
 Generate reference datasets and evaluate quantization fidelity with llama.cpp.
 Operator handovers: [RunPod reference generation](docs/reference-runpod-handover.md), [AWS VLM KLD collection](docs/kld-aws-handover.md), and [AWS llama-perplexity / LLM KLD collection](docs/perplexity-llm-kld-aws-handover.md). InternVL, GLM and Muse use the [final-evaluation reference handover](docs/reference-runpod-final-handover.md).
+
+The text bridge prepares native 512-token corpus windows, aligns full-window PPL/LLM-KLD execution, verifies original and quantized likelihoods, and supports paired window/article/contiguous-block reports. See the [text collection protocol](docs/perplexity-llm-kld-aws-handover.md) and [grouped statistical assumptions](docs/compare.md#fixed-text-corpora-and-grouped-inference).
 `llama-reference` renders GGUF chat templates, tokenizes with the GGUF vocabulary,
 and generates text/image trajectories directly with llama.cpp and mtmd.
 [Native reference generation](docs/reference.md) needs neither llama-server nor an HF tokenizer.

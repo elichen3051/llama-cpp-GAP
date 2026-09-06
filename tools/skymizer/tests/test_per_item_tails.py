@@ -127,23 +127,20 @@ def test_without_target_column_there_is_no_token_annotation():
     assert "position" in it["candidate_a"]["max"]
 
 
-def test_absent_without_token_data_and_skipped_below_two_items():
+def test_absent_without_token_data_and_rejected_below_two_items():
     scores_a = [{"kld": 0.1}, {"kld": 0.2}]
     scores_b = [{"kld": 0.15}, {"kld": 0.25}]
     res = compare_items(scores_a, scores_b, [10, 10], metrics=["kld"],
                            confidence_level=0.95, bootstrap_iters=500, seed=1,
                            model_a_label="A", model_b_label="B")
     assert "per_item_tails" not in res
-    one = compare_items(scores_a[:1], scores_b[:1], [4], metrics=["kld"],
-                           confidence_level=0.95, bootstrap_iters=500, seed=1,
-                           model_a_label="A", model_b_label="B",
-                           position_buckets=None,
-                           token_metrics_a={"kld": [np.ones(4, np.float32)]},
-                           token_metrics_b={"kld": [np.ones(4, np.float32) * 2]},
-                           item_keys=["k"])
-    cells = one["per_item_tails"]["metrics"]["kld"]["cells"]
-    assert all("skipped" in c and "p_value" not in c for c in cells)
-    assert one["per_item_tails"]["metrics"]["kld"]["items"][0]["candidate_b"]["max"]["value"] == 2.0
+    with pytest.raises(AlignmentError, match="at least two"):
+        compare_items(scores_a[:1], scores_b[:1], [4], metrics=["kld"],
+                      confidence_level=0.95, bootstrap_iters=500, seed=1,
+                      model_a_label="A", model_b_label="B", position_buckets=None,
+                      token_metrics_a={"kld": [np.ones(4, np.float32)]},
+                      token_metrics_b={"kld": [np.ones(4, np.float32) * 2]},
+                      item_keys=["k"])
 
 
 def test_markdown_section_and_worst_items_table():
@@ -172,18 +169,18 @@ def test_engine_validates_the_target_annotation_column():
     kld_b = (kld_a * 2).astype(np.float32)
     sa = {"kld": float(kld_a.mean())}
     sb = {"kld": float(kld_b.mean())}
-    tok_a = {"kld": [kld_a], "target": [tgt]}
-    tok_b = {"kld": [kld_b], "target": [tgt]}
+    tok_a = {"kld": [kld_a, kld_a], "target": [tgt, tgt]}
+    tok_b = {"kld": [kld_b, kld_b], "target": [tgt, tgt]}
     # a well-formed annotation column is accepted
-    compare_items([sa], [sb], [7], metrics=["kld"], confidence_level=0.95,
+    compare_items([sa, sa], [sb, sb], [7, 7], metrics=["kld"], confidence_level=0.95,
                      bootstrap_iters=500, seed=1, model_a_label="A",
                      model_b_label="B", position_buckets=None,
                      token_metrics_a=tok_a, token_metrics_b=tok_b,
-                     item_keys=["k"])
+                     item_keys=["k0", "k1"])
     # a short one is rejected exactly like a short metric column
     with pytest.raises(AlignmentError):
-        compare_items([sa], [sb], [7], metrics=["kld"], confidence_level=0.95,
+        compare_items([sa, sa], [sb, sb], [7, 7], metrics=["kld"], confidence_level=0.95,
                          bootstrap_iters=500, seed=1, model_a_label="A",
                          model_b_label="B", position_buckets=None,
-                         token_metrics_a=dict(tok_a, target=[tgt[:3]]),
-                         token_metrics_b=tok_b, item_keys=["k"])
+                         token_metrics_a=dict(tok_a, target=[tgt[:3], tgt]),
+                         token_metrics_b=tok_b, item_keys=["k0", "k1"])

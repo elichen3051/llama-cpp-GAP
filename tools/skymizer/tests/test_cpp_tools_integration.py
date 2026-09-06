@@ -319,3 +319,155 @@ int main() {
     subprocess.run([*command, str(source), "-o", str(exe)], check=True)
     result = subprocess.run([str(exe)], capture_output=True, text=True)
     assert result.returncode == 0, result.stderr
+
+
+def test_llm_perplexity_window_matches_full_batch_and_preserves_default(tmp_path):
+    if shutil.which("g++") is None:
+        pytest.skip("g++ unavailable")
+    source = tmp_path / "window.cpp"
+    source.write_text(r"""
+#define main skymizer_llm_kld_main
+#include "llm-kld.cpp"
+#undef main
+#include <cassert>
+struct llama_context {
+    int length, side, calls = 0, clears = 0;
+    bool window;
+    std::vector<std::vector<float>> rows;
+};
+struct llama_vocab { bool add_eos; };
+static std::vector<int32_t> input;
+static bool poison = false;
+void llama_free(llama_context * ctx) { delete ctx; }
+void llama_model_free(llama_model *) {}
+uint32_t llama_n_ctx(const llama_context * ctx) { return ctx->length; }
+uint32_t llama_n_ubatch(const llama_context * ctx) { return ctx->length; }
+bool llama_vocab_get_add_eos(const llama_vocab * v) { return v->add_eos; }
+llama_memory_t llama_get_memory(const llama_context * ctx) { return (llama_memory_t) ctx; }
+void llama_memory_clear(llama_memory_t memory, bool data) {
+    auto * ctx = (llama_context *) memory;
+    assert(data == ctx->window);
+    ++ctx->clears;
+    ctx->calls = 0;
+}
+llama_batch llama_batch_init(int32_t n, int32_t embd, int32_t seq) {
+    assert(embd == 0 && seq == 1);
+    llama_batch b{};
+    b.token = new llama_token[n]; b.pos = new llama_pos[n]; b.n_seq_id = new int32_t[n];
+    b.seq_id = new llama_seq_id *[n]; b.seq_id[0] = new llama_seq_id[n];
+    for (int i = 1; i < n; ++i) { b.seq_id[i] = b.seq_id[0] + i; }
+    b.logits = new int8_t[n];
+    return b;
+}
+void llama_batch_free(llama_batch b) {
+    delete[] b.token; delete[] b.pos; delete[] b.n_seq_id;
+    delete[] b.seq_id[0]; delete[] b.seq_id; delete[] b.logits;
+}
+void common_batch_clear(llama_batch & b) { b.n_tokens = 0; }
+void common_batch_add(llama_batch & b, llama_token t, llama_pos p, const std::vector<llama_seq_id> & seq, bool logits) {
+    assert(seq == std::vector<llama_seq_id>{0});
+    int i = b.n_tokens++;
+    b.token[i] = t; b.pos[i] = p; b.n_seq_id[i] = 1; b.seq_id[i][0] = 0; b.logits[i] = logits;
+}
+int32_t llama_decode(llama_context * ctx, llama_batch b) {
+    const int half = ctx->length / 2;
+    const int base = ctx->window || ctx->calls == 0 ? 0 : half + 1;
+    const int count = ctx->window ? ctx->length : ctx->calls == 0 ? half + 1 : half - 2;
+    assert(b.n_tokens == count);
+    ctx->rows.assign(count, {});
+    for (int i = 0; i < count; ++i) {
+        const int pos = base + i;
+        const bool keep = ctx->window ? pos >= half : ctx->calls == 0 ? pos == half : true;
+        assert(b.pos[i] == pos && b.token[i] == input[pos]);
+        assert(b.n_seq_id[i] == 1 && b.seq_id[i][0] == 0 && bool(b.logits[i]) == keep);
+        if (keep) {
+            ctx->rows[i].assign(16, 0.0f);
+            if (pos == ctx->length - 1 || poison) {
+                ctx->rows[i][0] = std::numeric_limits<float>::quiet_NaN();
+            } else {
+                ctx->rows[i][input[pos + 1]] = ctx->side == 0 ? 2.0f : 1.0f;
+            }
+        }
+    }
+    ++ctx->calls;
+    return 0;
+}
+float * llama_get_logits_ith(llama_context * ctx, int32_t i) {
+    if (i == -1) { i = (int) ctx->rows.size() - 1; }
+    return i >= 0 && i < (int) ctx->rows.size() && !ctx->rows[i].empty() ? ctx->rows[i].data() : nullptr;
+}
+int main(int argc, char ** argv) {
+    assert(argc == 2);
+    vlm_kld_args a;
+    a.metric_threads = 2;
+    a.tokens_in_path = std::string(argv[1]) + "/tokens.bin";
+    a.output_metrics_path = std::string(argv[1]) + "/metrics.bin";
+    for (int length : {8, 512}) {
+        a.n_ctx = a.n_batch = a.n_ubatch = length;
+        a.n_prefill = length / 2 + 1;
+        input.resize(length);
+        for (int i = 0; i < length; ++i) { input[i] = (i * 3 + 7) % 16; }
+        std::ofstream f(a.tokens_in_path, std::ios::binary);
+        f.write((const char *) input.data(), input.size() * sizeof(int32_t)); f.close();
+        for (bool window : {false, true}) {
+            a.perplexity_window = window;
+            model_side ref, cand;
+            ref.tag = "ref"; cand.tag = "cand";
+            ref.lctx.reset(new llama_context{length, 0, 0, 0, window, {}});
+            cand.lctx.reset(new llama_context{length, 1, 0, 0, window, {}});
+            for (int repeat = 0; repeat < 2; ++repeat) {
+                assert(score_one(a, ref, cand, 16, length, nullptr));
+                assert(ref.lctx->calls == (window ? 1 : 2) && cand.lctx->calls == ref.lctx->calls);
+                assert(ref.lctx->clears == repeat + 1 && cand.lctx->clears == repeat + 1);
+                std::ifstream out(a.output_metrics_path, std::ios::binary);
+                uint32_t h[6]; out.read((char *) h, sizeof(h));
+                assert(h[0] == VLMK_MAGIC && h[1] == VLMK_VERSION && h[2] == 16);
+                assert(h[3] == length / 2 - 1 && h[4] == a.n_prefill && h[5] == (window ? length : a.n_prefill));
+                for (int i = 0; i < length / 2 - 1; ++i) {
+                    kld_record rec; out.read((char *) &rec, sizeof(rec));
+                    assert(out && rec.target == input[a.n_prefill + i]);
+                    assert(std::abs(rec.nll_ref - (std::log(std::exp(2.0) + 15) - 2)) < 1e-6);
+                    assert(std::abs(rec.nll_cand - (std::log(std::exp(1.0) + 15) - 1)) < 1e-6);
+                    assert(validate_kld_record_finite(rec, i, nullptr));
+                }
+                assert(out.peek() == EOF);
+            }
+            std::remove(a.output_metrics_path.c_str());
+            poison = true;
+            assert(!score_one(a, ref, cand, 16, length, nullptr));
+            assert(!std::ifstream(a.output_metrics_path));
+            poison = false;
+        }
+        assert(validate_perplexity_window_input(a, length, nullptr));
+        assert(!validate_perplexity_window_input(a, length - 1, nullptr));
+        --a.n_prefill;
+        assert(!validate_perplexity_window_input(a, length, nullptr));
+    }
+    const auto parse = [](std::vector<std::string> extra) {
+        std::vector<std::string> flags = {"test", "--ref-model", "ref", "--cand-model", "cand", "--tokens-in", "tokens", "--output-metrics", "metrics", "--n-prefill", "5", "--perplexity-window", "-c", "8", "-b", "8", "-ub", "8"};
+        flags.insert(flags.end(), extra.begin(), extra.end());
+        std::vector<char *> argv;
+        for (auto & flag : flags) { argv.push_back(flag.data()); }
+        vlm_kld_args parsed;
+        return parse_args(argv.size(), argv.data(), parsed);
+    };
+    assert(parse({}) && parse({"--num-eval-tokens", "3"}) && parse({"--tf-chunk", "8"}));
+    for (const auto & flags : std::vector<std::vector<std::string>>{
+            {"-c", "7"}, {"-c", "2", "-b", "2", "-ub", "2"}, {"-b", "16"}, {"-ub", "4"},
+            {"--num-eval-tokens", "2"}, {"--num-eval-tokens", "4"}, {"--tf-chunk", "1"}}) {
+        assert(!parse(flags));
+    }
+    llama_vocab no{false}, yes{true};
+    assert(validate_perplexity_window_vocab(&no, &no));
+    assert(!validate_perplexity_window_vocab(&yes, &no));
+    assert(!validate_perplexity_window_vocab(&no, &yes));
+}
+""")
+    exe = tmp_path / "window"
+    includes = [SKYMIZER, REPO / "include", REPO / "ggml/include", REPO / "common", REPO / "vendor"]
+    command = ["g++", "-std=c++17", "-O1", "-pthread", "-ffunction-sections", "-fdata-sections", "-Wl,--gc-sections"]
+    for directory in includes:
+        command += ["-I", str(directory)]
+    subprocess.run([*command, str(source), "-o", str(exe)], check=True)
+    result = subprocess.run([str(exe), str(tmp_path)], capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr

@@ -22,6 +22,7 @@ from compare.contracts import (
     BOOTSTRAP_CI_METHODS,
     CI_METHODS,
     DEFAULT_CI_METHOD,
+    NonFiniteMetricError,
     min_bootstrap_iters,
 )
 from compare.engine import compare_items
@@ -312,10 +313,10 @@ def test_t_interval_is_a_point_on_a_degenerate_sample():
                                       confidence_level=0.95, bootstrap_iters=0,
                                       seed=None, ci_method="t")
     assert zero["p_value"] == 1.0 and zero["ci"]["contains_zero"]
-    one = _paired_bootstrap_delta(np.zeros(1), np.ones(1), np.ones(1),
-                                     weighting="item", confidence_level=0.95,
-                                     bootstrap_iters=0, seed=None, ci_method="t")
-    assert one["ci"]["degrees_of_freedom"] == 0 and "fallback" in one["ci"]
+    with pytest.raises(ValueError, match="at least two"):
+        _paired_bootstrap_delta(np.zeros(1), np.ones(1), np.ones(1),
+                                weighting="item", confidence_level=0.95,
+                                bootstrap_iters=0, seed=None, ci_method="t")
 
 
 def test_t_interval_plumbs_through_compare_items():
@@ -404,3 +405,20 @@ def test_bca_p_value_reduces_to_the_percentile_form_without_correction():
     plain = _two_sided_p(boot, 1.0, ci_method="percentile")
     reduced = _two_sided_p(boot, 1.0, ci_method="bca", z0=0.0, accel=0.0)
     assert reduced == pytest.approx(plain, rel=0.02)
+
+
+@pytest.mark.parametrize("method", CI_METHODS)
+@pytest.mark.parametrize("weighting", ["item", "token"])
+def test_overflowed_standard_error_cannot_become_zero_spread(method, weighting):
+    with pytest.raises(NonFiniteMetricError, match="non-finite.*standard error"):
+        _paired_bootstrap_delta(np.zeros(3), np.array([1e200, -1e200, 1e200]),
+                                np.ones(3), weighting=weighting, confidence_level=0.95,
+                                bootstrap_iters=1000, seed=1, ci_method=method)
+
+
+@pytest.mark.parametrize("weighting", ["item", "token"])
+def test_underflowed_standard_error_cannot_become_zero_spread(weighting):
+    with pytest.raises(NonFiniteMetricError, match="standard error underflow"):
+        _paired_bootstrap_delta(np.zeros(3), np.array([1e-200, -1e-200, 1e-200]),
+                                np.ones(3), weighting=weighting, confidence_level=0.95,
+                                bootstrap_iters=0, seed=1, ci_method="t")

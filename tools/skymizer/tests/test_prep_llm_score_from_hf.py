@@ -149,3 +149,54 @@ def test_main_threads_sort_desc_into_dataset_load(tmp_path, monkeypatch,
                     "sort_desc": expected, "row": 1}
     assert (tmp_path / "o" / "tokens.bin").exists()
     assert (tmp_path / "o" / "meta.json").exists()
+
+
+def _corpus_protocol():
+    from lib.text_corpus import SCHEMA
+    return {
+        "schema": SCHEMA, "corpus_name": "example", "window_size": 8, "stride": 8,
+        "n_prefill": 5, "targets_per_window": 3, "stream_tokens": 19,
+        "corpus_sha256": "1" * 64, "effective_text_sha256": "2" * 64,
+        "stream_sha256": "3" * 64, "articles_sha256": "4" * 64,
+        "parse_special": False, "escape": False, "strip_single_final_newline": True,
+        "bos_policy": "replace-window-position-zero", "bos_id": 1,
+        "tail_policy": "drop-incomplete-window",
+        "vocabulary": {"scheme": "llama-vocabulary-sha256-v1", "size": 100,
+                       "type": 2, "mapping": "5" * 64, "attributes": "6" * 64},
+    }
+
+
+def test_corpus_window_preserves_targets_and_article_crossing(tmp_path):
+    from lib.text_corpus import corpus_row, validate_corpus_dataset
+    protocol = _corpus_protocol()
+    rows = [corpus_row(protocol, [1] + list(range(10 + i * 8, 17 + i * 8)), i, [0, 1, 1]) for i in range(2)]
+    meta = prep.prep_row(rows[0], tmp_path)
+    assert np.fromfile(tmp_path / "tokens.bin", dtype=np.int32).tolist() == rows[0]["input_ids"]
+    assert meta["n_prefill"] == 5 and meta["n_answer"] == 3
+    assert meta["reference_vocabulary"] == protocol["vocabulary"]
+    assert meta["corpus_window"]["target_article_ids"] == [0, 1, 1]
+    assert len(validate_corpus_dataset(rows, 8)["windows"]) == 2
+    for changed in (rows[:1], rows[::-1], rows + rows[:1]):
+        with pytest.raises(ValueError):
+            validate_corpus_dataset(changed, 8)
+    rows[0]["input_ids"][-1] += 1
+    rows[0]["labels"][-1] += 1
+    with pytest.raises(ValueError, match="tokens or scoring targets changed"):
+        prep.prep_row(rows[0], tmp_path)
+
+
+def test_native_article_cut_assigns_boundary_affected_token_to_next_article():
+    from lib.text_corpus import stable_prefix_boundary
+    assert stable_prefix_boundary([1, 2, 3, 4], [1, 2]) == 2
+    assert stable_prefix_boundary([1, 2, 3, 4], [1, 9]) == 1
+    assert stable_prefix_boundary([1, 2, 3, 4], [1, 2, 3, 4]) == 4
+
+
+def test_wikitext_article_index_preserves_bytes_and_ignores_section_headers():
+    from cli.prepare_perplexity_corpus import article_spans
+    raw = b" \n = First = \nbody\n == Section == \ntext\n = Second = \nend\n"
+    spans = article_spans(raw, "wikitext-2-test")
+    assert [span["title"] for span in spans] == ["First", "Second"]
+    assert spans[0]["byte_start"] == 0
+    assert spans[0]["byte_end"] == spans[1]["byte_start"] == raw.index(b" = Second")
+    assert spans[1]["byte_end"] == len(raw)

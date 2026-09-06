@@ -74,7 +74,8 @@ IDENTITY_FIELDS = ["kind", "vlmk_version", "ref_model", "cand_model", "dataset",
                    "split", "sort_by", "sort_desc", "num_eval_tokens",
                    "max_total_tokens", "tf_chunk", "n_ctx", "n_batch", "n_ubatch",
                    "n_gpu_layers", "n_threads", "metric_threads", "flash_attn",
-                   "swa_full", "execution_identity"]
+                   "swa_full", "execution_identity", "perplexity_window",
+                   "corpus_protocol", "corpus_windows_sha256"]
 
 
 def dump_stem(idx: int, item_id: str) -> str:
@@ -146,6 +147,9 @@ def postprocess_kld_result(row: dict, num_eval_tokens: int, elapsed_s: float):
             raise ValueError(
                 f"{metrics_path}: header n_prefill={header['n_prefill']} != "
                 f"row n_prefill={row['n_prefill']}")
+
+        if row.get("corpus_window") and header["n_past_actual"] != 2 * (row["n_prefill"] - 1):
+            raise ValueError("corpus scorer did not decode the full PPL window")
 
         # Integrity cross-check: the scorer embeds each position's target token in
         # its record; they must equal this row's input_ids[n_prefill:n_prefill+npos].
@@ -242,7 +246,17 @@ def build_collect_meta(args, dataset_content_hash: str | None = None, *,
         "metric_threads": args.metric_threads,
         "flash_attn": args.flash_attn,
         "swa_full": bool(args.swa_full),
+        "perplexity_window": bool(getattr(args, "perplexity_window", False)),
+        "corpus_protocol": None,
+        "corpus_windows_sha256": None,
     }
+    if getattr(args, "perplexity_window", False):
+        from lib.text_corpus import digest_json
+        meta["perplexity_window"] = True
+        corpus = getattr(args, "_corpus_manifest", None)
+        if corpus is not None:
+            meta["corpus_protocol"] = corpus["protocol"]
+            meta["corpus_windows_sha256"] = digest_json(corpus)
     if dataset_content_hash is not None:
         meta["dataset_content_hash"] = dataset_content_hash
     if ref_model_fingerprint is not None:
@@ -325,6 +339,8 @@ def parse_args():
                         "be comparable use the same one (recorded in collect_meta).")
     p.add_argument("--llama-llm-kld",
                    default=str(REPO_ROOT / "build/bin/llama-llm-kld"))
+    p.add_argument("--perplexity-window", action="store_true",
+                   help="Decode full classic PPL windows; requires a frozen corpus dataset and n-ctx=n-batch=n-ubatch.")
     p.add_argument("--keep-prep", action="store_true",
                    help="Don't delete per-row prep dir (debug)")
     return p.parse_args()
@@ -383,6 +399,9 @@ def main():
     if args.end is not None and args.end < -1:
         sys.exit(f"--end must be -1 (all) or >= 0, got {args.end}")
 
+    if args.perplexity_window:
+        validate_perplexity_runtime(args)
+
     # Fail fast on missing inputs: a typo otherwise surfaces only after the
     # dataset has already been downloaded and loaded.
     required_paths = {
@@ -411,12 +430,30 @@ def main():
         _run_locked(args, manifest_path)
 
 
+def validate_perplexity_runtime(args):
+    if (args.n_ctx < 4 or args.n_ctx % 2
+            or args.n_batch != args.n_ctx or args.n_ubatch != args.n_ctx
+            or args.num_eval_tokens not in (-1, args.n_ctx // 2 - 1)
+            or args.tf_chunk not in (-1, args.n_ctx)
+            or args.sort_by or args.sort_desc
+            or args.max_total_tokens is not None):
+        raise ValueError("--perplexity-window requires even n-ctx=n-batch=n-ubatch, all half-window targets, no sorting or token-budget filtering, and tf-chunk=-1 or n-ctx")
+
+
 def _load_dataset(args):
     # Imported here (not at module top) so the pure helpers stay importable
     # for unit tests without the heavy `datasets` dependency.
     import cli.prep_llm_score_from_hf as prep_lib
-    return prep_lib.load_dataset_sorted(
+    ds = prep_lib.load_dataset_sorted(
         args.dataset, args.subset, args.split, args.sort_by, args.sort_desc)
+    has_corpus = len(ds) > 0 and bool(ds[0].get("corpus_protocol"))
+    if has_corpus != bool(getattr(args, "perplexity_window", False)):
+        raise ValueError("frozen corpus rows require --perplexity-window; this mode requires frozen corpus rows")
+    if has_corpus:
+        from lib.text_corpus import validate_corpus_dataset
+        validate_perplexity_runtime(args)
+        args._corpus_manifest = validate_corpus_dataset(ds, args.n_ctx)
+    return ds
 
 
 def _stamp_meta(args, ds_hash):
@@ -425,6 +462,14 @@ def _stamp_meta(args, ds_hash):
     meta = build_collect_meta(args, ds_hash,
         ref_model_fingerprint=ref_fp, cand_model_fingerprint=cand_fp)
     ensure_collect_meta(args.out, meta)
+    if getattr(args, "perplexity_window", False):
+        from lib.reference_dataset import canonical_json
+        path = args.out / "corpus_windows.json"
+        payload = canonical_json(args._corpus_manifest) + "\n"
+        if path.exists() and path.read_text() != payload:
+            raise ValueError("stored corpus window map differs from the prepared dataset")
+        if not path.exists():
+            path.write_text(payload)
     args._recorded_execution_identity = meta["execution_identity"]
 
 
@@ -462,7 +507,8 @@ def _prep(args, row, prep_dir, state):
     import cli.prep_llm_score_from_hf as prep_lib
     meta = prep_lib.prep_row(row, prep_dir)
     return {"n_prefill": meta["n_prefill"], "n_answer": meta["n_answer"],
-            "reference_vocabulary": meta.get("reference_vocabulary") }
+            "reference_vocabulary": meta.get("reference_vocabulary"),
+            **({"corpus_window": meta["corpus_window"]} if "corpus_window" in meta else {})}
 
 
 def _scorer_argv(args, kld_manifest_path):
@@ -482,6 +528,7 @@ def _scorer_argv(args, kld_manifest_path):
         *(["--flash-attn"] if args.flash_attn == "enabled" else
           ["--no-flash-attn"] if args.flash_attn == "disabled" else []),
         *(["--swa-full"] if args.swa_full else []),
+        *(["--perplexity-window"] if getattr(args, "perplexity_window", False) else []),
     ]
 
 

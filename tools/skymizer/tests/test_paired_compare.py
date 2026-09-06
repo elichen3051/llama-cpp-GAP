@@ -14,9 +14,11 @@ import pytest
 
 from compare.cli_common import resolve_item_end
 from compare.contracts import (
+    AlignmentError,
     DEFAULT_METRICS,
     LOWER_IS_BETTER,
     MissingMetricError,
+    NonFiniteMetricError,
     POOLED_LADDER,
     POOLED_TOKEN_METRICS,
     SCHEMA_VERSION,
@@ -118,6 +120,7 @@ def test_decision_contains_zero_is_inconclusive_not_equivalent():
     assert d["statistically_distinguishable_from_null"] is False
     assert d["equivalence_bound"] == pytest.approx(0.05)
     assert d["equivalence_margin"] is None
+    assert d["equivalence_established"] is None
     assert "bound |Δ| ≤ 0.05" in d["reason"]
 
 
@@ -129,6 +132,8 @@ def test_decision_reports_equivalence_when_the_ci_clears_the_margin():
                                   score_direction="lower_is_better",
                                   equivalence_margin=0.1)
     assert inside["verdict"] == "EQUIVALENT"
+    assert inside["equivalence_established"] is True
+    assert inside["equivalence_alpha"] == pytest.approx(0.025)
     assert "TOST" in inside["reason"]
     outside = _compute_decision(delta_estimate=0.01, ci_lower=-0.02,
                                    ci_upper=0.05, null_value=0.0,
@@ -136,6 +141,7 @@ def test_decision_reports_equivalence_when_the_ci_clears_the_margin():
                                    equivalence_margin=0.04)
     assert outside["verdict"] == "inconclusive"
     assert outside["equivalence_margin"] == 0.04
+    assert outside["equivalence_established"] is False
 
 
 def test_equivalence_margin_applies_only_to_the_primary_metric():
@@ -262,9 +268,9 @@ def test_compare_items_derives_absolute_ppl_from_nll():
 
 
 def test_compare_items_requested_metric_missing_raises():
-    a = [{"nll": 1.0}]
-    b = [{"nll": 1.1}]
-    w = [1.0]
+    a = [{"nll": 1.0}] * 2
+    b = [{"nll": 1.1}] * 2
+    w = [1.0] * 2
     with pytest.raises(MissingMetricError):
         compare_items(a, b, w, metrics=("kld",), confidence_level=0.95,
                          bootstrap_iters=10, seed=1, model_a_label="A", model_b_label="B")
@@ -566,3 +572,66 @@ def test_sorted_prefix_warning_names_a_window_when_start_end_are_used():
 # ---------------------------------------------------------------------------
 # source/docs hygiene: the top-K pipeline must stay gone
 # ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("count", [0, 1])
+def test_compare_items_rejects_too_few_units(count):
+    with pytest.raises(AlignmentError, match="at least two"):
+        compare_items([{"kld": 0.0}] * count, [{"kld": 0.1}] * count,
+                      [1.0] * count, metrics=["kld"], confidence_level=0.95,
+                      bootstrap_iters=0, seed=1, model_a_label="A", model_b_label="B")
+
+
+@pytest.mark.parametrize("bad", [float("nan"), float("inf"), -float("inf")])
+@pytest.mark.parametrize("metric", ["kld", "nll_ref"])
+def test_compare_items_rejects_nonfinite_scores(bad, metric):
+    a = [{"kld": 0.0, "nll_ref": 1.0}] * 2
+    b = [{"kld": 0.1, "nll_ref": 1.0}, {"kld": 0.1, "nll_ref": 1.0}]
+    b[0][metric] = bad
+    with pytest.raises(NonFiniteMetricError, match="non-finite"):
+        compare_items(a, b, [1.0, 1.0], metrics=["kld"], confidence_level=0.95,
+                      bootstrap_iters=0, seed=1, model_a_label="A", model_b_label="B")
+
+
+@pytest.mark.parametrize("bad", [0.0, -1.0, float("nan"), float("inf")])
+def test_compare_items_rejects_invalid_weights(bad):
+    with pytest.raises(ValueError, match="weights"):
+        compare_items([{"kld": 0.0}] * 2, [{"kld": 0.1}] * 2,
+                      [bad, 1.0], metrics=["kld"], confidence_level=0.95,
+                      bootstrap_iters=0, seed=1, model_a_label="A", model_b_label="B")
+
+
+def test_compare_items_rejects_nonfinite_token_arrays():
+    with pytest.raises(NonFiniteMetricError, match="per-token"):
+        compare_items([{"kld": 0.0}] * 2, [{"kld": 0.1}] * 2,
+                      [2, 2], metrics=["kld"], confidence_level=0.95,
+                      bootstrap_iters=0, seed=1, model_a_label="A", model_b_label="B",
+                      token_metrics_a={"kld": [np.zeros(2), np.zeros(2)]},
+                      token_metrics_b={"kld": [np.array([0.1, np.nan]), np.ones(2)]})
+
+
+@pytest.mark.parametrize("metric", ["nll", "nll_ref"])
+def test_compare_items_reports_ppl_range_error_in_log_units(metric):
+    a = [{"nll": 1.0, "nll_ref": 2.0, metric: 1000.0}] * 3
+    b = [{"nll": 1.1, "nll_ref": 2.0, metric: 1001.0}] * 3
+    with pytest.raises(NonFiniteMetricError, match="PPL.*range.*log-scale NLL"):
+        compare_items(a, b, [1.0] * 3, metrics=["nll"], confidence_level=0.95,
+                      bootstrap_iters=0, seed=1, model_a_label="A", model_b_label="B")
+
+
+def test_statistical_difference_can_also_establish_practical_equivalence():
+    deltas = [0.001, 0.0011, 0.0009, 0.00105, 0.00095]
+    result = compare_items([{"kld": 1.0}] * 5,
+                           [{"kld": 1.0 + delta} for delta in deltas],
+                           [512] * 5, metrics=["kld"], confidence_level=0.95,
+                           bootstrap_iters=0, seed=1, model_a_label="A", model_b_label="B",
+                           equivalence_margin=0.01)
+    decision = result["metrics"]["kld"]["item_weighted"]["decision"]
+    assert decision["verdict"] == "A closer"
+    assert decision["statistically_distinguishable_from_null"] is True
+    assert decision["equivalence_established"] is True
+    assert decision["equivalence_bound"] == pytest.approx(0.00109816215807)
+    assert decision["equivalence_margin"] == 0.01
+    assert decision["equivalence_alpha"] == pytest.approx(0.025)
+    assert decision["confidence_level"] == 0.95
+    assert "equivalent at that margin" in decision["reason"]

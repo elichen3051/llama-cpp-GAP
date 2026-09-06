@@ -1,93 +1,162 @@
-# AWS: llama-perplexity 與 LLM KLD 文字收集
+# AWS text bridge: llama-perplexity and llm-kld
 
-更新日期: 2026-09-06。此路線依目前決策延後，先完成 [reference 生成](/home/ubuntu/llamacpp_reference_runpod_handover.md) 與 [VLM KLD 收集](/home/ubuntu/llamacpp_kld_aws_handover.md)。本文件保存已確認的評估契約與缺口，不代表文字橋接已可直接正式執行，也不包含本輪的新實作。
+Updated 2026-09-06. The implementation, full CPU regression suite and sparse GPU parity checks are complete. Production corpus collection remains an operator task; the acceptance scope below is two windows per candidate/corpus comparison.
 
-## 1. 目的與比較範圍
+This lane uses the same frozen corpus, native GGUF vocabulary, 512-token windows, BOS policy and 255 targets in both tools. llm-kld computes full-vocabulary metrics while both uncompressed logit rows are in memory. llama-perplexity saves clipped, uint16-encoded reference log probabilities. Always pass both `--kl-divergence` and `--kl-divergence-base FILE` for candidate PPL: the filename option alone aliases `--save-all-logits` and can overwrite the reference file. Check completed PPL/KLD summaries, not only the exit code. Their KLD results are separate measurements; agreement is required for their uncompressed NLL and input protocol, not for the two KLD definitions.
 
-LLM KLD 作為 llama-perplexity 與 VLM KLD 之間的文字橋接，是因為 llama-perplexity 保存 reference logits 時使用較低精度表示。要分辨模型量化差異與該儲存路徑引入的偏差，兩個文字 scorer 必須先使用同一份 corpus、完全相同 token windows、BOS 處理與計分 targets。
+A family means quantizations of one base checkpoint. Kimi Instruct and Thinking-2506 are separate checkpoints. Use only architectures supported by this checkout's upstream base, `6a1a922d269908a29cbd4b49c27e6a8e7fd10fae`; this work changes evaluation tools, not model implementations. The candidate roster is subject to the separate integrity and numerical audit. The [reference handover](reference-runpod-handover.md) defines the SNR and final-evaluation groups; finish the SNR group before the final group. VLM KLD uses its own capacity-driven context and batch settings.
 
-Model family 指同一基底 checkpoint 的所有量化版本，不包含同系列不同 size。每個基底內的 candidates 使用完全相同 runtime；不同基底可分別凍結。LLM KLD 與 llama-perplexity 對齊本文件的 512-token 協定。VLM KLD 的 context / batch / ubatch 依圖片容量另訂，不需要跟這條文字路線相同。
+## Frozen inputs
 
-模型與 SNR / 最終評估先後順序沿用 reference handover；Kimi Instruct 與 Thinking-2506 分開。Candidate 清單仍未定案，不能因本文件列出協定就宣告所有工作已規劃完成。
+All paths below are under `/opt/dlami/nvme/skymizer-text-bridge-20260906/corpora`. Preserve these bytes when moving to another AWS host.
 
-## 2. Corpus identity 與 512-token 切窗
+| Corpus | File | Bytes | SHA256 |
+| --- | --- | ---: | --- |
+| WikiText-2 test | `wikitext-2/wikitext-2-raw/wiki.test.raw` | 1290590 | `173c87a53759e0201f33e0ccf978e510c2042d7f2cb78229d9a50d79b9e7dd08` |
+| Full PG RSS | `pg-normalized-html5lib1.1-html2text2.4.0/pg.txt` | 3179044 | `26db5717f58a11a8ed9c24dab9acffc557bcb9d7697b733f44039f13cca4e082` |
 
-預計測 Wikitext2 與 PG。PG 已由使用者指定為 [scripts/get-pg.sh](/home/ubuntu/projects/llama.cpp/scripts/get-pg.sh) 的完整 Paul Graham essays corpus，預期約 127 篇，採完整清單而非抽取少數 essays。該 script 從 aaronsw 的 pgessays RSS 取得 URLs，再依 html2text / tail / sed / fmt -w 80 的流程串接 pg.txt。正式準備時固定 RSS snapshot、完整 URL 順序、工具版本、成功篇數及 pg.txt SHA256；實際篇數以凍結清單為準，不把約 127 當成靜默截取上限。這些是後續 corpus 準備與驗收工作，PG 的來源選擇已定案。Wikitext2 的版本與兩份 corpus 的實際 bytes 另於準備時凍結。
+WikiText comes from `ggml-org/ci@927b3642933080f1b0e811e2f916e14c292992f9`, the source used by `scripts/get-wikitext-2.sh`. Its top-level headers identify 62 articles. The whitespace-only prelude belongs to the first article; nested section headers do not start articles.
 
-本次讀取的 get-pg.sh SHA256 為 `54c349a1b4ba8019d7fe7a8fe1b033325d73486c387025189b005077f6cd30be`。腳本在執行目錄寫入 pg.txt 與中間檔，且使用追加方式產生逐篇檔案；正式執行用 NVMe 上新的空目錄，避免混入先前執行結果。本次尚未下載 essays 或執行文字橋接。
+PG contains all 217 URLs in the frozen RSS order used by `scripts/get-pg.sh`. The earlier estimate of 127 was not a cap. The original system html2text failed on valid Founder Visa HTML; the frozen conversion uniformly uses html5lib 1.1, native html2text 2.4.0, then the script's original `tail -n +4`, `sed`, and `fmt -w 80` operations in `C.UTF-8`. All 217 articles and byte spans were verified. No body loss was observed in the audit of removed first-three-line prefixes; titles are retained separately as RSS metadata and are not guaranteed in the corpus text. Do not use the historical, partial `pg/pg.txt` containing 107 articles.
 
-每份 corpus 需要保存來源、精確 revision、檔案 SHA256、文件順序、換行 / 文件分隔、任何前處理，以及原始 bytes。兩個文字 scorer 讀同一份凍結文字檔，使用同一基底 GGUF tokenizer / vocabulary。不要各自下載、清理或串接內容。
+Transfer `corpus-inputs.json`, `corpus-freeze-receipt.json`, `SHA256SUMS`, and the PG normalized directory's `manifest.json` with the two files. The complete acquisition directory preserves raw HTML, conversion steps, pinned tools and every intermediate SHA. Re-running a live RSS or a different converter does not reproduce this frozen corpus.
 
-採 `ppl_stride=0` 的 classic chunk protocol:
+## Exact scoring protocol
 
-1. 依 llama-perplexity 的 `common_tokenize(..., add_special=true)` 處理整份 corpus，保存產生的完整 token IDs 與 tokenizer identity。
-2. 按來源順序切不重疊 512-token windows。`chunks=-1` 代表所有完整 windows；不足 512 的尾段不另補齊、不計分。目前 PPL 也要求輸入至少有 1024 tokens。
-3. 每個 window 開始清空 KV。模型要求 BOS 時，依目前 PPL 實作替換 window 位置 0 的 token，不是在 window 前插入一個額外 token。
-4. 以位置 256..510 的 logits 計分位置 257..511 的 next-token targets，每個完整 window 正好 255 個 targets。
+1. Match common's file handling by removing one final newline, when present. Do not interpret backslash escapes or parse literal special-token spellings.
+2. Tokenize the full effective text using the reference GGUF's native tokenizer, with its normal leading-BOS behavior. The preparer compares `llama-tokenize` with and without `--no-bos` to verify this behavior.
+3. Split the resulting stream into non-overlapping 512-token windows. Keep all complete windows; drop the incomplete tail. The classic tool requires at least 1024 input tokens.
+4. If the vocabulary requires BOS, replace token 0 of each window with BOS. Do not insert an additional token or reset tokenization at article boundaries.
+5. Clear KV data before every window. Decode all 512 tokens in one batch, with positions 0..511 and sequence 0. Request logits at positions 256..511, including the final unused output.
+6. Score logits at positions 256..510 against targets 257..511. There are exactly 255 targets. In the prepared row, `n_prefill_tokens=257`; its legacy `generated_tokens_len=255` field means teacher-forced corpus targets, not generated answers.
 
-整份 corpus 的 add-special 與每窗 BOS 替換是兩個步驟，兩者都要對齊。不能只看兩邊總 token 數相同就判定切窗一致。每個 window 至少保存來源 offset、實際輸入 token IDs、BOS 決策、255 個 target IDs 與對應 logits positions。
+The opt-in `--perplexity-window` mode implements this decode shape in llama-llm-kld. Its `n_past_actual` header is 512 because the entire window has already been decoded; `n_prefill` remains 257, the first target index. The ordinary prompt/answer teacher-forcing path is unchanged. Both vocabularies must have `add_eos=false`, as required by classic PPL.
 
-若轉成現有 LLM KLD 的 prompt / answer 邊界，`n_prefill=257, n_eval=255` 才與 PPL 的 targets 相同。這只對齊計分位置，仍未對齊 decode 形狀。
-
-## 3. 固定 runtime
-
-| 設定 | llama-perplexity | LLM KLD |
+| Setting | llama-perplexity | llm-kld |
 | --- | --- | --- |
-| n_ctx | 512 | 512 |
-| n_batch | 512 | 512 |
-| n_ubatch | 512 | 512 |
-| n_seq | `max(1, n_batch/n_ctx)=1` | 1 |
-| n_threads / n_threads_batch | 8 / 8 | 8 / 8 |
-| metric_threads | 目標 8，但目前 CLI 不能固定 PPL metric worker 數 | 8 |
-| flash attention | on | enabled |
-| GPU offload | 所有 layers | 所有 layers |
-| KV dtype | F16 K/V | F16 K/V |
-| SWA | `swa_full=false` | `swa_full=false` |
-| fit | off | 不使用自動 fit |
-| MTP | 關閉 | 關閉 |
+| Context, logical batch, microbatch | `-c 512 -b 512 -ub 512` | `--n-ctx 512 --n-batch 512 --n-ubatch 512` |
+| Sequence count | Derived `n_seq=1` | Fixed 1 |
+| Inference and batch threads | `-t 8 -tb 8` | `--n-threads 8` controls both |
+| Metric threads | 8, follows `-t` and is logged | `--metric-threads 8` |
+| GPU layers | `-ngl all` | `--n-gpu-layers -2` |
+| Flash attention | `-fa on` | `--flash-attn` |
+| KV types | `-ctk f16 -ctv f16` | F16 defaults |
+| Automatic fit | `--fit off` | No auto-fit path |
+| SWA full cache | Omit `--swa-full` | Omit `--swa-full` |
+| MTP | Off | Off |
 
-`-c 512 -b 512` 使 PPL 推導 `n_seq=1`，因此只有一個 512-token window，不再是舊設定 `b=2048` 時的四個並行 windows。`swa_full=false` 指不配置 full-size SWA cache，不是停用模型原生 sliding-window attention。
+SWA full-cache allocation being off does not disable architectural sliding-window attention. Use one scorer at a time on the RTX PRO 6000 Blackwell Server Edition, 96 GiB. llm-kld loads reference and candidate together; a successful single-model PPL run does not prove dual-model capacity. Freeze binary, backend libraries, GPU/driver, relevant environment, corpus and every runtime setting across candidates of the same base.
 
-硬體為 NVIDIA RTX PRO 6000 Blackwell Server Edition 96 GiB，每張卡同時只跑一個 scorer。同一基底全部 candidates 固定 binary、backend、driver / CUDA、硬體與 runtime。LLM KLD 同時載入 reference 和 candidate，仍須確認雙模型與 KV / workspace 的容量；PPL 能單獨跑某個模型不代表雙模型 scorer 能容納。
+## Build and prepare
 
-目前 PPL 的 metric workers 來自 `std::thread::hardware_concurrency()`，classic 路徑建立 `hardware_concurrency()-1` 個 workers，再由主執行緒參與計算；`--threads 8 --threads-batch 8` 只控制 inference threads，不會將 metric workers 固定為 8。這是正式要求完全對齊前必須處理的缺口，不能在 metadata 中聲稱已符合。
-
-## 4. 尚未完成的橋接
-
-目前 `collect_llm_kld.py` 接受已有 prompt / answer 邊界的資料，不會直接把 Wikitext2 / PG 轉成 PPL windows。`collect_model_kld.py` 是 VLM collector 的高階入口，也不是文字 corpus adapter。
-
-正式橋接至少需要:
-
-- 一個共用 corpus / tokenizer / window 準備流程，固定每窗 512 個輸入與 255 個 targets，保存上述來源 identity。
-- 與 PPL 相同的整窗 decode 路徑。現在 PPL 在 `c=b=ub=512` 時一次 decode 512 tokens；既有 LLM KLD 對 `n_prefill=257, n_eval=255` 先 decode 257，再 teacher-force 254 個 tokens。雖然 targets 相同，浮點計算的 batch 形狀仍不同。
-- 明確固定 PPL metric worker 數的方式，以及完整 runtime / target identity 驗證。
-- 對同一組 logits 分別使用完整精度 metric 與 PPL 的編碼 / 解碼 / 尾端處理，才能將儲存誤差、尾端截取與 decode 分段誤差分開量測。
-
-PPL 保存路徑不是單純將每個 float 換成 uint16: 它先將表示範圍限制到最大 logit 以下 16，再做 uint16 編碼；讀取後的 KLD 計算又略過 reference log-probability <= -16 的項。一般 PPL 的 NLL 則直接由當下 logits 計算。LLM KLD 在兩側 logits 同時存在記憶體時直接算 metrics，因此可以作為精度橋接，但在上述差異隔離前不能把結果差異全歸因於「儲存精度」。
-
-本輪只記錄設計，暫不實作 adapter、整窗 decode 或 PPL worker 控制。
-
-## 5. 延後執行的 PPL 命令範本
-
-完成 corpus 與 binary 凍結後，PPL baseline 可使用下列參數。`SKYMIZER_PPL_BINARY` 指向 NVMe build 的 `llama-perplexity`，`SKYMIZER_TEXT_CORPUS` 指向 NVMe 上已核對 SHA256 的同一份 corpus。這不是已完成的 paired bridge，也不會將 PPL metric workers 固定成 8。
+Run from the repository root. Put builds, environments, caches, datasets, logits, metrics and logs on NVMe.
 
 ```bash
-CUDA_VISIBLE_DEVICES=0 "${SKYMIZER_PPL_BINARY:?set the pinned NVMe llama-perplexity path}" \
-  -m "$HOME/models/qwen3.5-4b/bartowski/Qwen_Qwen3.5-4B-bf16.gguf" \
-  -f "${SKYMIZER_TEXT_CORPUS:?set the frozen NVMe corpus path}" \
-  -c 512 -b 512 -ub 512 -t 8 -tb 8 -ngl all \
-  -fa on -ctk f16 -ctv f16 --fit off \
-  --ppl-stride 0 --chunks -1
+set -euo pipefail
+export TEXT_WORK=/opt/dlami/nvme/text-bridge
+export TMPDIR="$TEXT_WORK/tmp"
+export HF_HOME="$TEXT_WORK/hf"
+export UV_CACHE_DIR="$TEXT_WORK/uv-cache"
+export UV_PROJECT_ENVIRONMENT="$TEXT_WORK/venv"
+mkdir -p "$TMPDIR"
+cmake -S . -B "$TEXT_WORK/build" -DGGML_CUDA=ON -DLLAMA_BUILD_TOOLS=ON
+cmake --build "$TEXT_WORK/build" --target llama-tokenize llama-perplexity llama-llm-kld -j8
+uv sync --project tools/skymizer --frozen
+export TEXT_PYTHON="$TEXT_WORK/venv/bin/python"
+export TEXT_BIN="$TEXT_WORK/build/bin"
 ```
 
-所有新建 corpus、token windows、logits、metrics、logs、cache、build 與暫存檔都放 `/opt/dlami/nvme`，模型沿用 `~/models`。執行前沿用另外兩份 handover 的 `TMPDIR / HF_DATASETS_CACHE / HF_HUB_CACHE / UV_CACHE_DIR` 設定。不要把預計很大的 logits 檔留在 root disk。
+Set `REF`, `CAND_A` and `CAND_B` to exact audited GGUF paths from the same base checkpoint. For a split model, use shard 1. Set `CORPUS`, `CORPUS_NAME` and `PREPARED` for one corpus; keep WikiText and PG in separate collections and reports. Existing prepared datasets are under `/opt/dlami/nvme/skymizer-text-bridge-20260906/prepared/<checkpoint>/<corpus>/dataset`.
 
-LLM KLD 的正式收集命令等共用 corpus adapter 與整窗 decode 完成後再補；現在列出既有 collector 命令會讓操作人員誤以為協定已一致。
+To prepare WikiText:
 
-## 6. 正式收集前的驗收
+```bash
+"$TEXT_PYTHON" tools/skymizer/cli/prepare_perplexity_corpus.py \
+  --corpus "$CORPUS" --corpus-name wikitext-2-test \
+  --ref-model "$REF" --llama-tokenize "$TEXT_BIN/llama-tokenize" \
+  --llama-llm-kld "$TEXT_BIN/llama-llm-kld" --out "$PREPARED"
+```
 
-同一 window 的實際輸入 IDs、BOS、255 個 targets 必須逐一一致，並驗證全 corpus 完整 window 數與丟棄尾段。基底、candidate、corpus、tokenizer、runtime、binary、metric worker、編碼路徑 identity 一起保存。各候選使用相同資料順序，輸出不覆寫，失敗使用新 attempt 並保留舊紀錄。
+For PG, use `--corpus-name pg-full-rss` and add `--article-index` pointing to the frozen normalized PG `manifest.json`. Prepare once per checkpoint and corpus, then reuse the same dataset for all its candidates. The output must be new. `manifest.json` records corpus and vocabulary hashes, the complete window map, article boundaries and dropped tail; `stream.json` preserves the pre-replacement native token stream. `corpus.txt` is the original file for PPL, while `effective.txt` documents the one-newline handling. Do not pass `effective.txt` to PPL, which applies its own file handling.
 
-驗證需分開報告 PPL NLL、直接 logits KLD、PPL 編碼後 KLD，以及 decode 路徑是否一致。只有這些因素都可追溯時，才可將 LLM KLD 當作本次量化比較的正式文字橋樑。
+## Collect all windows
 
-完整跨流程異常與證據見 [本輪稽核清單](/opt/dlami/nvme/skymizer-length-audit-20260906/ALL_FINDINGS.md)。
+Reference PPL and its reusable low-precision base:
+
+```bash
+test ! -e "$TEXT_WORK/reference-ppl.bin"
+"$TEXT_BIN/llama-perplexity" -m "$REF" -f "$PREPARED/corpus.txt" \
+  -c 512 -b 512 -ub 512 -t 8 -tb 8 -ngl all -fa on \
+  -ctk f16 -ctv f16 --fit off --no-escape --ppl-stride 0 --chunks -1 \
+  --save-all-logits "$TEXT_WORK/reference-ppl.bin" > "$TEXT_WORK/reference-ppl.log" 2>&1
+chmod a-w "$TEXT_WORK/reference-ppl.bin"
+sha256sum "$TEXT_WORK/reference-ppl.bin" > "$TEXT_WORK/reference-ppl.sha256"
+```
+
+For each candidate, use a new output directory and log path:
+
+```bash
+"$TEXT_BIN/llama-perplexity" -m "$CAND_A" \
+  -c 512 -b 512 -ub 512 -t 8 -tb 8 -ngl all -fa on \
+  -ctk f16 -ctv f16 --fit off --no-escape --ppl-stride 0 --chunks -1 \
+  --kl-divergence --kl-divergence-base "$TEXT_WORK/reference-ppl.bin" > "$TEXT_WORK/candidate-a-ppl.log" 2>&1
+sha256sum -c "$TEXT_WORK/reference-ppl.sha256"
+
+"$TEXT_PYTHON" tools/skymizer/cli/collect_llm_kld.py \
+  --ref-model "$REF" --cand-model "$CAND_A" \
+  --dataset "$PREPARED/dataset" --subset "" --out "$TEXT_WORK/llm-a" \
+  --llama-llm-kld "$TEXT_BIN/llama-llm-kld" --perplexity-window \
+  --n-ctx 512 --n-batch 512 --n-ubatch 512 --tf-chunk -1 \
+  --n-threads 8 --metric-threads 8 --n-gpu-layers -2 --flash-attn
+
+"$TEXT_PYTHON" tools/skymizer/cli/verify_perplexity_bridge.py \
+  --prepared "$PREPARED" --llm-collection "$TEXT_WORK/llm-a" \
+  --ppl-logits "$TEXT_WORK/reference-ppl.bin" \
+  --ppl-reference-log "$TEXT_WORK/reference-ppl.log" \
+  --ppl-candidate-log "$TEXT_WORK/candidate-a-ppl.log" --out "$TEXT_WORK/bridge-a.json"
+```
+
+Repeat with candidate B and distinct `llm-b`, log and verification paths. Keep the same reference base. The verifier checks exact saved tokens and target IDs, full file size, window count/shape, explicit thread alignment, and uncompressed mean NLL within 1e-5 nats plus printed-PPL rounding. It reports quantized-reference NLL error and both KLD means separately. It does not treat the two KLD definitions as identical.
+
+A two-window smoke uses `--chunks 2` for both PPL commands and `--dataset-limit 2` for llm-kld. Restore full-corpus settings for production. Do not use article or block aggregation on that partial smoke collection.
+
+The PPL base can be large: bytes = `20 + windows*512*4 + windows*255*(2*ceil(vocab/2)+4)*2`. This is roughly 127.5 MiB per window for a 262144-token vocabulary. llm-kld keeps only 76 bytes per scored target plus headers and provenance. Use a new work directory per checkpoint/corpus and avoid overwriting an existing PPL base or log.
+
+## Paired statistics: windows, articles and contiguous blocks
+
+Use the existing comparator with `--unit window`, `--unit article`, or `--unit block --block-windows 8`:
+
+```bash
+"$TEXT_PYTHON" tools/skymizer/cli/saved_metrics_paired_compare.py \
+  --candidate-a "$TEXT_WORK/llm-a" --candidate-b "$TEXT_WORK/llm-b" \
+  --unit article --metrics kld nll --primary-metric kld \
+  --primary-weighting token --out "$TEXT_WORK/articles.md" \
+  --output-json "$TEXT_WORK/articles.json"
+```
+
+Article and block modes require the complete corpus window set and all stored targets. They validate the original paired windows before merging full per-token records. They do not retokenize, insert BOS, shift windows or score additional targets. Every group mean is recomputed from its targets. Each article with at least one scored target is one group; articles that fall entirely in unscored context or the dropped tail contribute no group; a cross-article window contributes its targets to the respective articles. Blocks group consecutive original windows; the final shorter block is retained. Grouping happens before t statistics or bootstrap, so degrees of freedom and resampling use the number of groups.
+
+Article cuts use the longest stable native-token prefix at the exact byte boundary. The first token affected by the cut belongs to the following article. The manifest records every affected prefix token; this makes boundary-spanning tokens explicit. In the initial small-model checks, all WikiText cuts were exact, while 29 PG boundaries each affected one token.
+
+`item` weighting means equal weight per selected window/article/block. `token` weighting gives the pooled scored-token estimand and is the direct corpus-PPL aggregation. Windows and adjacent groups can remain correlated. These fixed corpora are not an independently sampled item panel; CI and test calculations treat the selected groups as independent sampling units. Residual dependence can invalidate coverage and p-values; fixed block size does not prove independence. Choose the primary metric, weighting, grouping and block size before inspecting candidate results. Compare article and block analyses as declared sensitivity analyses, with separate reports.
+
+The main comparator checks complete collection state, exact execution identity, the full runtime, corpus/window hashes, embedded targets and reference columns. Invalid/nonfinite data and fewer than two groups fail explicitly. `--allow-ref-drift` is an explicit approximate-pairing option, not part of the strict protocol above. The legacy power and variance loaders now use the same collection guards; they must not silently drop failed or nonfinite rows. See [statistical definitions](compare.md) for formulas and practical-equivalence semantics.
+
+
+## Acceptance scope
+
+All nine checkpoints were checked on the RTX PRO 6000: Gemma 31B, Gemma E4B, Kimi Instruct, Kimi Thinking-2506, Qwen3.5-4B, Qwen3.6-35B-A3B, InternVL3.5-30B-A3B, GLM-4.6V-Flash and Muse Glimmer. All 18 checkpoint/corpus datasets were prepared and checked with native tokenization. The GPU checks covered 22 candidate/corpus comparisons and 11,220 paired targets; the two small checkpoints each used two candidates, while the other seven used their largest candidate by file size. The same windows reused across candidates are not independent observations.
+
+All exact window/target checks and uncompressed NLL parity checks passed. The largest candidate mean-NLL difference was below 8e-8 nats; reference differences were below 7e-6 nats, including PPL log rounding. Both models fit simultaneously at the specified text runtime. The existing CPU suite passed 823 tests, with two external-model tests excluded. Statistical review included formulas, failure handling, paired data identity, numerical goldens and article/block aggregation. Two-window GPU smokes do not establish corpus-wide candidate quality, SNR saturation or CI coverage for correlated articles.
+
+The acceptance also exposed a material precision difference for Gemma 31B on the first two WikiText windows:
+
+| Measurement | PPL |
+| --- | ---: |
+| Original BF16 reference | 9357.5633 |
+| Q4_1 candidate | 8301.195369 |
+| uint16 saved reference base | 3195.379909 |
+
+The low-precision base had 120 of 510 target entries at its quantization floor and a mean target-NLL error of -1.07448 nats. A floor entry alone does not prove how far its original value was clipped. The verifier reports this separately from the original reference likelihood. Both uncompressed tools agree even when baseline raw-text PPL is high; this observation alone does not identify a broken quantized checkpoint. PG showed the same distinction at smaller magnitude. Keep original reference PPL, reconstructed saved-base PPL and candidate PPL as separate fields in paper tables.
+
+Local evidence is under `/opt/dlami/nvme/skymizer-text-bridge-20260906`: `gpu-acceptance/combined-acceptance-summary.json`, the r2 and extension reports, `independent-review/`, and `tests/final-cpu-suite.log`. The failed initial command and its overwritten 12-byte base are retained separately; only the corrected runs with both candidate KL flags contribute to acceptance.

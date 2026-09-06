@@ -69,6 +69,10 @@
        "statistically_distinguishable_from_null": true,
        "null_value": "0x0.0p+0",
        "confidence_level": "0x1.e666666666666p-1",
+       "equivalence_bound": "0x1.650a0ecd922b3p-6",
+       "equivalence_margin": null,
+       "equivalence_established": null,
+       "equivalence_alpha": null,
        "reason": "95% CI [+0.001119, +0.021792] excludes 0"
       },
       "role": "exploratory",
@@ -99,6 +103,8 @@
        "confidence_level": "0x1.e666666666666p-1",
        "equivalence_bound": "0x1.8eaa48fa6471cp-6",
        "equivalence_margin": null,
+       "equivalence_established": null,
+       "equivalence_alpha": null,
        "reason": "95% CI [-0.009972, +0.024333] contains 0; the data bound |\u0394| \u2264 0.0243326 and establish nothing tighter"
       },
       "role": "exploratory",
@@ -132,6 +138,10 @@
        "statistically_distinguishable_from_null": true,
        "null_value": "0x0.0p+0",
        "confidence_level": "0x1.e666666666666p-1",
+       "equivalence_bound": "0x1.3e5713d15b1fcp-12",
+       "equivalence_margin": "0x1.a36e2eb1c432dp-13",
+       "equivalence_established": false,
+       "equivalence_alpha": "0x1.99999999999a0p-6",
        "reason": "95% CI [+0.000283, +0.000304] excludes 0"
       },
       "role": "primary"
@@ -158,6 +168,10 @@
        "statistically_distinguishable_from_null": true,
        "null_value": "0x0.0p+0",
        "confidence_level": "0x1.e666666666666p-1",
+       "equivalence_bound": "0x1.45ad82ce3d3c5p-12",
+       "equivalence_margin": "0x1.a36e2eb1c432dp-13",
+       "equivalence_established": false,
+       "equivalence_alpha": "0x1.99999999999a0p-6",
        "reason": "95% CI [+0.000285, +0.000311] excludes 0"
       },
       "role": "exploratory",
@@ -191,6 +205,10 @@
        "statistically_distinguishable_from_null": true,
        "null_value": "0x0.0p+0",
        "confidence_level": "0x1.e666666666666p-1",
+       "equivalence_bound": "0x1.5e2c95ccb1096p-12",
+       "equivalence_margin": null,
+       "equivalence_established": null,
+       "equivalence_alpha": null,
        "reason": "95% CI [+0.000311, +0.000334] excludes 0"
       },
       "role": "exploratory",
@@ -219,6 +237,10 @@
        "statistically_distinguishable_from_null": true,
        "null_value": "0x0.0p+0",
        "confidence_level": "0x1.e666666666666p-1",
+       "equivalence_bound": "0x1.663edcafa9c26p-12",
+       "equivalence_margin": null,
+       "equivalence_established": null,
+       "equivalence_alpha": null,
        "reason": "95% CI [+0.000314, +0.000342] excludes 0"
       },
       "role": "exploratory",
@@ -252,6 +274,10 @@
        "statistically_distinguishable_from_null": true,
        "null_value": "0x0.0p+0",
        "confidence_level": "0x1.e666666666666p-1",
+       "equivalence_bound": "0x1.3e5713d15b1fcp-13",
+       "equivalence_margin": null,
+       "equivalence_established": null,
+       "equivalence_alpha": null,
        "reason": "95% CI [+0.000142, +0.000152] excludes 0"
       },
       "role": "exploratory",
@@ -280,6 +306,10 @@
        "statistically_distinguishable_from_null": true,
        "null_value": "0x0.0p+0",
        "confidence_level": "0x1.e666666666666p-1",
+       "equivalence_bound": "0x1.45ad82ce3d3c5p-13",
+       "equivalence_margin": null,
+       "equivalence_established": null,
+       "equivalence_alpha": null,
        "reason": "95% CI [+0.000143, +0.000155] excludes 0"
       },
       "role": "exploratory",
@@ -313,6 +343,10 @@
        "statistically_distinguishable_from_null": true,
        "null_value": "0x0.0p+0",
        "confidence_level": "0x1.e666666666666p-1",
+       "equivalence_bound": "0x1.07fd6b123a015p-7",
+       "equivalence_margin": null,
+       "equivalence_established": null,
+       "equivalence_alpha": null,
        "reason": "95% CI [-0.008056, -0.007843] excludes 0"
       },
       "role": "exploratory",
@@ -341,6 +375,10 @@
        "statistically_distinguishable_from_null": true,
        "null_value": "0x0.0p+0",
        "confidence_level": "0x1.e666666666666p-1",
+       "equivalence_bound": "0x1.0842fffd40ebcp-7",
+       "equivalence_margin": null,
+       "equivalence_established": null,
+       "equivalence_alpha": null,
        "reason": "95% CI [-0.008065, -0.007844] excludes 0"
       },
       "role": "exploratory",
@@ -366,7 +404,7 @@
        "degrees_of_freedom": 15,
        "bootstrap_iters": 0,
        "contains_zero": false,
-       "fallback": "the sample has no spread (n < 2 or identical deltas), so the t interval is the point estimate and p is its SE -> 0 limit"
+       "fallback": "the sample has no spread (identical deltas), so the t interval is the point estimate and p is its SE -> 0 limit"
       },
       "bootstrap_std": null,
       "p_value": "0x0.0p+0",
@@ -375,6 +413,10 @@
        "statistically_distinguishable_from_null": true,
        "null_value": "0x0.0p+0",
        "confidence_level": "0x1.e666666666666p-1",
+       "equivalence_bound": "0x1.0624dd2f1aa00p-9",
+       "equivalence_margin": null,
+       "equivalence_established": null,
+       "equivalence_alpha": null,
        "reason": "95% CI [-0.002000, -0.002000] excludes 0"
       },
       "role": "exploratory",
@@ -395,7 +437,7 @@
        "degrees_of_freedom": 15,
        "bootstrap_iters": 0,
        "contains_zero": false,
-       "fallback": "the sample has no spread (n < 2 or identical deltas), so the t interval is the point estimate and p is its SE -> 0 limit"
+       "fallback": "the sample has no spread (identical deltas), so the t interval is the point estimate and p is its SE -> 0 limit"
       },
       "bootstrap_std": null,
       "p_value": "0x0.0p+0",
@@ -404,6 +446,10 @@
        "statistically_distinguishable_from_null": true,
        "null_value": "0x0.0p+0",
        "confidence_level": "0x1.e666666666666p-1",
+       "equivalence_bound": "0x1.0624dd2f1aa00p-9",
+       "equivalence_margin": null,
+       "equivalence_established": null,
+       "equivalence_alpha": null,
        "reason": "95% CI [-0.002000, -0.002000] excludes 0"
       },
       "role": "exploratory",
@@ -437,6 +483,10 @@
        "statistically_distinguishable_from_null": true,
        "null_value": "0x0.0p+0",
        "confidence_level": "0x1.e666666666666p-1",
+       "equivalence_bound": "0x1.cde828af1029dp-6",
+       "equivalence_margin": null,
+       "equivalence_established": null,
+       "equivalence_alpha": null,
        "reason": "95% CI [+0.017536, +0.028193] excludes 0"
       },
       "role": "exploratory",
@@ -465,6 +515,10 @@
        "statistically_distinguishable_from_null": true,
        "null_value": "0x0.0p+0",
        "confidence_level": "0x1.e666666666666p-1",
+       "equivalence_bound": "0x1.d70e52d10f664p-6",
+       "equivalence_margin": null,
+       "equivalence_established": null,
+       "equivalence_alpha": null,
        "reason": "95% CI [+0.021577, +0.028751] excludes 0"
       },
       "role": "exploratory",
@@ -603,7 +657,7 @@
      "token_weighted": "0x1.d1f57071ca69ap+2"
     },
     "max_abs_side_difference": "0x0.0p+0",
-    "description": "The shared FP reference's own teacher-forced NLL and perplexity at the same target tokens -- llama-perplexity's PPL(base). Identical for both candidates by construction (one reference, scored once); max_abs_side_difference is the witness that it was."
+    "description": "The shared FP reference's teacher-forced NLL and perplexity from full logits at the same target tokens. These differ from PPL(base) reconstructed from llama-perplexity's saved clipped and quantized reference. Values use candidate-a's recorded reference column; max_abs_side_difference reports any difference from candidate-b's reference column."
    },
    "pooled_token_distribution": {
     "kld": {
@@ -3511,6 +3565,10 @@
          "statistically_distinguishable_from_null": true,
          "null_value": "0x0.0p+0",
          "confidence_level": "0x1.e666666666666p-1",
+         "equivalence_bound": "0x1.1b07d6af10708p-11",
+         "equivalence_margin": null,
+         "equivalence_established": null,
+         "equivalence_alpha": null,
          "reason": "95% CI [+0.000458, +0.000540] excludes 0"
         },
         "p_value_holm": "0x1.c252aefbfdf52p-43",
@@ -3545,6 +3603,10 @@
          "statistically_distinguishable_from_null": true,
          "null_value": "0x0.0p+0",
          "confidence_level": "0x1.e666666666666p-1",
+         "equivalence_bound": "0x1.3f4a0d6650be5p-11",
+         "equivalence_margin": null,
+         "equivalence_established": null,
+         "equivalence_alpha": null,
          "reason": "95% CI [+0.000492, +0.000609] excludes 0"
         },
         "p_value_holm": "0x1.ba973d20580f1p-38",
@@ -3578,6 +3640,10 @@
          "statistically_distinguishable_from_null": true,
          "null_value": "0x0.0p+0",
          "confidence_level": "0x1.e666666666666p-1",
+         "equivalence_bound": "0x1.47bf12e8d310ep-11",
+         "equivalence_margin": null,
+         "equivalence_established": null,
+         "equivalence_alpha": null,
          "reason": "95% CI [+0.000494, +0.000625] excludes 0"
         },
         "p_value_holm": "0x1.a74816019071fp-37",
@@ -4493,6 +4559,10 @@
         "statistically_distinguishable_from_null": true,
         "null_value": "0x0.0p+0",
         "confidence_level": "0x1.e666666666666p-1",
+        "equivalence_bound": "0x1.3f4515e7d66eap-12",
+        "equivalence_margin": null,
+        "equivalence_established": null,
+        "equivalence_alpha": null,
         "reason": "95% CI [+0.000279, +0.000304] excludes 0"
        },
        "p_value_holm": "0x1.d7ece182abfffp-55",
@@ -4527,6 +4597,10 @@
         "statistically_distinguishable_from_null": true,
         "null_value": "0x0.0p+0",
         "confidence_level": "0x1.e666666666666p-1",
+        "equivalence_bound": "0x1.44ca5d1a893f3p-12",
+        "equivalence_margin": null,
+        "equivalence_established": null,
+        "equivalence_alpha": null,
         "reason": "95% CI [+0.000262, +0.000310] excludes 0"
        },
        "p_value_holm": "0x1.788be5b87d23dp-35",
@@ -4561,6 +4635,10 @@
         "statistically_distinguishable_from_null": true,
         "null_value": "0x0.0p+0",
         "confidence_level": "0x1.e666666666666p-1",
+        "equivalence_bound": "0x1.6a23b6dc60e2bp-12",
+        "equivalence_margin": null,
+        "equivalence_established": null,
+        "equivalence_alpha": null,
         "reason": "95% CI [+0.000313, +0.000345] excludes 0"
        },
        "p_value_holm": "0x1.0ed74a3fdc90ep-12",
@@ -4597,6 +4675,10 @@
         "statistically_distinguishable_from_null": true,
         "null_value": "0x0.0p+0",
         "confidence_level": "0x1.e666666666666p-1",
+        "equivalence_bound": "0x1.07cf015812638p-7",
+        "equivalence_margin": null,
+        "equivalence_established": null,
+        "equivalence_alpha": null,
         "reason": "95% CI [-0.008051, -0.007706] excludes 0"
        },
        "p_value_holm": "0x1.0b50dae4fd1dap-69",
@@ -4631,6 +4713,10 @@
         "statistically_distinguishable_from_null": true,
         "null_value": "0x0.0p+0",
         "confidence_level": "0x1.e666666666666p-1",
+        "equivalence_bound": "0x1.290670d37209cp-7",
+        "equivalence_margin": null,
+        "equivalence_established": null,
+        "equivalence_alpha": null,
         "reason": "95% CI [-0.009064, -0.007611] excludes 0"
        },
        "p_value_holm": "0x1.0d20679bc7547p-34",
@@ -4665,6 +4751,10 @@
         "statistically_distinguishable_from_null": true,
         "null_value": "0x0.0p+0",
         "confidence_level": "0x1.e666666666666p-1",
+        "equivalence_bound": "0x1.0c4a1d7736c40p-7",
+        "equivalence_margin": null,
+        "equivalence_established": null,
+        "equivalence_alpha": null,
         "reason": "95% CI [-0.008188, -0.007934] excludes 0"
        },
        "p_value_holm": "0x1.517ac3545286fp-15",
@@ -4701,6 +4791,10 @@
         "statistically_distinguishable_from_null": true,
         "null_value": "0x0.0p+0",
         "confidence_level": "0x1.e666666666666p-1",
+        "equivalence_bound": "0x1.73ced3cabf1aep-4",
+        "equivalence_margin": null,
+        "equivalence_established": null,
+        "equivalence_alpha": null,
         "reason": "95% CI [-0.090773, -0.070445] excludes 0"
        },
        "p_value_holm": "0x1.86960a71742f3p-33",
@@ -4735,6 +4829,10 @@
         "statistically_distinguishable_from_null": true,
         "null_value": "0x0.0p+0",
         "confidence_level": "0x1.e666666666666p-1",
+        "equivalence_bound": "0x1.7b89c8342cdaap-4",
+        "equivalence_margin": null,
+        "equivalence_established": null,
+        "equivalence_alpha": null,
         "reason": "95% CI [-0.092661, -0.070886] excludes 0"
        },
        "p_value_holm": "0x1.89229757fbd79p-28",
@@ -4769,6 +4867,10 @@
         "statistically_distinguishable_from_null": true,
         "null_value": "0x0.0p+0",
         "confidence_level": "0x1.e666666666666p-1",
+        "equivalence_bound": "0x1.a11444699b1f0p-4",
+        "equivalence_margin": null,
+        "equivalence_established": null,
+        "equivalence_alpha": null,
         "reason": "95% CI [-0.101826, -0.024684] excludes 0"
        },
        "p_value_holm": "0x1.3f77cdb711aaap-6",
@@ -4823,6 +4925,10 @@
        "statistically_distinguishable_from_null": true,
        "null_value": "0x0.0p+0",
        "confidence_level": "0x1.e666666666666p-1",
+       "equivalence_bound": "0x1.57fdad0d68131p-6",
+       "equivalence_margin": null,
+       "equivalence_established": null,
+       "equivalence_alpha": null,
        "reason": "95% CI [+0.000761, +0.020996] excludes 0"
       },
       "role": "exploratory",
@@ -4852,6 +4958,8 @@
        "confidence_level": "0x1.e666666666666p-1",
        "equivalence_bound": "0x1.dbd1688d6d933p-6",
        "equivalence_margin": null,
+       "equivalence_established": null,
+       "equivalence_alpha": null,
        "reason": "95% CI [-0.014462, +0.029042] contains 0; the data bound |\u0394| \u2264 0.0290416 and establish nothing tighter"
       },
       "role": "exploratory",
@@ -4884,6 +4992,10 @@
        "statistically_distinguishable_from_null": true,
        "null_value": "0x0.0p+0",
        "confidence_level": "0x1.e666666666666p-1",
+       "equivalence_bound": "0x1.4091d922b77c3p-12",
+       "equivalence_margin": "0x1.a36e2eb1c432dp-13",
+       "equivalence_established": false,
+       "equivalence_alpha": "0x1.99999999999a0p-6",
        "reason": "95% CI [+0.000283, +0.000306] excludes 0"
       },
       "role": "primary"
@@ -4909,6 +5021,10 @@
        "statistically_distinguishable_from_null": true,
        "null_value": "0x0.0p+0",
        "confidence_level": "0x1.e666666666666p-1",
+       "equivalence_bound": "0x1.4cfd6b5920f29p-12",
+       "equivalence_margin": "0x1.a36e2eb1c432dp-13",
+       "equivalence_established": false,
+       "equivalence_alpha": "0x1.99999999999a0p-6",
        "reason": "95% CI [+0.000284, +0.000318] excludes 0"
       },
       "role": "exploratory",
@@ -4941,6 +5057,10 @@
        "statistically_distinguishable_from_null": true,
        "null_value": "0x0.0p+0",
        "confidence_level": "0x1.e666666666666p-1",
+       "equivalence_bound": "0x1.60a06ed9636f0p-12",
+       "equivalence_margin": null,
+       "equivalence_established": null,
+       "equivalence_alpha": null,
        "reason": "95% CI [+0.000312, +0.000336] excludes 0"
       },
       "role": "exploratory",
@@ -4968,6 +5088,10 @@
        "statistically_distinguishable_from_null": true,
        "null_value": "0x0.0p+0",
        "confidence_level": "0x1.e666666666666p-1",
+       "equivalence_bound": "0x1.6e49f6153dd7cp-12",
+       "equivalence_margin": null,
+       "equivalence_established": null,
+       "equivalence_alpha": null,
        "reason": "95% CI [+0.000312, +0.000349] excludes 0"
       },
       "role": "exploratory",
@@ -5000,6 +5124,10 @@
        "statistically_distinguishable_from_null": true,
        "null_value": "0x0.0p+0",
        "confidence_level": "0x1.e666666666666p-1",
+       "equivalence_bound": "0x1.4091d922b77c3p-13",
+       "equivalence_margin": null,
+       "equivalence_established": null,
+       "equivalence_alpha": null,
        "reason": "95% CI [+0.000142, +0.000153] excludes 0"
       },
       "role": "exploratory",
@@ -5027,6 +5155,10 @@
        "statistically_distinguishable_from_null": true,
        "null_value": "0x0.0p+0",
        "confidence_level": "0x1.e666666666666p-1",
+       "equivalence_bound": "0x1.4cfd6b5920f29p-13",
+       "equivalence_margin": null,
+       "equivalence_established": null,
+       "equivalence_alpha": null,
        "reason": "95% CI [+0.000142, +0.000159] excludes 0"
       },
       "role": "exploratory",
@@ -5059,6 +5191,10 @@
        "statistically_distinguishable_from_null": true,
        "null_value": "0x0.0p+0",
        "confidence_level": "0x1.e666666666666p-1",
+       "equivalence_bound": "0x1.074ab6a9223c9p-7",
+       "equivalence_margin": null,
+       "equivalence_established": null,
+       "equivalence_alpha": null,
        "reason": "95% CI [-0.008035, -0.007817] excludes 0"
       },
       "role": "exploratory",
@@ -5086,6 +5222,10 @@
        "statistically_distinguishable_from_null": true,
        "null_value": "0x0.0p+0",
        "confidence_level": "0x1.e666666666666p-1",
+       "equivalence_bound": "0x1.082627af41716p-7",
+       "equivalence_margin": null,
+       "equivalence_established": null,
+       "equivalence_alpha": null,
        "reason": "95% CI [-0.008061, -0.007799] excludes 0"
       },
       "role": "exploratory",
@@ -5119,6 +5259,10 @@
        "statistically_distinguishable_from_null": true,
        "null_value": "0x0.0p+0",
        "confidence_level": "0x1.e666666666666p-1",
+       "equivalence_bound": "0x1.0624dd2f1aa00p-9",
+       "equivalence_margin": null,
+       "equivalence_established": null,
+       "equivalence_alpha": null,
        "reason": "95% CI [-0.002000, -0.002000] excludes 0"
       },
       "role": "exploratory",
@@ -5147,6 +5291,10 @@
        "statistically_distinguishable_from_null": true,
        "null_value": "0x0.0p+0",
        "confidence_level": "0x1.e666666666666p-1",
+       "equivalence_bound": "0x1.0624dd2f1aa01p-9",
+       "equivalence_margin": null,
+       "equivalence_established": null,
+       "equivalence_alpha": null,
        "reason": "95% CI [-0.002000, -0.002000] excludes 0"
       },
       "role": "exploratory",
@@ -5179,6 +5327,10 @@
        "statistically_distinguishable_from_null": true,
        "null_value": "0x0.0p+0",
        "confidence_level": "0x1.e666666666666p-1",
+       "equivalence_bound": "0x1.b71cd1b922267p-6",
+       "equivalence_margin": null,
+       "equivalence_established": null,
+       "equivalence_alpha": null,
        "reason": "95% CI [+0.014752, +0.026801] excludes 0"
       },
       "role": "exploratory",
@@ -5206,6 +5358,10 @@
        "statistically_distinguishable_from_null": true,
        "null_value": "0x0.0p+0",
        "confidence_level": "0x1.e666666666666p-1",
+       "equivalence_bound": "0x1.f5b1b1f58d746p-6",
+       "equivalence_margin": null,
+       "equivalence_established": null,
+       "equivalence_alpha": null,
        "reason": "95% CI [+0.020995, +0.030621] excludes 0"
       },
       "role": "exploratory",
@@ -5344,7 +5500,7 @@
      "token_weighted": "0x1.d1f57071ca69ap+2"
     },
     "max_abs_side_difference": "0x0.0p+0",
-    "description": "The shared FP reference's own teacher-forced NLL and perplexity at the same target tokens -- llama-perplexity's PPL(base). Identical for both candidates by construction (one reference, scored once); max_abs_side_difference is the witness that it was."
+    "description": "The shared FP reference's teacher-forced NLL and perplexity from full logits at the same target tokens. These differ from PPL(base) reconstructed from llama-perplexity's saved clipped and quantized reference. Values use candidate-a's recorded reference column; max_abs_side_difference reports any difference from candidate-b's reference column."
    },
    "pooled_token_distribution": {
     "kld": {
@@ -8251,6 +8407,10 @@
          "statistically_distinguishable_from_null": true,
          "null_value": "0x0.0p+0",
          "confidence_level": "0x1.e666666666666p-1",
+         "equivalence_bound": "0x1.202ab81e638f0p-11",
+         "equivalence_margin": null,
+         "equivalence_established": null,
+         "equivalence_alpha": null,
          "reason": "95% CI [+0.000461, +0.000550] excludes 0"
         },
         "p_value_holm": "0x1.88d2bbb75e5eap-8",
@@ -8284,6 +8444,10 @@
          "statistically_distinguishable_from_null": true,
          "null_value": "0x0.0p+0",
          "confidence_level": "0x1.e666666666666p-1",
+         "equivalence_bound": "0x1.45c4d360b2d4ep-11",
+         "equivalence_margin": null,
+         "equivalence_established": null,
+         "equivalence_alpha": null,
          "reason": "95% CI [+0.000499, +0.000621] excludes 0"
         },
         "p_value_holm": "0x1.88d2bbb75e5eap-8",
@@ -8316,6 +8480,10 @@
          "statistically_distinguishable_from_null": true,
          "null_value": "0x0.0p+0",
          "confidence_level": "0x1.e666666666666p-1",
+         "equivalence_bound": "0x1.4f6b65e779013p-11",
+         "equivalence_margin": null,
+         "equivalence_established": null,
+         "equivalence_alpha": null,
          "reason": "95% CI [+0.000504, +0.000640] excludes 0"
         },
         "p_value_holm": "0x1.88d2bbb75e5eap-8",
@@ -9230,6 +9398,10 @@
         "statistically_distinguishable_from_null": true,
         "null_value": "0x0.0p+0",
         "confidence_level": "0x1.e666666666666p-1",
+        "equivalence_bound": "0x1.3de50cb3ff92ap-12",
+        "equivalence_margin": null,
+        "equivalence_established": null,
+        "equivalence_alpha": null,
         "reason": "95% CI [+0.000277, +0.000303] excludes 0"
        },
        "p_value_holm": "0x1.269e0cc986c70p-6",
@@ -9263,6 +9435,10 @@
         "statistically_distinguishable_from_null": true,
         "null_value": "0x0.0p+0",
         "confidence_level": "0x1.e666666666666p-1",
+        "equivalence_bound": "0x1.3df9d366393f9p-12",
+        "equivalence_margin": null,
+        "equivalence_established": null,
+        "equivalence_alpha": null,
         "reason": "95% CI [+0.000250, +0.000303] excludes 0"
        },
        "p_value_holm": "0x1.269e0cc986c70p-6",
@@ -9296,6 +9472,10 @@
         "statistically_distinguishable_from_null": true,
         "null_value": "0x0.0p+0",
         "confidence_level": "0x1.e666666666666p-1",
+        "equivalence_bound": "0x1.6b0593f8f6848p-12",
+        "equivalence_margin": null,
+        "equivalence_established": null,
+        "equivalence_alpha": null,
         "reason": "95% CI [+0.000324, +0.000346] excludes 0"
        },
        "p_value_holm": "0x1.269e0cc986c70p-6",
@@ -9331,6 +9511,10 @@
         "statistically_distinguishable_from_null": true,
         "null_value": "0x0.0p+0",
         "confidence_level": "0x1.e666666666666p-1",
+        "equivalence_bound": "0x1.09dfb683c1a86p-7",
+        "equivalence_margin": null,
+        "equivalence_established": null,
+        "equivalence_alpha": null,
         "reason": "95% CI [-0.008114, -0.007715] excludes 0"
        },
        "p_value_holm": "0x1.269e0cc986c70p-6",
@@ -9364,6 +9548,10 @@
         "statistically_distinguishable_from_null": true,
         "null_value": "0x0.0p+0",
         "confidence_level": "0x1.e666666666666p-1",
+        "equivalence_bound": "0x1.4e5b8b34f935cp-7",
+        "equivalence_margin": null,
+        "equivalence_established": null,
+        "equivalence_alpha": null,
         "reason": "95% CI [-0.010204, -0.007879] excludes 0"
        },
        "p_value_holm": "0x1.269e0cc986c70p-6",
@@ -9397,6 +9585,10 @@
         "statistically_distinguishable_from_null": true,
         "null_value": "0x0.0p+0",
         "confidence_level": "0x1.e666666666666p-1",
+        "equivalence_bound": "0x1.092032a064070p-7",
+        "equivalence_margin": null,
+        "equivalence_established": null,
+        "equivalence_alpha": null,
         "reason": "95% CI [-0.008091, -0.007102] excludes 0"
        },
        "p_value_holm": "0x1.269e0cc986c70p-6",
@@ -9432,6 +9624,10 @@
         "statistically_distinguishable_from_null": true,
         "null_value": "0x0.0p+0",
         "confidence_level": "0x1.e666666666666p-1",
+        "equivalence_bound": "0x1.83ce2d9c5a0a5p-4",
+        "equivalence_margin": null,
+        "equivalence_established": null,
+        "equivalence_alpha": null,
         "reason": "95% CI [-0.094679, -0.072931] excludes 0"
        },
        "p_value_holm": "0x1.269e0cc986c70p-6",
@@ -9465,6 +9661,10 @@
         "statistically_distinguishable_from_null": true,
         "null_value": "0x0.0p+0",
         "confidence_level": "0x1.e666666666666p-1",
+        "equivalence_bound": "0x1.892c30354ae6fp-4",
+        "equivalence_margin": null,
+        "equivalence_established": null,
+        "equivalence_alpha": null,
         "reason": "95% CI [-0.095989, -0.072538] excludes 0"
        },
        "p_value_holm": "0x1.269e0cc986c70p-6",
@@ -9498,6 +9698,10 @@
         "statistically_distinguishable_from_null": true,
         "null_value": "0x0.0p+0",
         "confidence_level": "0x1.e666666666666p-1",
+        "equivalence_bound": "0x1.5a9fb5315fccep+42",
+        "equivalence_margin": null,
+        "equivalence_established": null,
+        "equivalence_alpha": null,
         "reason": "95% CI [-5954952545663.201172, -0.049675] excludes 0"
        },
        "p_value_holm": "0x1.269e0cc986c70p-6",
@@ -9552,6 +9756,10 @@
        "statistically_distinguishable_from_null": true,
        "null_value": "0x0.0p+0",
        "confidence_level": "0x1.e666666666666p-1",
+       "equivalence_bound": "0x1.4f38082f247fap-6",
+       "equivalence_margin": null,
+       "equivalence_established": null,
+       "equivalence_alpha": null,
        "reason": "95% CI [+0.002357, +0.020460] excludes 0"
       },
       "role": "exploratory",
@@ -9581,6 +9789,8 @@
        "confidence_level": "0x1.e666666666666p-1",
        "equivalence_bound": "0x1.a34fe8696f742p-6",
        "equivalence_margin": null,
+       "equivalence_established": null,
+       "equivalence_alpha": null,
        "reason": "95% CI [-0.006487, +0.025593] contains 0; the data bound |\u0394| \u2264 0.0255928 and establish nothing tighter"
       },
       "role": "exploratory",
@@ -9613,6 +9823,10 @@
        "statistically_distinguishable_from_null": true,
        "null_value": "0x0.0p+0",
        "confidence_level": "0x1.e666666666666p-1",
+       "equivalence_bound": "0x1.3e165605c0962p-12",
+       "equivalence_margin": "0x1.a36e2eb1c432dp-13",
+       "equivalence_established": false,
+       "equivalence_alpha": "0x1.99999999999a0p-6",
        "reason": "95% CI [+0.000284, +0.000303] excludes 0"
       },
       "role": "primary"
@@ -9638,6 +9852,10 @@
        "statistically_distinguishable_from_null": true,
        "null_value": "0x0.0p+0",
        "confidence_level": "0x1.e666666666666p-1",
+       "equivalence_bound": "0x1.4458cdaa0a7d0p-12",
+       "equivalence_margin": "0x1.a36e2eb1c432dp-13",
+       "equivalence_established": false,
+       "equivalence_alpha": "0x1.99999999999a0p-6",
        "reason": "95% CI [+0.000286, +0.000309] excludes 0"
       },
       "role": "exploratory",
@@ -9670,6 +9888,10 @@
        "statistically_distinguishable_from_null": true,
        "null_value": "0x0.0p+0",
        "confidence_level": "0x1.e666666666666p-1",
+       "equivalence_bound": "0x1.5de55e9fed721p-12",
+       "equivalence_margin": null,
+       "equivalence_established": null,
+       "equivalence_alpha": null,
        "reason": "95% CI [+0.000313, +0.000334] excludes 0"
       },
       "role": "exploratory",
@@ -9697,6 +9919,10 @@
        "statistically_distinguishable_from_null": true,
        "null_value": "0x0.0p+0",
        "confidence_level": "0x1.e666666666666p-1",
+       "equivalence_bound": "0x1.64c8156e3ebcap-12",
+       "equivalence_margin": null,
+       "equivalence_established": null,
+       "equivalence_alpha": null,
        "reason": "95% CI [+0.000315, +0.000340] excludes 0"
       },
       "role": "exploratory",
@@ -9729,6 +9955,10 @@
        "statistically_distinguishable_from_null": true,
        "null_value": "0x0.0p+0",
        "confidence_level": "0x1.e666666666666p-1",
+       "equivalence_bound": "0x1.3e165605c0962p-13",
+       "equivalence_margin": null,
+       "equivalence_established": null,
+       "equivalence_alpha": null,
        "reason": "95% CI [+0.000142, +0.000152] excludes 0"
       },
       "role": "exploratory",
@@ -9756,6 +9986,10 @@
        "statistically_distinguishable_from_null": true,
        "null_value": "0x0.0p+0",
        "confidence_level": "0x1.e666666666666p-1",
+       "equivalence_bound": "0x1.4458cdaa0a7d0p-13",
+       "equivalence_margin": null,
+       "equivalence_established": null,
+       "equivalence_alpha": null,
        "reason": "95% CI [+0.000143, +0.000155] excludes 0"
       },
       "role": "exploratory",
@@ -9788,6 +10022,10 @@
        "statistically_distinguishable_from_null": true,
        "null_value": "0x0.0p+0",
        "confidence_level": "0x1.e666666666666p-1",
+       "equivalence_bound": "0x1.0721fa90e07abp-7",
+       "equivalence_margin": null,
+       "equivalence_established": null,
+       "equivalence_alpha": null,
        "reason": "95% CI [-0.008030, -0.007836] excludes 0"
       },
       "role": "exploratory",
@@ -9815,6 +10053,10 @@
        "statistically_distinguishable_from_null": true,
        "null_value": "0x0.0p+0",
        "confidence_level": "0x1.e666666666666p-1",
+       "equivalence_bound": "0x1.077d7cf3666e1p-7",
+       "equivalence_margin": null,
+       "equivalence_established": null,
+       "equivalence_alpha": null,
        "reason": "95% CI [-0.008041, -0.007844] excludes 0"
       },
       "role": "exploratory",
@@ -9848,6 +10090,10 @@
        "statistically_distinguishable_from_null": true,
        "null_value": "0x0.0p+0",
        "confidence_level": "0x1.e666666666666p-1",
+       "equivalence_bound": "0x1.0624dd2f1aa00p-9",
+       "equivalence_margin": null,
+       "equivalence_established": null,
+       "equivalence_alpha": null,
        "reason": "95% CI [-0.002000, -0.002000] excludes 0"
       },
       "role": "exploratory",
@@ -9876,6 +10122,10 @@
        "statistically_distinguishable_from_null": true,
        "null_value": "0x0.0p+0",
        "confidence_level": "0x1.e666666666666p-1",
+       "equivalence_bound": "0x1.0624dd2f1aa01p-9",
+       "equivalence_margin": null,
+       "equivalence_established": null,
+       "equivalence_alpha": null,
        "reason": "95% CI [-0.002000, -0.002000] excludes 0"
       },
       "role": "exploratory",
@@ -9908,6 +10158,10 @@
        "statistically_distinguishable_from_null": true,
        "null_value": "0x0.0p+0",
        "confidence_level": "0x1.e666666666666p-1",
+       "equivalence_bound": "0x1.b11f4a08da975p-6",
+       "equivalence_margin": null,
+       "equivalence_established": null,
+       "equivalence_alpha": null,
        "reason": "95% CI [+0.015394, +0.026436] excludes 0"
       },
       "role": "exploratory",
@@ -9935,6 +10189,10 @@
        "statistically_distinguishable_from_null": true,
        "null_value": "0x0.0p+0",
        "confidence_level": "0x1.e666666666666p-1",
+       "equivalence_bound": "0x1.d9cdb08b8ff30p-6",
+       "equivalence_margin": null,
+       "equivalence_established": null,
+       "equivalence_alpha": null,
        "reason": "95% CI [+0.022280, +0.028919] excludes 0"
       },
       "role": "exploratory",
@@ -10073,7 +10331,7 @@
      "token_weighted": "0x1.d1f57071ca69ap+2"
     },
     "max_abs_side_difference": "0x0.0p+0",
-    "description": "The shared FP reference's own teacher-forced NLL and perplexity at the same target tokens -- llama-perplexity's PPL(base). Identical for both candidates by construction (one reference, scored once); max_abs_side_difference is the witness that it was."
+    "description": "The shared FP reference's teacher-forced NLL and perplexity from full logits at the same target tokens. These differ from PPL(base) reconstructed from llama-perplexity's saved clipped and quantized reference. Values use candidate-a's recorded reference column; max_abs_side_difference reports any difference from candidate-b's reference column."
    },
    "pooled_token_distribution": {
     "kld": {
@@ -12980,6 +13238,10 @@
          "statistically_distinguishable_from_null": true,
          "null_value": "0x0.0p+0",
          "confidence_level": "0x1.e666666666666p-1",
+         "equivalence_bound": "0x1.1bbb15c283ef5p-11",
+         "equivalence_margin": null,
+         "equivalence_established": null,
+         "equivalence_alpha": null,
          "reason": "95% CI [+0.000464, +0.000541] excludes 0"
         },
         "p_value_holm": "0x1.88d2bbb75e5eap-8",
@@ -13013,6 +13275,10 @@
          "statistically_distinguishable_from_null": true,
          "null_value": "0x0.0p+0",
          "confidence_level": "0x1.e666666666666p-1",
+         "equivalence_bound": "0x1.3e60496a8cf5cp-11",
+         "equivalence_margin": null,
+         "equivalence_established": null,
+         "equivalence_alpha": null,
          "reason": "95% CI [+0.000500, +0.000607] excludes 0"
         },
         "p_value_holm": "0x1.88d2bbb75e5eap-8",
@@ -13045,6 +13311,10 @@
          "statistically_distinguishable_from_null": true,
          "null_value": "0x0.0p+0",
          "confidence_level": "0x1.e666666666666p-1",
+         "equivalence_bound": "0x1.476624baae461p-11",
+         "equivalence_margin": null,
+         "equivalence_established": null,
+         "equivalence_alpha": null,
          "reason": "95% CI [+0.000505, +0.000624] excludes 0"
         },
         "p_value_holm": "0x1.88d2bbb75e5eap-8",
@@ -13959,6 +14229,10 @@
         "statistically_distinguishable_from_null": true,
         "null_value": "0x0.0p+0",
         "confidence_level": "0x1.e666666666666p-1",
+        "equivalence_bound": "0x1.3de53ce5c5b71p-12",
+        "equivalence_margin": null,
+        "equivalence_established": null,
+        "equivalence_alpha": null,
         "reason": "95% CI [+0.000280, +0.000303] excludes 0"
        },
        "p_value_holm": "0x1.269e0cc986c70p-6",
@@ -13992,6 +14266,10 @@
         "statistically_distinguishable_from_null": true,
         "null_value": "0x0.0p+0",
         "confidence_level": "0x1.e666666666666p-1",
+        "equivalence_bound": "0x1.3b60215126ad0p-12",
+        "equivalence_margin": null,
+        "equivalence_established": null,
+        "equivalence_alpha": null,
         "reason": "95% CI [+0.000254, +0.000301] excludes 0"
        },
        "p_value_holm": "0x1.269e0cc986c70p-6",
@@ -14025,6 +14303,10 @@
         "statistically_distinguishable_from_null": true,
         "null_value": "0x0.0p+0",
         "confidence_level": "0x1.e666666666666p-1",
+        "equivalence_bound": "0x1.5d918e31c71c7p-12",
+        "equivalence_margin": null,
+        "equivalence_established": null,
+        "equivalence_alpha": null,
         "reason": "95% CI [+0.000324, +0.000333] excludes 0"
        },
        "p_value_holm": "0x1.269e0cc986c70p-6",
@@ -14060,6 +14342,10 @@
         "statistically_distinguishable_from_null": true,
         "null_value": "0x0.0p+0",
         "confidence_level": "0x1.e666666666666p-1",
+        "equivalence_bound": "0x1.07819b7e7f726p-7",
+        "equivalence_margin": null,
+        "equivalence_established": null,
+        "equivalence_alpha": null,
         "reason": "95% CI [-0.008042, -0.007720] excludes 0"
        },
        "p_value_holm": "0x1.269e0cc986c70p-6",
@@ -14093,6 +14379,10 @@
         "statistically_distinguishable_from_null": true,
         "null_value": "0x0.0p+0",
         "confidence_level": "0x1.e666666666666p-1",
+        "equivalence_bound": "0x1.3928d8cb17224p-7",
+        "equivalence_margin": null,
+        "equivalence_established": null,
+        "equivalence_alpha": null,
         "reason": "95% CI [-0.009557, -0.007950] excludes 0"
        },
        "p_value_holm": "0x1.269e0cc986c70p-6",
@@ -14126,6 +14416,10 @@
         "statistically_distinguishable_from_null": true,
         "null_value": "0x0.0p+0",
         "confidence_level": "0x1.e666666666666p-1",
+        "equivalence_bound": "0x1.0923da2e8ba40p-7",
+        "equivalence_margin": null,
+        "equivalence_established": null,
+        "equivalence_alpha": null,
         "reason": "95% CI [-0.008091, -0.008031] excludes 0"
        },
        "p_value_holm": "0x1.269e0cc986c70p-6",
@@ -14161,6 +14455,10 @@
         "statistically_distinguishable_from_null": true,
         "null_value": "0x0.0p+0",
         "confidence_level": "0x1.e666666666666p-1",
+        "equivalence_bound": "0x1.7d520f5d0768fp-4",
+        "equivalence_margin": null,
+        "equivalence_established": null,
+        "equivalence_alpha": null,
         "reason": "95% CI [-0.093096, -0.074086] excludes 0"
        },
        "p_value_holm": "0x1.269e0cc986c70p-6",
@@ -14194,6 +14492,10 @@
         "statistically_distinguishable_from_null": true,
         "null_value": "0x0.0p+0",
         "confidence_level": "0x1.e666666666666p-1",
+        "equivalence_bound": "0x1.7f7bb7d17d0bbp-4",
+        "equivalence_margin": null,
+        "equivalence_established": null,
+        "equivalence_alpha": null,
         "reason": "95% CI [-0.093624, -0.074317] excludes 0"
        },
        "p_value_holm": "0x1.269e0cc986c70p-6",
@@ -14227,6 +14529,10 @@
         "statistically_distinguishable_from_null": true,
         "null_value": "0x0.0p+0",
         "confidence_level": "0x1.e666666666666p-1",
+        "equivalence_bound": "0x1.484e660000000p-4",
+        "equivalence_margin": null,
+        "equivalence_established": null,
+        "equivalence_alpha": null,
         "reason": "95% CI [-0.080153, -0.053076] excludes 0"
        },
        "p_value_holm": "0x1.269e0cc986c70p-6",
@@ -14281,6 +14587,10 @@
        "statistically_distinguishable_from_null": true,
        "null_value": "0x0.0p+0",
        "confidence_level": "0x1.e666666666666p-1",
+       "equivalence_bound": "0x1.516da093eabd8p-6",
+       "equivalence_margin": null,
+       "equivalence_established": null,
+       "equivalence_alpha": null,
        "reason": "95% CI [+0.002366, +0.020595] excludes 0"
       },
       "role": "exploratory",
@@ -14310,6 +14620,8 @@
        "confidence_level": "0x1.e666666666666p-1",
        "equivalence_bound": "0x1.7cb4080e602bep-6",
        "equivalence_margin": null,
+       "equivalence_established": null,
+       "equivalence_alpha": null,
        "reason": "95% CI [-0.007280, +0.023236] contains 0; the data bound |\u0394| \u2264 0.0232363 and establish nothing tighter"
       },
       "role": "exploratory",
@@ -14342,6 +14654,10 @@
        "statistically_distinguishable_from_null": true,
        "null_value": "0x0.0p+0",
        "confidence_level": "0x1.e666666666666p-1",
+       "equivalence_bound": "0x1.3d6c7b8069283p-12",
+       "equivalence_margin": "0x1.a36e2eb1c432dp-13",
+       "equivalence_established": false,
+       "equivalence_alpha": "0x1.99999999999a0p-6",
        "reason": "95% CI [+0.000284, +0.000303] excludes 0"
       },
       "role": "primary"
@@ -14367,6 +14683,10 @@
        "statistically_distinguishable_from_null": true,
        "null_value": "0x0.0p+0",
        "confidence_level": "0x1.e666666666666p-1",
+       "equivalence_bound": "0x1.4356ed171bfd3p-12",
+       "equivalence_margin": "0x1.a36e2eb1c432dp-13",
+       "equivalence_established": false,
+       "equivalence_alpha": "0x1.99999999999a0p-6",
        "reason": "95% CI [+0.000285, +0.000308] excludes 0"
       },
       "role": "exploratory",
@@ -14399,6 +14719,10 @@
        "statistically_distinguishable_from_null": true,
        "null_value": "0x0.0p+0",
        "confidence_level": "0x1.e666666666666p-1",
+       "equivalence_bound": "0x1.5d2a87da0d45dp-12",
+       "equivalence_margin": null,
+       "equivalence_established": null,
+       "equivalence_alpha": null,
        "reason": "95% CI [+0.000312, +0.000333] excludes 0"
       },
       "role": "exploratory",
@@ -14426,6 +14750,10 @@
        "statistically_distinguishable_from_null": true,
        "null_value": "0x0.0p+0",
        "confidence_level": "0x1.e666666666666p-1",
+       "equivalence_bound": "0x1.63ac6b3305302p-12",
+       "equivalence_margin": null,
+       "equivalence_established": null,
+       "equivalence_alpha": null,
        "reason": "95% CI [+0.000314, +0.000339] excludes 0"
       },
       "role": "exploratory",
@@ -14458,6 +14786,10 @@
        "statistically_distinguishable_from_null": true,
        "null_value": "0x0.0p+0",
        "confidence_level": "0x1.e666666666666p-1",
+       "equivalence_bound": "0x1.3d6c7b8069283p-13",
+       "equivalence_margin": null,
+       "equivalence_established": null,
+       "equivalence_alpha": null,
        "reason": "95% CI [+0.000142, +0.000151] excludes 0"
       },
       "role": "exploratory",
@@ -14485,6 +14817,10 @@
        "statistically_distinguishable_from_null": true,
        "null_value": "0x0.0p+0",
        "confidence_level": "0x1.e666666666666p-1",
+       "equivalence_bound": "0x1.4356ed171bfd3p-13",
+       "equivalence_margin": null,
+       "equivalence_established": null,
+       "equivalence_alpha": null,
        "reason": "95% CI [+0.000143, +0.000154] excludes 0"
       },
       "role": "exploratory",
@@ -14517,6 +14853,10 @@
        "statistically_distinguishable_from_null": true,
        "null_value": "0x0.0p+0",
        "confidence_level": "0x1.e666666666666p-1",
+       "equivalence_bound": "0x1.0787dba74bc5dp-7",
+       "equivalence_margin": null,
+       "equivalence_established": null,
+       "equivalence_alpha": null,
        "reason": "95% CI [-0.008042, -0.007854] excludes 0"
       },
       "role": "exploratory",
@@ -14544,6 +14884,10 @@
        "statistically_distinguishable_from_null": true,
        "null_value": "0x0.0p+0",
        "confidence_level": "0x1.e666666666666p-1",
+       "equivalence_bound": "0x1.07a0db75d2f54p-7",
+       "equivalence_margin": null,
+       "equivalence_established": null,
+       "equivalence_alpha": null,
        "reason": "95% CI [-0.008045, -0.007849] excludes 0"
       },
       "role": "exploratory",
@@ -14576,6 +14920,10 @@
        "statistically_distinguishable_from_null": true,
        "null_value": "0x0.0p+0",
        "confidence_level": "0x1.e666666666666p-1",
+       "equivalence_bound": "0x1.0624dd2f1aa00p-9",
+       "equivalence_margin": null,
+       "equivalence_established": null,
+       "equivalence_alpha": null,
        "reason": "95% CI [-0.002000, -0.002000] excludes 0"
       },
       "role": "exploratory",
@@ -14603,6 +14951,10 @@
        "statistically_distinguishable_from_null": true,
        "null_value": "0x0.0p+0",
        "confidence_level": "0x1.e666666666666p-1",
+       "equivalence_bound": "0x1.0624dd2f1aa01p-9",
+       "equivalence_margin": null,
+       "equivalence_established": null,
+       "equivalence_alpha": null,
        "reason": "95% CI [-0.002000, -0.002000] excludes 0"
       },
       "role": "exploratory",
@@ -14635,6 +14987,10 @@
        "statistically_distinguishable_from_null": true,
        "null_value": "0x0.0p+0",
        "confidence_level": "0x1.e666666666666p-1",
+       "equivalence_bound": "0x1.bac6881284a1fp-6",
+       "equivalence_margin": null,
+       "equivalence_established": null,
+       "equivalence_alpha": null,
        "reason": "95% CI [+0.017637, +0.027025] excludes 0"
       },
       "role": "exploratory",
@@ -14662,6 +15018,10 @@
        "statistically_distinguishable_from_null": true,
        "null_value": "0x0.0p+0",
        "confidence_level": "0x1.e666666666666p-1",
+       "equivalence_bound": "0x1.cfd9f5ef8ff40p-6",
+       "equivalence_margin": null,
+       "equivalence_established": null,
+       "equivalence_alpha": null,
        "reason": "95% CI [+0.021815, +0.028311] excludes 0"
       },
       "role": "exploratory",
@@ -14800,7 +15160,7 @@
      "token_weighted": "0x1.d1f57071ca69ap+2"
     },
     "max_abs_side_difference": "0x0.0p+0",
-    "description": "The shared FP reference's own teacher-forced NLL and perplexity at the same target tokens -- llama-perplexity's PPL(base). Identical for both candidates by construction (one reference, scored once); max_abs_side_difference is the witness that it was."
+    "description": "The shared FP reference's teacher-forced NLL and perplexity from full logits at the same target tokens. These differ from PPL(base) reconstructed from llama-perplexity's saved clipped and quantized reference. Values use candidate-a's recorded reference column; max_abs_side_difference reports any difference from candidate-b's reference column."
    },
    "pooled_token_distribution": {
     "kld": {
@@ -17707,6 +18067,10 @@
          "statistically_distinguishable_from_null": true,
          "null_value": "0x0.0p+0",
          "confidence_level": "0x1.e666666666666p-1",
+         "equivalence_bound": "0x1.1b7d3b7d3f7cbp-11",
+         "equivalence_margin": null,
+         "equivalence_established": null,
+         "equivalence_alpha": null,
          "reason": "95% CI [+0.000463, +0.000541] excludes 0"
         },
         "p_value_holm": "0x1.88d2bbb75e5eap-8",
@@ -17740,6 +18104,10 @@
          "statistically_distinguishable_from_null": true,
          "null_value": "0x0.0p+0",
          "confidence_level": "0x1.e666666666666p-1",
+         "equivalence_bound": "0x1.3d3fc362374c4p-11",
+         "equivalence_margin": null,
+         "equivalence_established": null,
+         "equivalence_alpha": null,
          "reason": "95% CI [+0.000498, +0.000605] excludes 0"
         },
         "p_value_holm": "0x1.88d2bbb75e5eap-8",
@@ -17772,6 +18140,10 @@
          "statistically_distinguishable_from_null": true,
          "null_value": "0x0.0p+0",
          "confidence_level": "0x1.e666666666666p-1",
+         "equivalence_bound": "0x1.462d90d666666p-11",
+         "equivalence_margin": null,
+         "equivalence_established": null,
+         "equivalence_alpha": null,
          "reason": "95% CI [+0.000502, +0.000622] excludes 0"
         },
         "p_value_holm": "0x1.88d2bbb75e5eap-8",
@@ -18686,6 +19058,10 @@
         "statistically_distinguishable_from_null": true,
         "null_value": "0x0.0p+0",
         "confidence_level": "0x1.e666666666666p-1",
+        "equivalence_bound": "0x1.3dd8e63670576p-12",
+        "equivalence_margin": null,
+        "equivalence_established": null,
+        "equivalence_alpha": null,
         "reason": "95% CI [+0.000280, +0.000303] excludes 0"
        },
        "p_value_holm": "0x1.269e0cc986c70p-6",
@@ -18719,6 +19095,10 @@
         "statistically_distinguishable_from_null": true,
         "null_value": "0x0.0p+0",
         "confidence_level": "0x1.e666666666666p-1",
+        "equivalence_bound": "0x1.3eedc1c763495p-12",
+        "equivalence_margin": null,
+        "equivalence_established": null,
+        "equivalence_alpha": null,
         "reason": "95% CI [+0.000264, +0.000304] excludes 0"
        },
        "p_value_holm": "0x1.269e0cc986c70p-6",
@@ -18752,6 +19132,10 @@
         "statistically_distinguishable_from_null": true,
         "null_value": "0x0.0p+0",
         "confidence_level": "0x1.e666666666666p-1",
+        "equivalence_bound": "0x1.60edb88000000p-12",
+        "equivalence_margin": null,
+        "equivalence_established": null,
+        "equivalence_alpha": null,
         "reason": "95% CI [+0.000324, +0.000337] excludes 0"
        },
        "p_value_holm": "0x1.269e0cc986c70p-6",
@@ -18787,6 +19171,10 @@
         "statistically_distinguishable_from_null": true,
         "null_value": "0x0.0p+0",
         "confidence_level": "0x1.e666666666666p-1",
+        "equivalence_bound": "0x1.074d61ff73d34p-7",
+        "equivalence_margin": null,
+        "equivalence_established": null,
+        "equivalence_alpha": null,
         "reason": "95% CI [-0.008035, -0.007719] excludes 0"
        },
        "p_value_holm": "0x1.269e0cc986c70p-6",
@@ -18820,6 +19208,10 @@
         "statistically_distinguishable_from_null": true,
         "null_value": "0x0.0p+0",
         "confidence_level": "0x1.e666666666666p-1",
+        "equivalence_bound": "0x1.2804da708e95bp-7",
+        "equivalence_margin": null,
+        "equivalence_established": null,
+        "equivalence_alpha": null,
         "reason": "95% CI [-0.009034, -0.007885] excludes 0"
        },
        "p_value_holm": "0x1.269e0cc986c70p-6",
@@ -18853,6 +19245,10 @@
         "statistically_distinguishable_from_null": true,
         "null_value": "0x0.0p+0",
         "confidence_level": "0x1.e666666666666p-1",
+        "equivalence_bound": "0x1.0923da2e8ba40p-7",
+        "equivalence_margin": null,
+        "equivalence_established": null,
+        "equivalence_alpha": null,
         "reason": "95% CI [-0.008091, -0.008002] excludes 0"
        },
        "p_value_holm": "0x1.269e0cc986c70p-6",
@@ -18888,6 +19284,10 @@
         "statistically_distinguishable_from_null": true,
         "null_value": "0x0.0p+0",
         "confidence_level": "0x1.e666666666666p-1",
+        "equivalence_bound": "0x1.7347f602b3c14p-4",
+        "equivalence_margin": null,
+        "equivalence_established": null,
+        "equivalence_alpha": null,
         "reason": "95% CI [-0.090645, -0.072617] excludes 0"
        },
        "p_value_holm": "0x1.269e0cc986c70p-6",
@@ -18921,6 +19321,10 @@
         "statistically_distinguishable_from_null": true,
         "null_value": "0x0.0p+0",
         "confidence_level": "0x1.e666666666666p-1",
+        "equivalence_bound": "0x1.7974bc05b719cp-4",
+        "equivalence_margin": null,
+        "equivalence_established": null,
+        "equivalence_alpha": null,
         "reason": "95% CI [-0.092152, -0.073549] excludes 0"
        },
        "p_value_holm": "0x1.269e0cc986c70p-6",
@@ -18954,6 +19358,10 @@
         "statistically_distinguishable_from_null": true,
         "null_value": "0x0.0p+0",
         "confidence_level": "0x1.e666666666666p-1",
+        "equivalence_bound": "0x1.484e660000000p-4",
+        "equivalence_margin": null,
+        "equivalence_established": null,
+        "equivalence_alpha": null,
         "reason": "95% CI [-0.080153, -0.049617] excludes 0"
        },
        "p_value_holm": "0x1.269e0cc986c70p-6",
@@ -18965,6 +19373,6 @@
   }
  },
  "markdown": {
-  "default": "# Paired comparison: A (a) vs B (b)\n\n- Items compared: 16   |   95% CI via paired Student-t (df = n - 1, no bootstrap)\n- Protocol: teacher-forced on the dataset's stored model-generated answer trajectory; KLD/JSD/EAR over full vocab; answer positions only.\n\n- Reference (FP teacher): F16\n\n## Reference corpus likelihood (F16)\n\n| weighting | mean nll_ref (nats) | PPL(reference) |\n| --------- | ------------------: | -------------: |\n| item      |            1.962383 |       7.116268 |\n| token     |            1.985214 |       7.280605 |\n\n`llama-perplexity`'s PPL(base), on the same stored target tokens. Identical for both candidates by construction \u2014 one reference, scored once; the JSON's `max_abs_side_difference` (0) is the witness that it was.\n\n## Verdict summary\n\n| endpoint              | verdict  | inference scope             |\n| --------------------- | -------- | --------------------------- |\n| kld (item)            | A closer | primary (confirmatory)      |\n| kld (token)           | A closer | exploratory (survives Holm) |\n| reversed_kld (item)   | A closer | exploratory (survives Holm) |\n| reversed_kld (token)  | A closer | exploratory (survives Holm) |\n| js_kld (item)         | A closer | exploratory (survives Holm) |\n| js_kld (token)        | A closer | exploratory (survives Holm) |\n| ear (item)            | A closer | exploratory (survives Holm) |\n| ear (token)           | A closer | exploratory (survives Holm) |\n| same_top_rate (item)  | A closer | exploratory (survives Holm) |\n| same_top_rate (token) | A closer | exploratory (survives Holm) |\n| mse_dp (item)         | A closer | exploratory (survives Holm) |\n| mse_dp (token)        | A closer | exploratory (survives Holm) |\n\nEverything that is not listed here is either inconclusive or did not survive the family-wise correction; the full grid is below.\n\n## Results\n\nverdict reads the paired CI of (b \u2212 a); do NOT compare per-model means independently.\n\n**\u2605 = the one confirmatory endpoint** (`kld`, item-weighted). Its 95% CI is the report's claim and spends the whole \u03b1. Every other row is **exploratory**: its `p (Holm)` is the Holm\u2013Bonferroni-adjusted p-value across the other 13 cells (`\u2713` = survives at \u03b1, `\u00b7` = does not), and only a `\u2713` row supports a claim of its own. Reading the raw per-cell verdicts as 14 independent tests is what produced a measured family-wise false-positive rate of 0.35 on exchangeable A/B data.\n\n| metric                   | weighting |    a mean |    b mean | b \u2212 a (or b \u00f7 a) | 95% CI                 |            p (Holm) | verdict                              |\n| ------------------------ | --------- | --------: | --------: | ---------------: | ---------------------- | ------------------: | ------------------------------------ |\n| nll                      | item      |  1.982383 |  1.993839 |        +0.011455 | [+0.001119, +0.021792] |           0.06423 \u00b7 | A closer                             |\n| nll                      | token     |  2.005214 |  2.012394 |        +0.007180 | [-0.009972, +0.024333] |            0.3863 \u00b7 | inconclusive                         |\n| entropy (nats)           | item      |  1.797208 |  1.807208 |                \u2014 | \u2014                      |                   \u2014 | candidate-only; not compared         |\n| entropy (nats)           | token     |  1.800418 |  1.810418 |                \u2014 | \u2014                      |                   \u2014 | candidate-only; not compared         |\n| mean_dp (pp, signed)     | item      | -0.050021 | -0.128701 |                \u2014 | \u2014                      |                   \u2014 | candidate-only; not compared         |\n| mean_dp (pp, signed)     | token     | -0.050419 | -0.127583 |                \u2014 | \u2014                      |                   \u2014 | candidate-only; not compared         |\n| \u2605 kld                    | item      |  0.001179 |  0.001472 |        +0.000293 | [+0.000283, +0.000304] | 2.181e-19 (primary) | A closer                             |\n| kld                      | token     |  0.001198 |  0.001495 |        +0.000298 | [+0.000285, +0.000311] |         3.263e-17 \u2713 | A closer                             |\n| reversed_kld             | item      |  0.001297 |  0.001620 |        +0.000323 | [+0.000311, +0.000334] |         1.963e-18 \u2713 | A closer                             |\n| reversed_kld             | token     |  0.001317 |  0.001645 |        +0.000328 | [+0.000314, +0.000342] |         3.263e-17 \u2713 | A closer                             |\n| js_kld                   | item      |  0.000590 |  0.000736 |        +0.000147 | [+0.000142, +0.000152] |         1.963e-18 \u2713 | A closer                             |\n| js_kld                   | token     |  0.000599 |  0.000748 |        +0.000149 | [+0.000143, +0.000155] |         3.263e-17 \u2713 | A closer                             |\n| ear                      | item      |  0.987985 |  0.980035 |        -0.007950 | [-0.008056, -0.007843] |         1.377e-24 \u2713 | A closer                             |\n| ear                      | token     |  0.987917 |  0.979963 |        -0.007954 | [-0.008065, -0.007844] |         2.129e-24 \u2713 | A closer                             |\n| same_top_rate            | item      |  0.992669 |  0.990669 |        -0.002000 | [-0.002000, -0.002000] |                 0 \u2713 | A closer                             |\n| same_top_rate            | token     |  0.992072 |  0.990072 |        -0.002000 | [-0.002000, -0.002000] |                 0 \u2713 | A closer                             |\n| mse_dp                   | item      |  0.170461 |  0.193325 |        +0.022864 | [+0.017536, +0.028193] |         4.783e-07 \u2713 | A closer                             |\n| mse_dp                   | token     |  0.167922 |  0.193086 |        +0.025164 | [+0.021577, +0.028751] |         8.122e-10 \u2713 | A closer                             |\n| ppl (a, b = exp(nll))    | item      |  7.260026 |  7.343670 |        +0.083644 | (see ppl_ratio)        |                   \u2014 | (linked to nll.item_weighted above)  |\n| ppl (a, b = exp(nll))    | token     |  7.427683 |  7.481209 |        +0.053525 | (see ppl_ratio)        |                   \u2014 | (linked to nll.token_weighted above) |\n| ppl_ratio (\u2261 exp(nll \u0394)) | item      |         \u2014 |         \u2014 |       \u00d7 1.011521 | [\u00d7 1.001119, 1.022031] |                   \u2014 | (linked to nll.item_weighted above)  |\n| ppl_ratio (\u2261 exp(nll \u0394)) | token     |         \u2014 |         \u2014 |       \u00d7 1.007206 | [\u00d7 0.990078, 1.024631] |                   \u2014 | (linked to nll.token_weighted above) |\n\nnote: weighting verdicts disagree on 1 metric(s):\n  - nll: item = A closer, token = inconclusive\nnote: small sample (n_items = 16 < 30). No interval construction reaches its nominal coverage on right-skewed per-item deltas at this size (measured ~0.90 for a nominal 0.95 at n = 25, skew 6, for the t and bootstrap-t intervals alike), and the misses sit on one side: the interval tends to understate the damage of rare catastrophic items. The real \u03b1 is above the stated one.\nnote: `inconclusive` means the interval contains 0 \u2014 NOT that the two candidates are equivalent. Each such row's `reason` carries the tightest margin its own interval does rule out; pass --equivalence-margin to have the primary metric tested for equivalence at a margin you choose (interval-inclusion TOST).\nnote: mse_dp is in pp\u00b2 (percentage-points squared); rms_dp (pp) is shown with --show-diagnostic-metrics.\nnote: ppl = exp(mean nll) per model (item/token-weighted); its tested change is ppl_ratio (b \u00f7 a), not the raw \u0394PPL.\nnote: ear = Expected Acceptance Rate (arXiv:2605.02404): per position \u03a3_v min(p_ref, p_cand) = 1 \u2212 TV distance over the full vocab; EAR 0.99 \u21d2 the two models emit the same token 99% of the time under optimal coupling. Higher is better.\n\n## Answer-position strata (exploratory)\n\nPer-item means restricted to each answer-position range, tested with the same paired ITEM bootstrap (an item contributes the mean of its own positions in the bucket; items that never reach a bucket are dropped from it).\n\nThis exists because the effect is not spread evenly over the answer: the mmproj F16-vs-Q8_0 signal measured on this data sits in the **first ~32 answer tokens** and decays more than 10\u00d7 after, while the default eval cap is 1024 \u2014 so a single item-mean over all positions dilutes a vision effect by roughly 30\u00d7. Capping the run shorter throws the rest of the data away; stratifying keeps it.\n\nThe strata were chosen from prior measurements on this data, so every row here is **exploratory**: `p (Holm)` is adjusted within this family only, and these rows never carry the confirmatory endpoint's \u03b1.\n\n| metric | positions | items |     a = A |     b = B |     b \u2212 a | 95% CI                 |    p (Holm) | verdict  |\n| ------ | --------- | ----: | --------: | --------: | --------: | ---------------------- | ----------: | -------- |\n| kld    | 0-32      |    16 |  0.001177 |  0.001468 | +0.000292 | [+0.000279, +0.000304] | 5.117e-17 \u2713 | A closer |\n| kld    | 32-256    |    13 |  0.001134 |  0.001420 | +0.000286 | [+0.000262, +0.000310] | 4.281e-11 \u2713 | A closer |\n| kld    | 256+      |     3 |  0.001205 |  0.001534 | +0.000329 | [+0.000313, +0.000345] | 0.0002583 \u2713 | A closer |\n| ear    | 0-32      |    16 |  0.988169 |  0.980290 | -0.007878 | [-0.008051, -0.007706] | 1.769e-21 \u2713 | A closer |\n| ear    | 32-256    |    13 |  0.988229 |  0.979891 | -0.008338 | [-0.009064, -0.007611] | 6.119e-11 \u2713 | A closer |\n| ear    | 256+      |     3 |  0.987624 |  0.979564 | -0.008061 | [-0.008188, -0.007934] | 4.023e-05 \u2713 | A closer |\n| dp     | 0-32      |    16 | -0.028239 | -0.108848 | -0.080609 | [-0.090773, -0.070445] | 1.776e-10 \u2713 | A closer |\n| dp     | 32-256    |    13 | -0.084576 | -0.166349 | -0.081773 | [-0.092661, -0.070886] | 5.721e-09 \u2713 | A closer |\n| dp     | 256+      |     3 | -0.095805 | -0.159060 | -0.063255 | [-0.101826, -0.024684] |    0.0195 \u2713 | A closer |\n\n## Per-item KLD tails (exploratory \u2014 own Holm family)\n\nEach item's OWN p99 / p99.9 / maximum of its per-token KLD, with the answer position (and target token id) it occurred at, so a bad tail can be traced to the token that produced it. The quantile convention is the pooled ladder's (linear interpolation between neighbouring order statistics) applied to one item at a time; `max` is exact.\n\nAcross items each level is a per-item scalar and is tested with the same paired statistics as the mean metrics (unit: the item), but these rows are **exploratory**: a per-item maximum is a single-token statistic, far heavier-tailed than a mean, so its interval reaches nominal coverage later; `p (Holm)` is adjusted within this family only and never borrows the confirmatory endpoint's \u03b1. `on top-2` counts the items too short for that level to interpolate anywhere but between their two largest tokens (p99 needs > 100 positions, p99.9 > 1000) \u2014 for them the level is the max in all but name.\n\n| metric | level | items | on top-2 |    a = A |    b = B |     b \u2212 a | 95% CI                 |    p (Holm) | verdict  |\n| ------ | ----- | ----: | -------: | -------: | -------: | --------: | ---------------------- | ----------: | -------- |\n| kld    | p99   |    16 |        9 | 0.002021 | 0.002520 | +0.000499 | [+0.000458, +0.000540] |     2e-13 \u2713 | A closer |\n| kld    | p99.9 |    16 |       16 | 0.002167 | 0.002718 | +0.000550 | [+0.000492, +0.000609] |  6.29e-12 \u2713 | A closer |\n| kld    | max   |    16 |        \u2014 | 0.002181 | 0.002741 | +0.000560 | [+0.000494, +0.000625] | 1.203e-11 \u2713 | A closer |\n\nWorst 10 of 16 items by per-item max `kld` (either candidate); every item is in the JSON under `per_item_tails`:\n\n| item       | positions | a max @pos    | b max @pos    | b \u2212 a (max) | a p99 @pos    | b p99 @pos    |\n| ---------- | --------: | ------------- | ------------- | ----------: | ------------- | ------------- |\n| 013_item13 |       300 | 0.002826 @194 | 0.003699 @194 |   +0.000873 | 0.002265 @108 | 0.002914 @266 |\n| 009_item9  |       200 | 0.002575 @154 | 0.00319 @154  |   +0.000614 | 0.002243 @69  | 0.002766 @62  |\n| 012_item12 |       280 | 0.002485 @138 | 0.003176 @138 |   +0.000691 | 0.002299 @111 | 0.002866 @130 |\n| 006_item6  |        90 | 0.002582 @65  | 0.003142 @65  |   +0.000560 | 0.002045 @58  | 0.002576 @58  |\n| 010_item10 |       240 | 0.002249 @137 | 0.002913 @31  |   +0.000663 | 0.002099 @34  | 0.00258 @59   |\n| 007_item7  |       120 | 0.002197 @6   | 0.002766 @6   |   +0.000569 | 0.002001 @28  | 0.00243 @28   |\n| 001_item1  |        18 | 0.002059 @4   | 0.002671 @13  |   +0.000612 | 0.002044 @4   | 0.002661 @13  |\n| 005_item5  |        64 | 0.002041 @60  | 0.002669 @60  |   +0.000627 | 0.001929 @10  | 0.002537 @10  |\n| 003_item3  |        33 | 0.002195 @8   | 0.002588 @8   |   +0.000393 | 0.002142 @8   | 0.002567 @8   |\n| 011_item11 |       260 | 0.002055 @231 | 0.002585 @231 |   +0.000530 | 0.001871 @107 | 0.002355 @233 |\n\n## Per-token distributions (pooled tokens \u2014 NO bootstrap, NO CI)\n\n1950 token(s) from 16 item(s), flattened across items into ONE multiset \u2014 the llama-perplexity `--kl-divergence` scale and convention (linear interpolation between neighbouring order statistics).\n\nThese rows are **descriptive statistics with no confidence interval, no bootstrap and no verdict**. The pooled maximum has no consistent nonparametric bootstrap \u2014 a resample can only contain a subset of the observed items, so its replicate distribution is degenerate (measured coverage 0.86\u20130.89 against a nominal 0.95, and *worsening* as items are added) \u2014 and the far quantiles rest on too few tokens to support one either. Confirmatory inference lives on the mean metrics above; the bold rows are the degradation tail.\n\n`witness` names the pooled token whose value the (interpolated) quantile is nearest to, as `item@position`; `position` is 0-based among that item's scored answer positions, after any compare-time `--num-eval-tokens` cap. Ties resolve to the earliest item/position, so witnesses are reproducible across runs and `--jobs`.\n\n### KLD\n\nforward KL(p_ref \u2016 p_cand) at each scored answer position, nats. Lower is better, so the degradation tail is the HIGH end: 99.0% / 99.9% / Maximum. At the BOTTOM of the ladder the values are at the floating-point noise floor \u2014 where the two distributions are all but identical the double-precision sum of signed per-slot terms can land a few ulp below zero, and the float32 store keeps it there. A tiny negative minimum is that floor, not a broken metric; it is left unclamped because clamping would hide it.\n\n| level       |       a = A | witness (a)    |       b = B | witness (b)    |     b \u2212 a |\n| ----------- | ----------: | -------------- | ----------: | -------------- | --------: |\n| **Maximum** |  0.00282637 | 013_item13@194 |  0.00369914 | 013_item13@194 | +0.000873 |\n| **99.9%**   |  0.00257581 | 009_item9@154  |  0.00319036 | 009_item9@154  | +0.000615 |\n| **99.0%**   |  0.00219691 | 007_item7@6    |  0.00270823 | 013_item13@223 | +0.000511 |\n| 95.0%       |  0.00188309 | 010_item10@17  |  0.00235827 | 013_item13@193 | +0.000475 |\n| 90.0%       |  0.00171309 | 013_item13@189 |  0.00217277 | 006_item6@82   |  +0.00046 |\n| Median      |  0.00118867 | 011_item11@130 |  0.00149115 | 012_item12@9   | +0.000302 |\n| 10.0%       | 0.000675487 | 007_item7@13   | 0.000835378 | 012_item12@24  |  +0.00016 |\n| 5.0%        | 0.000544668 | 013_item13@157 | 0.000677111 | 014_item14@14  | +0.000132 |\n| 1.0%        | 0.000261311 | 009_item9@58   | 0.000305513 | 009_item9@63   | +4.42e-05 |\n| 0.1%        | 9.65887e-05 | 012_item12@101 |  7.7014e-05 | 013_item13@252 | -1.96e-05 |\n| Minimum     | 2.62735e-05 | 013_item13@252 | 2.23883e-06 | 008_item8@125  |  -2.4e-05 |\n\n**kld tail composition** \u2014 items holding tokens at or beyond each candidate's own quantile (top 5 per side; the JSON holds every sample and every token position).\n\n| level | candidate | item       | tail tokens | of item | item max kld | worst ear there |\n| ----- | --------- | ---------- | ----------: | ------: | -----------: | --------------: |\n| 99.0% | A         | 013_item13 |           6 |    2.0% |   0.00282637 |        0.981477 |\n| 99.0% | A         | 009_item9  |           5 |    2.5% |   0.00257548 |        0.981113 |\n| 99.0% | A         | 012_item12 |           5 |    1.8% |   0.00248479 |        0.981869 |\n| 99.0% | A         | 010_item10 |           2 |    0.8% |    0.0022492 |        0.981458 |\n| 99.0% | A         | 006_item6  |           1 |    1.1% |   0.00258202 |        0.990102 |\n| 99.0% | B         | 013_item13 |           7 |    2.3% |   0.00369914 |        0.970477 |\n| 99.0% | B         | 012_item12 |           6 |    2.1% |   0.00317581 |        0.971676 |\n| 99.0% | B         | 009_item9  |           3 |    1.5% |   0.00318976 |        0.970843 |\n| 99.0% | B         | 010_item10 |           2 |    0.8% |   0.00291263 |         0.97698 |\n| 99.0% | B         | 006_item6  |           1 |    1.1% |   0.00314202 |        0.982314 |\n| 99.9% | A         | 013_item13 |           1 |    0.3% |   0.00282637 |        0.985919 |\n| 99.9% | A         | 006_item6  |           1 |    1.1% |   0.00258202 |        0.990102 |\n| 99.9% | B         | 013_item13 |           2 |    0.7% |   0.00369914 |        0.970477 |\n\n### EAR\n\n\u03a3_v min(p_ref, p_cand) = 1 \u2212 TV at each scored answer position. HIGHER is better, so the degradation tail is the LOW end: 1.0% / 0.1% / Minimum \u2014 a literal \"maximum EAR\" sits at ~1.0 for any candidate worth measuring and carries no information.\n\n| level       |    a = A | witness (a)    |    b = B | witness (b)    |    b \u2212 a |\n| ----------- | -------: | -------------- | -------: | -------------- | -------: |\n| Maximum     | 0.999468 | 012_item12@9   | 0.997492 | 013_item13@260 | -0.00198 |\n| 99.9%       | 0.998864 | 010_item10@48  | 0.994332 | 015_item15@60  | -0.00453 |\n| 99.0%       | 0.997113 | 010_item10@5   |  0.99125 | 008_item8@4    | -0.00586 |\n| 95.0%       | 0.994414 | 014_item14@19  | 0.987802 | 013_item13@146 | -0.00661 |\n| 90.0%       | 0.992894 | 012_item12@21  | 0.986409 | 003_item3@28   | -0.00649 |\n| Median      | 0.987927 | 011_item11@41  | 0.980022 | 012_item12@240 | -0.00791 |\n| 10.0%       | 0.982775 | 012_item12@163 |  0.97362 | 014_item14@34  | -0.00915 |\n| 5.0%        | 0.981585 | 005_item5@32   | 0.971846 | 011_item11@258 | -0.00974 |\n| **1.0%**    | 0.979349 | 009_item9@107  | 0.968878 | 011_item11@121 |  -0.0105 |\n| **0.1%**    | 0.977285 | 011_item11@229 | 0.965972 | 014_item14@43  |  -0.0113 |\n| **Minimum** | 0.976329 | 012_item12@158 | 0.965143 | 006_item6@83   |  -0.0112 |\n\n**ear tail composition** \u2014 items holding tokens at or beyond each candidate's own quantile (top 5 per side; the JSON holds every sample and every token position).\n\n| level | candidate | item       | tail tokens | of item | item min ear |\n| ----- | --------- | ---------- | ----------: | ------: | -----------: |\n| 1.0%  | A         | 012_item12 |           4 |    1.4% |     0.976329 |\n| 1.0%  | A         | 009_item9  |           3 |    1.5% |     0.978297 |\n| 1.0%  | A         | 013_item13 |           3 |    1.0% |     0.977797 |\n| 1.0%  | A         | 011_item11 |           3 |    1.2% |     0.977306 |\n| 1.0%  | A         | 006_item6  |           3 |    3.3% |     0.976902 |\n| 1.0%  | B         | 009_item9  |           5 |    2.5% |     0.967518 |\n| 1.0%  | B         | 012_item12 |           5 |    1.8% |     0.965813 |\n| 1.0%  | B         | 013_item13 |           3 |    1.0% |     0.965981 |\n| 1.0%  | B         | 011_item11 |           2 |    0.8% |     0.967607 |\n| 1.0%  | B         | 010_item10 |           1 |    0.4% |     0.967581 |\n| 0.1%  | A         | 006_item6  |           1 |    1.1% |     0.976902 |\n| 0.1%  | A         | 012_item12 |           1 |    0.4% |     0.976329 |\n| 0.1%  | B         | 012_item12 |           1 |    0.4% |     0.965813 |\n| 0.1%  | B         | 006_item6  |           1 |    1.1% |     0.965143 |\n\n### \u0394p at the target token\n\np_cand(target) \u2212 p_ref(target) in percentage points, SIGNED. The full ladder including the MEDIAN is what shows a systematic over- or under-confidence; `mse_dp` and `rms_dp` are unsigned by construction and cannot. This is llama-perplexity's \u0394p table.\n\n| level       |      a = A | witness (a)    |     b = B | witness (b)    |     b \u2212 a |\n| ----------- | ---------: | -------------- | --------: | -------------- | --------: |\n| **Maximum** |    1.45991 | 013_item13@109 |   1.43935 | 008_item8@133  |   -0.0206 |\n| **99.9%**   |    1.36065 | 012_item12@156 |   1.36126 | 012_item12@156 | +0.000605 |\n| 99.0%       |   0.891972 | 009_item9@141  |  0.849244 | 015_item15@66  |   -0.0427 |\n| 95.0%       |    0.60572 | 013_item13@195 |  0.557082 | 010_item10@7   |   -0.0486 |\n| 90.0%       |   0.482522 | 010_item10@27  |  0.419347 | 013_item13@21  |   -0.0632 |\n| **Median**  | -0.0575671 | 012_item12@245 | -0.131395 | 010_item10@218 |   -0.0738 |\n| 10.0%       |  -0.564397 | 006_item6@73   | -0.663331 | 003_item3@21   |   -0.0989 |\n| 5.0%        |  -0.699557 | 010_item10@143 | -0.802534 | 010_item10@161 |    -0.103 |\n| 1.0%        |  -0.948022 | 009_item9@197  |  -1.06582 | 010_item10@17  |    -0.118 |\n| **0.1%**    |   -1.19105 | 013_item13@277 |  -1.35383 | 010_item10@111 |    -0.163 |\n| **Minimum** |   -1.30525 | 010_item10@111 |  -1.43954 | 012_item12@11  |    -0.134 |\n"
+  "default": "# Paired comparison: A (a) vs B (b)\n\n- Items compared: 16   |   95% CI via paired Student-t (df = n - 1, no bootstrap)\n- Protocol: teacher-forced on the dataset's stored model-generated answer trajectory; KLD/JSD/EAR over full vocab; answer positions only.\n\n- Reference (FP teacher): F16\n\n## Reference corpus likelihood (F16)\n\n| weighting | mean nll_ref (nats) | PPL(reference) |\n| --------- | ------------------: | -------------: |\n| item      |            1.962383 |       7.116268 |\n| token     |            1.985214 |       7.280605 |\n\nReference likelihood on the same stored target tokens, using uncompressed VLMK NLL values. The reference is evaluated in each collection; the JSON's `max_abs_side_difference` (0) records the observed agreement.\n\n## Verdict summary\n\n| endpoint              | verdict  | inference scope             |\n| --------------------- | -------- | --------------------------- |\n| kld (item)            | A closer | primary (confirmatory)      |\n| kld (token)           | A closer | exploratory (survives Holm) |\n| reversed_kld (item)   | A closer | exploratory (survives Holm) |\n| reversed_kld (token)  | A closer | exploratory (survives Holm) |\n| js_kld (item)         | A closer | exploratory (survives Holm) |\n| js_kld (token)        | A closer | exploratory (survives Holm) |\n| ear (item)            | A closer | exploratory (survives Holm) |\n| ear (token)           | A closer | exploratory (survives Holm) |\n| same_top_rate (item)  | A closer | exploratory (survives Holm) |\n| same_top_rate (token) | A closer | exploratory (survives Holm) |\n| mse_dp (item)         | A closer | exploratory (survives Holm) |\n| mse_dp (token)        | A closer | exploratory (survives Holm) |\n\nEverything that is not listed here is either inconclusive or did not survive the family-wise correction; the full grid is below.\n\n## Results\n\nverdict reads the paired CI of (b \u2212 a); do NOT compare per-model means independently.\n\n**\u2605 = the one confirmatory endpoint** (`kld`, item-weighted). Its 95% CI is the report's claim and spends the whole \u03b1. Every other row is **exploratory**: its `p (Holm)` is the Holm\u2013Bonferroni-adjusted p-value across the other 13 cells (`\u2713` = survives at \u03b1, `\u00b7` = does not), and only a `\u2713` row supports a claim of its own. Reading the raw per-cell verdicts as 14 independent tests is what produced a measured family-wise false-positive rate of 0.35 on exchangeable A/B data.\n\n| metric                   | weighting |    a mean |    b mean | b \u2212 a (or b \u00f7 a) | 95% CI                 |            p (Holm) | verdict                              |\n| ------------------------ | --------- | --------: | --------: | ---------------: | ---------------------- | ------------------: | ------------------------------------ |\n| nll                      | item      |  1.982383 |  1.993839 |        +0.011455 | [+0.001119, +0.021792] |           0.06423 \u00b7 | A closer                             |\n| nll                      | token     |  2.005214 |  2.012394 |        +0.007180 | [-0.009972, +0.024333] |            0.3863 \u00b7 | inconclusive                         |\n| entropy (nats)           | item      |  1.797208 |  1.807208 |                \u2014 | \u2014                      |                   \u2014 | candidate-only; not compared         |\n| entropy (nats)           | token     |  1.800418 |  1.810418 |                \u2014 | \u2014                      |                   \u2014 | candidate-only; not compared         |\n| mean_dp (pp, signed)     | item      | -0.050021 | -0.128701 |                \u2014 | \u2014                      |                   \u2014 | candidate-only; not compared         |\n| mean_dp (pp, signed)     | token     | -0.050419 | -0.127583 |                \u2014 | \u2014                      |                   \u2014 | candidate-only; not compared         |\n| \u2605 kld                    | item      |  0.001179 |  0.001472 |        +0.000293 | [+0.000283, +0.000304] | 2.181e-19 (primary) | A closer                             |\n| kld                      | token     |  0.001198 |  0.001495 |        +0.000298 | [+0.000285, +0.000311] |         3.263e-17 \u2713 | A closer                             |\n| reversed_kld             | item      |  0.001297 |  0.001620 |        +0.000323 | [+0.000311, +0.000334] |         1.963e-18 \u2713 | A closer                             |\n| reversed_kld             | token     |  0.001317 |  0.001645 |        +0.000328 | [+0.000314, +0.000342] |         3.263e-17 \u2713 | A closer                             |\n| js_kld                   | item      |  0.000590 |  0.000736 |        +0.000147 | [+0.000142, +0.000152] |         1.963e-18 \u2713 | A closer                             |\n| js_kld                   | token     |  0.000599 |  0.000748 |        +0.000149 | [+0.000143, +0.000155] |         3.263e-17 \u2713 | A closer                             |\n| ear                      | item      |  0.987985 |  0.980035 |        -0.007950 | [-0.008056, -0.007843] |         1.377e-24 \u2713 | A closer                             |\n| ear                      | token     |  0.987917 |  0.979963 |        -0.007954 | [-0.008065, -0.007844] |         2.129e-24 \u2713 | A closer                             |\n| same_top_rate            | item      |  0.992669 |  0.990669 |        -0.002000 | [-0.002000, -0.002000] |                 0 \u2713 | A closer                             |\n| same_top_rate            | token     |  0.992072 |  0.990072 |        -0.002000 | [-0.002000, -0.002000] |                 0 \u2713 | A closer                             |\n| mse_dp                   | item      |  0.170461 |  0.193325 |        +0.022864 | [+0.017536, +0.028193] |         4.783e-07 \u2713 | A closer                             |\n| mse_dp                   | token     |  0.167922 |  0.193086 |        +0.025164 | [+0.021577, +0.028751] |         8.122e-10 \u2713 | A closer                             |\n| ppl (a, b = exp(nll))    | item      |  7.260026 |  7.343670 |        +0.083644 | (see ppl_ratio)        |                   \u2014 | (linked to nll.item_weighted above)  |\n| ppl (a, b = exp(nll))    | token     |  7.427683 |  7.481209 |        +0.053525 | (see ppl_ratio)        |                   \u2014 | (linked to nll.token_weighted above) |\n| ppl_ratio (\u2261 exp(nll \u0394)) | item      |         \u2014 |         \u2014 |       \u00d7 1.011521 | [\u00d7 1.001119, 1.022031] |                   \u2014 | (linked to nll.item_weighted above)  |\n| ppl_ratio (\u2261 exp(nll \u0394)) | token     |         \u2014 |         \u2014 |       \u00d7 1.007206 | [\u00d7 0.990078, 1.024631] |                   \u2014 | (linked to nll.token_weighted above) |\n\nnote: weighting verdicts disagree on 1 metric(s):\n  - nll: item = A closer, token = inconclusive\nnote: small sample (n_items = 16 < 30). No interval construction reaches its nominal coverage on right-skewed per-item deltas at this size (measured ~0.90 for a nominal 0.95 at n = 25, skew 6, for the t and bootstrap-t intervals alike), and the misses sit on one side: the interval tends to understate the damage of rare catastrophic items. The real \u03b1 is above the stated one.\nnote: `inconclusive` means the interval contains 0 \u2014 NOT that the two candidates are equivalent. Each such row's `reason` carries the tightest margin its own interval does rule out; pass --equivalence-margin to have the primary metric tested for equivalence at a margin you choose (interval-inclusion TOST).\nnote: mse_dp is in pp\u00b2 (percentage-points squared); rms_dp (pp) is shown with --show-diagnostic-metrics.\nnote: ppl = exp(mean nll) per model (item/token-weighted); its tested change is ppl_ratio (b \u00f7 a), not the raw \u0394PPL.\nnote: ear = Expected Acceptance Rate (arXiv:2605.02404): per position \u03a3_v min(p_ref, p_cand) = 1 \u2212 TV distance over the full vocab; EAR 0.99 \u21d2 the two models emit the same token 99% of the time under optimal coupling. Higher is better.\n\n## Answer-position strata (exploratory)\n\nPer-item means restricted to each answer-position range, tested with the same paired ITEM bootstrap (an item contributes the mean of its own positions in the bucket; items that never reach a bucket are dropped from it).\n\nThis exists because the effect is not spread evenly over the answer: the mmproj F16-vs-Q8_0 signal measured on this data sits in the **first ~32 answer tokens** and decays more than 10\u00d7 after, while the default eval cap is 1024 \u2014 so a single item-mean over all positions dilutes a vision effect by roughly 30\u00d7. Capping the run shorter throws the rest of the data away; stratifying keeps it.\n\nThe strata were chosen from prior measurements on this data, so every row here is **exploratory**: `p (Holm)` is adjusted within this family only, and these rows never carry the confirmatory endpoint's \u03b1.\n\n| metric | positions | items |     a = A |     b = B |     b \u2212 a | 95% CI                 |    p (Holm) | verdict  |\n| ------ | --------- | ----: | --------: | --------: | --------: | ---------------------- | ----------: | -------- |\n| kld    | 0-32      |    16 |  0.001177 |  0.001468 | +0.000292 | [+0.000279, +0.000304] | 5.117e-17 \u2713 | A closer |\n| kld    | 32-256    |    13 |  0.001134 |  0.001420 | +0.000286 | [+0.000262, +0.000310] | 4.281e-11 \u2713 | A closer |\n| kld    | 256+      |     3 |  0.001205 |  0.001534 | +0.000329 | [+0.000313, +0.000345] | 0.0002583 \u2713 | A closer |\n| ear    | 0-32      |    16 |  0.988169 |  0.980290 | -0.007878 | [-0.008051, -0.007706] | 1.769e-21 \u2713 | A closer |\n| ear    | 32-256    |    13 |  0.988229 |  0.979891 | -0.008338 | [-0.009064, -0.007611] | 6.119e-11 \u2713 | A closer |\n| ear    | 256+      |     3 |  0.987624 |  0.979564 | -0.008061 | [-0.008188, -0.007934] | 4.023e-05 \u2713 | A closer |\n| dp     | 0-32      |    16 | -0.028239 | -0.108848 | -0.080609 | [-0.090773, -0.070445] | 1.776e-10 \u2713 | A closer |\n| dp     | 32-256    |    13 | -0.084576 | -0.166349 | -0.081773 | [-0.092661, -0.070886] | 5.721e-09 \u2713 | A closer |\n| dp     | 256+      |     3 | -0.095805 | -0.159060 | -0.063255 | [-0.101826, -0.024684] |    0.0195 \u2713 | A closer |\n\n## Per-item KLD tails (exploratory \u2014 own Holm family)\n\nEach item's OWN p99 / p99.9 / maximum of its per-token KLD, with the answer position (and target token id) it occurred at, so a bad tail can be traced to the token that produced it. The quantile convention is the pooled ladder's (linear interpolation between neighbouring order statistics) applied to one item at a time; `max` is exact.\n\nAcross items each level is a per-item scalar and is tested with the same paired statistics as the mean metrics (unit: the item), but these rows are **exploratory**: a per-item maximum is a single-token statistic, far heavier-tailed than a mean, so its interval reaches nominal coverage later; `p (Holm)` is adjusted within this family only and never borrows the confirmatory endpoint's \u03b1. `on top-2` counts the items too short for that level to interpolate anywhere but between their two largest tokens (p99 needs > 100 positions, p99.9 > 1000) \u2014 for them the level is the max in all but name.\n\n| metric | level | items | on top-2 |    a = A |    b = B |     b \u2212 a | 95% CI                 |    p (Holm) | verdict  |\n| ------ | ----- | ----: | -------: | -------: | -------: | --------: | ---------------------- | ----------: | -------- |\n| kld    | p99   |    16 |        9 | 0.002021 | 0.002520 | +0.000499 | [+0.000458, +0.000540] |     2e-13 \u2713 | A closer |\n| kld    | p99.9 |    16 |       16 | 0.002167 | 0.002718 | +0.000550 | [+0.000492, +0.000609] |  6.29e-12 \u2713 | A closer |\n| kld    | max   |    16 |        \u2014 | 0.002181 | 0.002741 | +0.000560 | [+0.000494, +0.000625] | 1.203e-11 \u2713 | A closer |\n\nWorst 10 of 16 items by per-item max `kld` (either candidate); every item is in the JSON under `per_item_tails`:\n\n| item       | positions | a max @pos    | b max @pos    | b \u2212 a (max) | a p99 @pos    | b p99 @pos    |\n| ---------- | --------: | ------------- | ------------- | ----------: | ------------- | ------------- |\n| 013_item13 |       300 | 0.002826 @194 | 0.003699 @194 |   +0.000873 | 0.002265 @108 | 0.002914 @266 |\n| 009_item9  |       200 | 0.002575 @154 | 0.00319 @154  |   +0.000614 | 0.002243 @69  | 0.002766 @62  |\n| 012_item12 |       280 | 0.002485 @138 | 0.003176 @138 |   +0.000691 | 0.002299 @111 | 0.002866 @130 |\n| 006_item6  |        90 | 0.002582 @65  | 0.003142 @65  |   +0.000560 | 0.002045 @58  | 0.002576 @58  |\n| 010_item10 |       240 | 0.002249 @137 | 0.002913 @31  |   +0.000663 | 0.002099 @34  | 0.00258 @59   |\n| 007_item7  |       120 | 0.002197 @6   | 0.002766 @6   |   +0.000569 | 0.002001 @28  | 0.00243 @28   |\n| 001_item1  |        18 | 0.002059 @4   | 0.002671 @13  |   +0.000612 | 0.002044 @4   | 0.002661 @13  |\n| 005_item5  |        64 | 0.002041 @60  | 0.002669 @60  |   +0.000627 | 0.001929 @10  | 0.002537 @10  |\n| 003_item3  |        33 | 0.002195 @8   | 0.002588 @8   |   +0.000393 | 0.002142 @8   | 0.002567 @8   |\n| 011_item11 |       260 | 0.002055 @231 | 0.002585 @231 |   +0.000530 | 0.001871 @107 | 0.002355 @233 |\n\n## Per-token distributions (pooled tokens \u2014 NO bootstrap, NO CI)\n\n1950 token(s) from 16 item(s), flattened across items into ONE multiset \u2014 the llama-perplexity `--kl-divergence` scale and convention (linear interpolation between neighbouring order statistics).\n\nThese rows are **descriptive statistics with no confidence interval, no bootstrap and no verdict**. The pooled maximum has no consistent nonparametric bootstrap \u2014 a resample can only contain a subset of the observed items, so its replicate distribution is degenerate (measured coverage 0.86\u20130.89 against a nominal 0.95, and *worsening* as items are added) \u2014 and the far quantiles rest on too few tokens to support one either. Confirmatory inference lives on the mean metrics above; the bold rows are the degradation tail.\n\n`witness` names the pooled token whose value the (interpolated) quantile is nearest to, as `item@position`; `position` is 0-based among that item's scored answer positions, after any compare-time `--num-eval-tokens` cap. Ties resolve to the earliest item/position, so witnesses are reproducible across runs and `--jobs`.\n\n### KLD\n\nforward KL(p_ref \u2016 p_cand) at each scored answer position, nats. Lower is better, so the degradation tail is the HIGH end: 99.0% / 99.9% / Maximum. At the BOTTOM of the ladder the values are at the floating-point noise floor \u2014 where the two distributions are all but identical the double-precision sum of signed per-slot terms can land a few ulp below zero, and the float32 store keeps it there. A tiny negative minimum is that floor, not a broken metric; it is left unclamped because clamping would hide it.\n\n| level       |       a = A | witness (a)    |       b = B | witness (b)    |     b \u2212 a |\n| ----------- | ----------: | -------------- | ----------: | -------------- | --------: |\n| **Maximum** |  0.00282637 | 013_item13@194 |  0.00369914 | 013_item13@194 | +0.000873 |\n| **99.9%**   |  0.00257581 | 009_item9@154  |  0.00319036 | 009_item9@154  | +0.000615 |\n| **99.0%**   |  0.00219691 | 007_item7@6    |  0.00270823 | 013_item13@223 | +0.000511 |\n| 95.0%       |  0.00188309 | 010_item10@17  |  0.00235827 | 013_item13@193 | +0.000475 |\n| 90.0%       |  0.00171309 | 013_item13@189 |  0.00217277 | 006_item6@82   |  +0.00046 |\n| Median      |  0.00118867 | 011_item11@130 |  0.00149115 | 012_item12@9   | +0.000302 |\n| 10.0%       | 0.000675487 | 007_item7@13   | 0.000835378 | 012_item12@24  |  +0.00016 |\n| 5.0%        | 0.000544668 | 013_item13@157 | 0.000677111 | 014_item14@14  | +0.000132 |\n| 1.0%        | 0.000261311 | 009_item9@58   | 0.000305513 | 009_item9@63   | +4.42e-05 |\n| 0.1%        | 9.65887e-05 | 012_item12@101 |  7.7014e-05 | 013_item13@252 | -1.96e-05 |\n| Minimum     | 2.62735e-05 | 013_item13@252 | 2.23883e-06 | 008_item8@125  |  -2.4e-05 |\n\n**kld tail composition** \u2014 items holding tokens at or beyond each candidate's own quantile (top 5 per side; the JSON holds every sample and every token position).\n\n| level | candidate | item       | tail tokens | of item | item max kld | worst ear there |\n| ----- | --------- | ---------- | ----------: | ------: | -----------: | --------------: |\n| 99.0% | A         | 013_item13 |           6 |    2.0% |   0.00282637 |        0.981477 |\n| 99.0% | A         | 009_item9  |           5 |    2.5% |   0.00257548 |        0.981113 |\n| 99.0% | A         | 012_item12 |           5 |    1.8% |   0.00248479 |        0.981869 |\n| 99.0% | A         | 010_item10 |           2 |    0.8% |    0.0022492 |        0.981458 |\n| 99.0% | A         | 006_item6  |           1 |    1.1% |   0.00258202 |        0.990102 |\n| 99.0% | B         | 013_item13 |           7 |    2.3% |   0.00369914 |        0.970477 |\n| 99.0% | B         | 012_item12 |           6 |    2.1% |   0.00317581 |        0.971676 |\n| 99.0% | B         | 009_item9  |           3 |    1.5% |   0.00318976 |        0.970843 |\n| 99.0% | B         | 010_item10 |           2 |    0.8% |   0.00291263 |         0.97698 |\n| 99.0% | B         | 006_item6  |           1 |    1.1% |   0.00314202 |        0.982314 |\n| 99.9% | A         | 013_item13 |           1 |    0.3% |   0.00282637 |        0.985919 |\n| 99.9% | A         | 006_item6  |           1 |    1.1% |   0.00258202 |        0.990102 |\n| 99.9% | B         | 013_item13 |           2 |    0.7% |   0.00369914 |        0.970477 |\n\n### EAR\n\n\u03a3_v min(p_ref, p_cand) = 1 \u2212 TV at each scored answer position. HIGHER is better, so the degradation tail is the LOW end: 1.0% / 0.1% / Minimum \u2014 a literal \"maximum EAR\" sits at ~1.0 for any candidate worth measuring and carries no information.\n\n| level       |    a = A | witness (a)    |    b = B | witness (b)    |    b \u2212 a |\n| ----------- | -------: | -------------- | -------: | -------------- | -------: |\n| Maximum     | 0.999468 | 012_item12@9   | 0.997492 | 013_item13@260 | -0.00198 |\n| 99.9%       | 0.998864 | 010_item10@48  | 0.994332 | 015_item15@60  | -0.00453 |\n| 99.0%       | 0.997113 | 010_item10@5   |  0.99125 | 008_item8@4    | -0.00586 |\n| 95.0%       | 0.994414 | 014_item14@19  | 0.987802 | 013_item13@146 | -0.00661 |\n| 90.0%       | 0.992894 | 012_item12@21  | 0.986409 | 003_item3@28   | -0.00649 |\n| Median      | 0.987927 | 011_item11@41  | 0.980022 | 012_item12@240 | -0.00791 |\n| 10.0%       | 0.982775 | 012_item12@163 |  0.97362 | 014_item14@34  | -0.00915 |\n| 5.0%        | 0.981585 | 005_item5@32   | 0.971846 | 011_item11@258 | -0.00974 |\n| **1.0%**    | 0.979349 | 009_item9@107  | 0.968878 | 011_item11@121 |  -0.0105 |\n| **0.1%**    | 0.977285 | 011_item11@229 | 0.965972 | 014_item14@43  |  -0.0113 |\n| **Minimum** | 0.976329 | 012_item12@158 | 0.965143 | 006_item6@83   |  -0.0112 |\n\n**ear tail composition** \u2014 items holding tokens at or beyond each candidate's own quantile (top 5 per side; the JSON holds every sample and every token position).\n\n| level | candidate | item       | tail tokens | of item | item min ear |\n| ----- | --------- | ---------- | ----------: | ------: | -----------: |\n| 1.0%  | A         | 012_item12 |           4 |    1.4% |     0.976329 |\n| 1.0%  | A         | 009_item9  |           3 |    1.5% |     0.978297 |\n| 1.0%  | A         | 013_item13 |           3 |    1.0% |     0.977797 |\n| 1.0%  | A         | 011_item11 |           3 |    1.2% |     0.977306 |\n| 1.0%  | A         | 006_item6  |           3 |    3.3% |     0.976902 |\n| 1.0%  | B         | 009_item9  |           5 |    2.5% |     0.967518 |\n| 1.0%  | B         | 012_item12 |           5 |    1.8% |     0.965813 |\n| 1.0%  | B         | 013_item13 |           3 |    1.0% |     0.965981 |\n| 1.0%  | B         | 011_item11 |           2 |    0.8% |     0.967607 |\n| 1.0%  | B         | 010_item10 |           1 |    0.4% |     0.967581 |\n| 0.1%  | A         | 006_item6  |           1 |    1.1% |     0.976902 |\n| 0.1%  | A         | 012_item12 |           1 |    0.4% |     0.976329 |\n| 0.1%  | B         | 012_item12 |           1 |    0.4% |     0.965813 |\n| 0.1%  | B         | 006_item6  |           1 |    1.1% |     0.965143 |\n\n### \u0394p at the target token\n\np_cand(target) \u2212 p_ref(target) in percentage points, SIGNED. The full ladder including the MEDIAN is what shows a systematic over- or under-confidence; `mse_dp` and `rms_dp` are unsigned by construction and cannot. This is llama-perplexity's \u0394p table.\n\n| level       |      a = A | witness (a)    |     b = B | witness (b)    |     b \u2212 a |\n| ----------- | ---------: | -------------- | --------: | -------------- | --------: |\n| **Maximum** |    1.45991 | 013_item13@109 |   1.43935 | 008_item8@133  |   -0.0206 |\n| **99.9%**   |    1.36065 | 012_item12@156 |   1.36126 | 012_item12@156 | +0.000605 |\n| 99.0%       |   0.891972 | 009_item9@141  |  0.849244 | 015_item15@66  |   -0.0427 |\n| 95.0%       |    0.60572 | 013_item13@195 |  0.557082 | 010_item10@7   |   -0.0486 |\n| 90.0%       |   0.482522 | 010_item10@27  |  0.419347 | 013_item13@21  |   -0.0632 |\n| **Median**  | -0.0575671 | 012_item12@245 | -0.131395 | 010_item10@218 |   -0.0738 |\n| 10.0%       |  -0.564397 | 006_item6@73   | -0.663331 | 003_item3@21   |   -0.0989 |\n| 5.0%        |  -0.699557 | 010_item10@143 | -0.802534 | 010_item10@161 |    -0.103 |\n| 1.0%        |  -0.948022 | 009_item9@197  |  -1.06582 | 010_item10@17  |    -0.118 |\n| **0.1%**    |   -1.19105 | 013_item13@277 |  -1.35383 | 010_item10@111 |    -0.163 |\n| **Minimum** |   -1.30525 | 010_item10@111 |  -1.43954 | 012_item12@11  |    -0.134 |\n"
  }
 }

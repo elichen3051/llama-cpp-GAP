@@ -441,6 +441,12 @@ static results_perplexity perplexity_v2(llama_context * ctx, const common_params
     return {tokens, std::exp(nll / count), logit_history, prob_history};
 }
 
+static std::vector<std::thread> make_metric_workers(const common_params & params) {
+    const int threads = std::max(1, params.cpuparams.n_threads);
+    LOG_INF("metric_threads = %d\n", threads);
+    return std::vector<std::thread>(threads - 1);
+}
+
 static results_perplexity perplexity(llama_context * ctx, const common_params & params, const int32_t n_ctx) {
     if (params.ppl_stride > 0) {
         return perplexity_v2(ctx, params);
@@ -516,7 +522,7 @@ static results_perplexity perplexity(llama_context * ctx, const common_params & 
 
     LOG_INF("%s: calculating perplexity over %d chunks, n_ctx=%d, batch_size=%d, n_seq=%d\n", __func__, n_chunk, n_ctx, n_batch, n_seq);
 
-    std::vector<std::thread> workers(std::thread::hardware_concurrency() - 1);
+    auto workers = make_metric_workers(params);
 
     std::vector<uint16_t> log_probs;
     if (!params.logits_file.empty()) {
@@ -1765,7 +1771,7 @@ static void kl_divergence(llama_context * ctx, const common_params & params) {
 
     LOG_INF("%s: computing over %d chunks, n_ctx=%u, batch_size=%d, n_seq=%d\n", __func__, n_chunk, n_ctx, n_batch, n_seq);
 
-    std::vector<std::thread> workers(std::thread::hardware_concurrency() - 1);
+    auto workers = make_metric_workers(params);
 
     auto mean_and_uncertainty = [] (double sum, double sum2, size_t count) {
         if (count < 1) {

@@ -137,3 +137,54 @@ def test_null_verdict_rows_are_not_counted_as_detections(tmp_path, monkeypatch):
     md, _payload = _run(tmp_path, monkeypatch, "--mode", "power", effect=0.0)
     assert "never a detection rate" in md
     assert "inconclusive" in md
+
+
+@pytest.mark.parametrize("loader", ["random", "variance"])
+@pytest.mark.parametrize("failure", ["runtime", "execution", "missing", "rejected", "nonfinite", "reference", "budget"])
+def test_legacy_loaders_reject_invalid_paired_collections(tmp_path, loader, failure):
+    from test_saved_metrics_paired_compare import _make_pair
+    import cli.variance_decomposition as vd
+
+    options = {"n_items": 4}
+    if failure == "runtime":
+        options["meta_b_overrides"] = {"tf_chunk": 32}
+    elif failure == "missing":
+        options["n_items_b"] = 3
+    elif failure == "budget":
+        options["skipped_a"] = (3,)
+    a_dir, b_dir = _make_pair(tmp_path, **options)
+    if failure == "execution":
+        meta = json.loads((b_dir / "collect_meta.json").read_text())
+        meta["execution_identity"]["unexpected_change"] = True
+        (b_dir / "collect_meta.json").write_text(json.dumps(meta))
+    elif failure == "rejected":
+        (a_dir / "metrics" / "004_failed.rejected").write_text("failed")
+    elif failure in ("nonfinite", "reference"):
+        path = b_dir / "metrics" / "000_item0.npz"
+        with np.load(path) as data:
+            payload = {name: data[name].copy() for name in data.files}
+        if failure == "nonfinite":
+            payload["kld"][0] = np.nan
+        else:
+            payload["entropy_ref"][0] += 0.5
+        np.savez(path, **payload)
+    with pytest.raises(SystemExit):
+        if loader == "random":
+            rsp.load_population(a_dir, b_dir)
+        else:
+            vd.collect_deltas(a_dir, b_dir, "kld", -1)
+
+
+@pytest.mark.parametrize("loader", ["random", "variance"])
+def test_legacy_loaders_keep_every_valid_paired_item(tmp_path, loader):
+    from test_saved_metrics_paired_compare import _make_pair
+    import cli.variance_decomposition as vd
+
+    a_dir, b_dir = _make_pair(tmp_path, n_items=4)
+    if loader == "random":
+        a, b, weights, keys = rsp.load_population(a_dir, b_dir)
+        assert len(a) == len(b) == len(weights) == len(keys) == 4
+    else:
+        deltas, weights, npos, _rho, dropped = vd.collect_deltas(a_dir, b_dir, "kld", -1)
+        assert len(deltas) == len(weights) == len(npos) == 4
+        assert dropped == 0

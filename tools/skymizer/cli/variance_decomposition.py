@@ -41,11 +41,11 @@ Reported quantities
 * Full-cap decomposition: Var(d_i), sigma_w^2/T share, sigma_b^2 share
   (moment estimators; sigma_b^2 = Var(d_i) - mean_i(s_i^2/T_i), clamped 0).
 * Cap ladder (16, 32, ... , full): mu(K), sd(K), d(K) = mu/sd, and an
-  OBSERVED-EFFECT conditional N diagnostic from the iterated two-sided paired-t
+  OBSERVED-EFFECT conditional N diagnostic from the two-sided t-quantile
   formula. It is not prospective power; use power_analysis.py with an external
   SESOI for collection planning. The cap-LOCAL token-noise
-  share mean_i(s_i^2(K)/K_i)/Var (valid under token independence even when
-  positions are non-stationary), and the model check log2(pred/emp).
+  share mean_i(s_i^2(K)/K_i)/Var (requires independent residuals with a
+  common conditional mean), and the model check log2(pred/emp).
 * Sign profile of mu(K): a sign flip across caps means the cap is an
   ESTIMATOR choice, not a precision knob — pre-register it, and inspect the
   position-resolved delta profile before trusting any single-cap verdict.
@@ -101,7 +101,7 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from lib.kld_metrics_io import load_kld_metrics                # noqa: E402
-from cli.saved_metrics_paired_compare import find_metric_items  # noqa: E402
+import cli.saved_metrics_paired_compare as smpc                 # noqa: E402
 
 # metric name -> per-token delta column extractor (B minus A)
 METRIC_COLUMNS = {
@@ -137,48 +137,48 @@ def parse_args(argv=None):
 
 
 def collect_deltas(a_dir: Path, b_dir: Path, metric: str, cap: int):
-    """Per-item full (analysis-capped) delta ARRAYS from the matched .npz
-    pairs, plus (T_i, stored npos, lag-1 autocorr diagnostic). Items with
-    fewer than 2 usable positions are dropped."""
-    matched, _ = find_metric_items(a_dir, b_dir)
-    if not matched:
-        sys.exit("no items present in both metrics dirs")
-    delta_fn = METRIC_COLUMNS[metric]
-    deltas, T, npos_all, rho1, dropped, drifted = [], [], [], [], 0, 0
-    for key in matched:
-        ma, ha = load_kld_metrics(a_dir / "metrics" / f"{key}.npz")
-        mb, hb = load_kld_metrics(b_dir / "metrics" / f"{key}.npz")
-        for field in ("vocab", "npos", "n_prefill"):
-            if ha[field] != hb[field]:
-                sys.exit(f"{key}: {field} mismatch (candidate-a={ha[field]}, "
-                         f"candidate-b={hb[field]}) — item misalignment")
-        if not np.array_equal(ma["target"], mb["target"]):
-            sys.exit(f"{key}: target tokens differ between the two dirs — "
-                     "these are not the same items")
-        if not np.array_equal(ma["nll_ref"], mb["nll_ref"]):
-            drifted += 1
-        keep = ha["npos"] if cap == -1 else min(cap, ha["npos"])
-        if keep < 2:
-            dropped += 1
-            continue
-        dt = delta_fn(ma, mb)[:keep].astype(np.float64)
-        if not np.all(np.isfinite(dt)):
-            dropped += 1
-            continue
-        deltas.append(dt)
-        T.append(keep)
-        npos_all.append(ha["npos"])
-        if keep >= 3 and dt.std() > 0:
-            rho1.append(float(np.corrcoef(dt[:-1], dt[1:])[0, 1]))
-    if drifted:
-        print(f"WARNING: {drifted} item(s) have non-bit-identical reference "
-              "columns between the two dirs — reference drift inflates BOTH "
-              "variance components; the verdict pipeline would reject this "
-              "pairing (see saved_metrics_paired_compare.py).", file=sys.stderr)
-    if len(deltas) < 3:
-        sys.exit(f"need >= 3 usable items, got {len(deltas)} ({dropped} dropped)")
-    return (deltas, np.array(T), np.array(npos_all),
-            float(np.mean(rho1)) if rho1 else float("nan"), dropped)
+    """Load every paired delta array and reject rows unsuitable for variance analysis."""
+    try:
+        with smpc.comparison_locks((a_dir, b_dir)):
+            for role, root in (("candidate-a", a_dir), ("candidate-b", b_dir)):
+                smpc.require_collection_success(root, role)
+            a_meta = smpc.load_kld_collect_meta(a_dir)
+            b_meta = smpc.load_kld_collect_meta(b_dir)
+            smpc.require_execution_alignment(a_meta, b_meta)
+            for warning in smpc.check_kld_meta_alignment(a_meta, b_meta):
+                print(f"WARNING: {warning}", file=sys.stderr)
+            smpc.require_common_budget_skips({"candidate-a": a_dir, "candidate-b": b_dir})
+            matched, drops = smpc.find_metric_items(a_dir, b_dir)
+            smpc.require_complete_item_alignment(drops, allow_interaction=False)
+            if not matched:
+                sys.exit("no matched items between the two dirs")
+            delta_fn = METRIC_COLUMNS[metric]
+            deltas, T, npos_all, rho1 = [], [], [], []
+            for key in matched:
+                _sa, _sb, _ta, _tb, keep, finite, drift, _versions = smpc.score_item(
+                    key, a_dir, b_dir, cap)
+                if drift is not None:
+                    sys.exit(f"reference drift on {key}: {drift['msg']}")
+                if not finite:
+                    sys.exit(f"{key}: non-finite metric score; variance analysis aborted")
+                if keep < 2:
+                    sys.exit(f"{key}: variance analysis requires at least two scored positions")
+                ma, ha = load_kld_metrics(a_dir / "metrics" / f"{key}.npz")
+                mb, _hb = load_kld_metrics(b_dir / "metrics" / f"{key}.npz")
+                dt = delta_fn(ma, mb)[:keep].astype(np.float64)
+                if not np.all(np.isfinite(dt)):
+                    sys.exit(f"{key}: non-finite paired differences; variance analysis aborted")
+                deltas.append(dt)
+                T.append(keep)
+                npos_all.append(ha["npos"])
+                if keep >= 3 and dt.std() > 0:
+                    rho1.append(float(np.corrcoef(dt[:-1], dt[1:])[0, 1]))
+            if len(deltas) < 3:
+                sys.exit(f"need >= 3 usable items, got {len(deltas)}")
+            return (deltas, np.array(T), np.array(npos_all),
+                    float(np.mean(rho1)) if rho1 else float("nan"), 0)
+    except ValueError as error:
+        sys.exit(str(error))
 
 
 def t_ppf(p: float, df: float) -> float:
@@ -195,6 +195,8 @@ def t_ppf(p: float, df: float) -> float:
     if df <= 0:
         return float("nan")
     x = NormalDist().inv_cdf(p)
+    if df > sys.float_info.max ** 0.25:
+        return x  # All corrections are below floating-point resolution.
     x2 = x * x
     g1 = (x2 + 1.0) * x / 4.0
     g2 = ((5.0 * x2 + 16.0) * x2 + 3.0) * x / 96.0
@@ -205,27 +207,40 @@ def t_ppf(p: float, df: float) -> float:
 
 
 def required_n(snr: float, confidence_level: float, power_target: float):
-    """Smallest n with power >= power_target for a two-sided paired t-test at
-    the given standardized effect, or None when the effect is not bounded away
-    from zero (snr <= 0 / non-finite) and no finite n suffices.
+    """Smallest n satisfying the two-sided t-quantile sample-size approximation.
 
-    n solves n = ((t_{1-alpha/2, n-1} + t_{power, n-1}) / snr)^2, which is
-    implicit in n; iterate from the z-based seed until it stops moving. The
-    iteration is monotone and converges in a handful of steps."""
+    This is not exact noncentral-t power inversion. Return None for an
+    undefined effect or a required count outside floating-point range.
+    """
     if not np.isfinite(snr) or snr <= 0.0:
         return None
+    if not (0.0 < confidence_level < 1.0 and 0.0 < power_target < 1.0):
+        raise ValueError("confidence_level and power_target must be in (0, 1)")
     alpha = 1.0 - confidence_level
     z_sum = (NormalDist().inv_cdf(1.0 - alpha / 2.0)
              + NormalDist().inv_cdf(power_target))
-    n = max(3, int(np.ceil((z_sum / snr) ** 2)))
-    for _ in range(64):
-        df = max(n - 1, 1)
+    try:
+        initial = (z_sum / snr) ** 2
+    except OverflowError:
+        return None
+    if not math.isfinite(initial):
+        return None
+
+    def sufficient(n):
+        df = n - 1
         t_sum = t_ppf(1.0 - alpha / 2.0, df) + t_ppf(power_target, df)
-        nxt = max(3, int(np.ceil((t_sum / snr) ** 2)))
-        if nxt == n:
-            return n
-        n = nxt
-    return n
+        return n >= (t_sum / snr) ** 2
+
+    low, high = 2, max(3, int(math.ceil(initial)))
+    while not sufficient(high):
+        high *= 2
+    while high - low > 1:
+        middle = (low + high) // 2
+        if sufficient(middle):
+            high = middle
+        else:
+            low = middle
+    return high
 
 
 def snr_interval(snr: float, n: int, confidence_level: float):
@@ -259,8 +274,8 @@ def build_curve(deltas, T, s2b, s2w, caps, confidence_level, power_target):
     pred = sigma_b^2 + mean_i(s2w_i / min(K, T_i)) against the empirical
     variance — the 2026-08-26 backtest's F1 metric (negative = the law
     underestimates the real variance at this cap). noise_share is the
-    cap-LOCAL decomposition mean_i(s_i^2(K)/K_i)/emp, which stays valid
-    under position non-stationarity (unlike pred's full-length s2w)."""
+    cap-LOCAL decomposition mean_i(s_i^2(K)/K_i)/emp. Correlated residuals
+    or changing positional means invalidate its interpretation as noise."""
     rows = []
     for K in caps:
         dK = np.array([d[: min(K, len(d))].mean() for d in deltas])
@@ -270,20 +285,21 @@ def build_curve(deltas, T, s2b, s2w, caps, confidence_level, power_target):
         s2_local = np.array([d[: min(K, len(d))].var(ddof=1) for d in deltas])
         noise_local = float(np.mean(s2_local / kept))
         pred = float(s2b + np.mean(s2w / kept))
-        snr = abs(mu) / math.sqrt(emp) if emp > 0 else float("inf")
+        snr = abs(mu) / math.sqrt(emp) if emp > 0 else (float("inf") if mu != 0 else float("nan"))
         rows.append({
             "K": int(K),
             "mu": mu,
             "sd": float(math.sqrt(emp)),
             "snr": float(snr),
-            # a zero-variance sample separates at any n: report the minimum
-            "n_required": (3 if not np.isfinite(snr)
+            "n_required": (3 if emp == 0.0 and mu != 0.0
                            else required_n(snr, confidence_level, power_target)),
             "noise_share_local": (min(1.0, noise_local / emp)
                                   if emp > 0 else float("nan")),
             "log2_pred_over_emp": (float(math.log2(pred / emp))
                                    if emp > 0 and pred > 0 else float("nan")),
         })
+        if emp == 0.0:
+            rows[-1]["snr_status"] = "zero_effect_zero_variance" if mu == 0.0 else "zero_variance_nonzero_effect"
     return rows
 
 
@@ -365,8 +381,8 @@ def main(argv=None) -> int:
 
     # |mu|: the test is two-sided, so detectability is sign-agnostic (a
     # negative delta just means B beats A on this metric).
-    snr_now = abs(mu) / np.sqrt(var_total)
-    snr_inf = abs(mu) / np.sqrt(var_between) if var_between > 0 else float("inf")
+    snr_now = abs(mu) / np.sqrt(var_total) if var_total > 0 else (float("inf") if mu != 0 else float("nan"))
+    snr_inf = abs(mu) / np.sqrt(var_between) if var_between > 0 else (float("inf") if mu != 0 else float("nan"))
 
     def n_req(snr):
         return required_n(snr, args.confidence_level, args.power_target)
@@ -408,7 +424,9 @@ def main(argv=None) -> int:
 
     floor_str = (f"N_min={n80_min}" if n80_min is not None
                  else "no floor (token noise explains all variance)")
-    if token_share > 0.5:
+    if mu == 0.0:
+        hint = "no observed mean difference; this pilot does not size a nonzero effect"
+    elif token_share > 0.5:
         if coll_cap not in (None, -1) and cap_saturated < 0.05:
             hint = ("token noise dominates, BUT answers are already fully "
                     f"stored ({100*cap_saturated:.0f}% of items hit the "
@@ -439,7 +457,7 @@ def main(argv=None) -> int:
           f"({100*(1-token_share):.1f}%)"
           + ("  [clamped to 0 — token noise explains everything]" if clamped else ""))
     print(f"SNR now / at T->inf         = {snr_now:.4f} / "
-          + (f"{snr_inf:.4f}" if np.isfinite(snr_inf) else "inf"))
+          + ("undefined" if np.isnan(snr_inf) else f"{snr_inf:.4f}"))
     print(f"  SNR {int(args.confidence_level*100)}% interval        = "
           f"[{snr_lo:.4f}, {snr_hi:.4f}]"
           + ("   <-- reaches 0: the required N below has NO upper bound"
@@ -468,7 +486,7 @@ def main(argv=None) -> int:
         fit = ("   n/a" if not np.isfinite(r["log2_pred_over_emp"])
                else f"{r['log2_pred_over_emp']:+14.2f}")
         print(f"  {r['K']:>5}  {r['mu']:>+12.4e}  {r['sd']:>10.3e}  "
-              f"{(r['mu']/r['sd'] if r['sd'] > 0 else float('inf')):>+8.3f}  "
+              f"{(r['mu']/r['sd'] if r['sd'] > 0 else math.copysign(r['snr'], r['mu'])):>+8.3f}  "
               f"{nreq:>8}  {share}  {fit}")
     if worst is not None and abs(worst["log2_pred_over_emp"]) > 0.3:
         fit = worst["log2_pred_over_emp"]
@@ -514,7 +532,7 @@ def main(argv=None) -> int:
           "reaches infinity as 'this pilot cannot size the study'.")
 
     if args.output_json:
-        args.output_json.write_text(json.dumps({
+        payload = {
             "metric": args.metric,
             "num_eval_tokens": args.num_eval_tokens,
             "n_items": n, "n_dropped": dropped,
@@ -536,7 +554,7 @@ def main(argv=None) -> int:
             "n_required_now_upper": n80_now_hi,   # null = unbounded
             "n_required_uses": (
                 "observed pilot effect; two-sided paired t approximation "
-                "iterated on df; diagnostic only, not prospective power"
+                "solved as an integer bound on df; diagnostic only, not prospective power"
             ),
             "n_required_role": "conditional_observed_effect_diagnostic",
             "n_required_floor": n80_min,
@@ -553,7 +571,14 @@ def main(argv=None) -> int:
             "confidence_level": args.confidence_level,
             "power_target": args.power_target,
             "hint": hint,
-        }, indent=2) + "\n", encoding="utf-8")
+        }
+        if var_total == 0.0:
+            payload["snr_status"] = "zero_effect_zero_variance" if mu == 0.0 else "zero_variance_nonzero_effect"
+        for block in (payload, cost or {}):
+            for key, value in block.items():
+                if isinstance(value, float) and not np.isfinite(value):
+                    block[key] = None
+        args.output_json.write_text(json.dumps(payload, indent=2, allow_nan=False) + "\n", encoding="utf-8")
         print(f"wrote json -> {args.output_json}", file=sys.stderr)
     return 0
 

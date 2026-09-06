@@ -98,3 +98,13 @@ The default comparison now has 30 cells, of which 29 are exploratory (v4: 26
 and 25). This deliberately changes the Holm adjustment family, not existing
 raw metrics, means, raw p-values or CIs. Explicit-metric golden reports retain
 their old metric lists and remain unchanged.
+
+## 6. Classic PPL corpus bridge and grouped comparisons
+
+`--perplexity-window` is an opt-in llm-kld protocol. It decodes the full even-sized window in one batch, including the final unused logit row, and scores positions `L/2 + 1 .. L - 1`. The 512-token protocol has 255 targets, `n_prefill=257` and `n_past_actual=512`. It preserves native full-stream tokenization, per-window BOS replacement and the dropped incomplete tail. The ordinary teacher-forcing path retains its original decode shape.
+
+Corpus protocol and ordered window maps are immutable collection identity fields. Article and contiguous-block comparisons concatenate the original per-target records before computing group means; grouping cannot change the corpus, BOS handling, targets or pooled token estimates. Only articles with scored targets form groups. The statistical unit is the selected window, article or block, and inference is conditional on treating those groups as independent sampling units. Residual dependence can invalidate coverage and p-values.
+
+`llama-perplexity` saved references use clipped uint16 log probabilities. Compare exact tokens/windows/targets and uncompressed mean NLL across tools; report saved-reference quantization effects and both KLD values separately. The bridge verifier holds the collection reader lock for its complete read.
+
+The statistical validation update preserves existing finite-input numerical results. Directional evidence and interval-inclusion equivalence are separate output facts; a 95% interval wholly inside a margin corresponds to TOST with each one-sided test at alpha 0.025. Invalid or non-finite input and unrepresentable derived values fail explicitly. Approximate observed-effect sample-size diagnostics do not replace prospective power analysis with an externally chosen effect.

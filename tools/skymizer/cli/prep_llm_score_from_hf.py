@@ -146,6 +146,10 @@ def prep_row(row, out_dir: Path) -> dict:
     meta = build_meta(row)
     from lib.reference_dataset import reference_provenance
     meta.update(reference_provenance(row))
+    if row.get("corpus_protocol"):
+        from lib.text_corpus import validate_corpus_row
+        protocol, window = validate_corpus_row(row)
+        meta.update(reference_vocabulary=protocol["vocabulary"], corpus_protocol=protocol, corpus_window=window)
     (out_dir / "meta.json").write_text(
         json.dumps(meta, indent=2, ensure_ascii=False), encoding="utf-8")
     return meta

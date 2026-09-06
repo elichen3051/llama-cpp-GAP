@@ -12,6 +12,7 @@ from compare.contracts import (
     DEFAULT_PRIMARY_WEIGHTING,
     LOWER_IS_BETTER,
     MissingMetricError,
+    NonFiniteMetricError,
     PER_ITEM_TAIL_LADDER,
     PER_ITEM_TAIL_METRICS,
     POOLED_TOKEN_METRICS,
@@ -20,6 +21,7 @@ from compare.contracts import (
 from compare.inference import (
     _build_weighting_block,
     _classify_consensus,
+    _exp_nll,
     _ppl_block,
     _ppl_ratio_block,
     _rms_dp_block,
@@ -50,10 +52,14 @@ def _optional_metric_arrays(scores: Sequence[Mapping[str, Any]], metric: str) ->
 
 def _weighted_metric_mean(values: np.ndarray, weights: np.ndarray, weighting: str) -> float:
     if weighting == "item":
-        return float(values.mean())
-    if weighting == "token":
-        return float((weights * values).sum() / weights.sum())
-    raise ValueError(f"weighting must be item|token; got {weighting!r}")
+        mean = float(values.mean())
+    elif weighting == "token":
+        mean = float((weights * values).sum() / weights.sum())
+    else:
+        raise ValueError(f"weighting must be item|token; got {weighting!r}")
+    if not math.isfinite(mean):
+        raise NonFiniteMetricError("non-finite metric mean; paired comparison aborted")
+    return mean
 
 
 def _candidate_metric_summary(
@@ -97,8 +103,18 @@ def _validate_compare_inputs(scores_a, scores_b, weights, token_metrics_a,
         raise ValueError("seed must be an int (item & token bootstraps share it)")
     if len(scores_a) != len(scores_b) or len(scores_a) != len(weights):
         raise AlignmentError("scores_a, scores_b, weights must have equal length")
-    if len(scores_a) == 0:
-        raise AlignmentError("paired comparison requires at least one item")
+    if len(scores_a) < 2:
+        raise AlignmentError("paired comparison requires at least two items")
+    w = np.asarray(weights, dtype=float)
+    if w.ndim != 1 or not np.all(np.isfinite(w)) or np.any(w <= 0.0):
+        raise ValueError("weights must be a one-dimensional sequence of finite positive values")
+    for role, scores in (("candidate-a", scores_a), ("candidate-b", scores_b)):
+        for i, score in enumerate(scores):
+            for metric, value in score.items():
+                if not math.isfinite(float(value)):
+                    raise NonFiniteMetricError(f"{role} item {i}: non-finite {metric!r}; paired comparison aborted")
+    if item_keys is not None and len(item_keys) != len(scores_a):
+        raise AlignmentError("item_keys must align 1:1 with scores_a")
     if (token_metrics_a is None) != (token_metrics_b is None):
         raise ValueError(
             "token_metrics_a and token_metrics_b must be given together")
@@ -120,13 +136,13 @@ def _validate_compare_inputs(scores_a, scores_b, weights, token_metrics_a,
             # ladders instead of failing loudly.
             for i, (ta, tb) in enumerate(zip(cols_a, cols_b)):
                 na, nb = np.asarray(ta).size, np.asarray(tb).size
-                if not (na == nb == int(weights[i])):
+                if not (na == nb == weights[i]):
                     raise AlignmentError(
                         f"item {i}: per-token {name!r} lengths (a={na}, "
                         f"b={nb}) != weights[{i}]={weights[i]}; the per-token "
                         "arrays are misaligned with the per-item scores")
-        if item_keys is not None and len(item_keys) != len(scores_a):
-            raise AlignmentError("item_keys must align 1:1 with scores_a")
+                if not (np.all(np.isfinite(ta)) and np.all(np.isfinite(tb))):
+                    raise NonFiniteMetricError(f"item {i}: non-finite per-token {name!r}; paired comparison aborted")
 
 
 def _metric_blocks(scores_a, scores_b, w, metrics, resolved_primary,
@@ -199,13 +215,8 @@ def _side_metrics(scores_a, scores_b, w, model_a_label, model_b_label):
         if summary is not None:
             candidate_metrics[cname] = summary
 
-    # The REFERENCE's own NLL / PPL. Both candidates were scored against one
-    # shared reference, so nll_ref is identical on the two sides by
-    # construction and is not a paired quantity -- it is what makes
-    # PPL(reference) reportable at all. llama-perplexity prints PPL(base)
-    # next to PPL(Q); here "baseline" and "candidate" are candidates A and B,
-    # and the reference's own likelihood had nowhere to appear even though
-    # every VLMK record stores nll_ref per token.
+    # Report reference NLL from side A and record any difference from side B.
+    # The caller checks the shared reference and target-token provenance.
     reference_metrics = None
     ref_nll_a = _optional_metric_arrays(scores_a, "nll_ref")
     ref_nll_b = _optional_metric_arrays(scores_b, "nll_ref")
@@ -218,15 +229,16 @@ def _side_metrics(scores_a, scores_b, w, model_a_label, model_b_label):
             "n_items_used": int(ref_nll_a.size),
             "nll": {"item_weighted_mean": item_mean,
                     "token_weighted_mean": token_mean},
-            "ppl": {"item_weighted": math.exp(item_mean),
-                    "token_weighted": math.exp(token_mean)},
+            "ppl": {"item_weighted": _exp_nll(item_mean),
+                    "token_weighted": _exp_nll(token_mean)},
             "max_abs_side_difference": drift,
             "description": (
-                "The shared FP reference's own teacher-forced NLL and "
-                "perplexity at the same target tokens -- llama-perplexity's "
-                "PPL(base). Identical for both candidates by construction "
-                "(one reference, scored once); max_abs_side_difference is the "
-                "witness that it was."),
+                "The shared FP reference's teacher-forced NLL and perplexity "
+                "from full logits at the same target tokens. These differ from "
+                "PPL(base) reconstructed from llama-perplexity's saved clipped "
+                "and quantized reference. Values use candidate-a's recorded "
+                "reference column; max_abs_side_difference reports any "
+                "difference from candidate-b's reference column."),
         }
     return candidate_metrics, reference_metrics
 

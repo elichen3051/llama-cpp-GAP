@@ -299,7 +299,7 @@ def _resolve_display_weightings(display_weighting: str):
 
 
 def _section_title(a_label, b_label, n_items, iters, conf_pct, num_eval_tokens,
-                   ci_method=None) -> list[str]:
+                   ci_method=None, sampling=None) -> list[str]:
     if ci_method == "t":
         how = f"{conf_pct}CI via paired Student-t (df = n - 1, no bootstrap)"
     else:
@@ -311,6 +311,14 @@ def _section_title(a_label, b_label, n_items, iters, conf_pct, num_eval_tokens,
         "- Protocol: teacher-forced on the dataset's stored model-generated "
         "answer trajectory; KLD/JSD/EAR over full vocab; answer positions only.",
     ]
+    if sampling:
+        lines[2] = f"- Paired {sampling['unit']} units: {n_items} from {sampling['n_windows']} corpus windows   |   {how}"
+        protocol = sampling["protocol"]
+        lines[3] = f"- Protocol: fixed text corpus, {protocol['window_size']}-token windows, {protocol['targets_per_window']} teacher-forced targets per window; KLD/JSD/EAR over full vocabulary."
+        lines.append("- " + sampling["scope"])
+        lines.append("- Item weighting gives each selected group equal weight; token weighting pools its scored targets.")
+        if sampling.get("block_windows"):
+            lines.append(f"- Block size: {sampling['block_windows']} consecutive original windows; the final partial block is retained.")
     if num_eval_tokens != -1:
         lines.append(f"- Compare-time num_eval_tokens: {num_eval_tokens}")
     lines.append("")
@@ -404,9 +412,9 @@ def _section_alignment(
 
 
 def _section_reference_likelihood(ref_m, reference_label, weightings) -> list[str]:
-    """PPL(base): the SHARED reference's own likelihood at the same target
+    """Full-logits reference likelihood at the same target
     tokens. Its own section, not a row in the paired table -- there is
-    nothing paired about it (one reference, scored once, identical in
+    nothing paired about it (one shared reference, checked for agreement in
     both columns by construction)."""
     lines: list[str] = []
     if ref_m:
@@ -420,13 +428,18 @@ def _section_reference_likelihood(ref_m, reference_label, weightings) -> list[st
             aligns=["left", "right", "right"]))
         lines.append("")
         lines.append(
-            "`llama-perplexity`'s PPL(base), on the same stored target tokens. "
-            "Identical for both candidates by construction — one reference, "
-            "scored once; the JSON's `max_abs_side_difference` "
-            f"({ref_m.get('max_abs_side_difference', 0.0):.3g}) is the witness "
-            "that it was.")
+            "Reference likelihood on the same stored target tokens, using uncompressed VLMK NLL values. "
+            "The reference is evaluated in each collection; the JSON's `max_abs_side_difference` "
+            f"({ref_m.get('max_abs_side_difference', 0.0):.3g}) records the observed agreement.")
         lines.append("")
     return lines
+
+
+def _verdict_text(decision):
+    verdict = decision["verdict"]
+    if decision.get("equivalence_established") and verdict != "EQUIVALENT":
+        verdict += f"; equivalent at margin {decision['equivalence_margin']:g}"
+    return verdict
 
 
 def _section_verdict_summary(result, weightings) -> list[str]:
@@ -443,13 +456,13 @@ def _section_verdict_summary(result, weightings) -> list[str]:
                 continue
             role = block["role"]
             if role == "primary":
-                scope = "primary (confirmatory)"
+                scope = "primary (conditional corpus inference)" if result.get("sampling") else "primary (confirmatory)"
             elif block.get("holm_significant"):
                 scope = "exploratory (survives Holm)"
             else:
                 continue
             summary_rows.append([f"{name} ({wshort})",
-                                 block["decision"]["verdict"], scope])
+                                 _verdict_text(block["decision"]), scope])
     lines: list[str] = []
     if summary_rows:
         lines.append("## Verdict summary")
@@ -465,7 +478,7 @@ def _section_verdict_summary(result, weightings) -> list[str]:
     return lines
 
 
-def _section_results_intro(primary, multiplicity, conf_pct) -> list[str]:
+def _section_results_intro(primary, multiplicity, conf_pct, conditional=False) -> list[str]:
     lines = ["## Results", ""]
     lines.append("verdict reads the paired CI of (b − a); do NOT compare per-model "
                  "means independently.")
@@ -483,6 +496,8 @@ def _section_results_intro(primary, multiplicity, conf_pct) -> list[str]:
             "what produced a measured family-wise false-positive rate of 0.35 "
             "on exchangeable A/B data.")
     lines.append("")
+    if conditional:
+        lines = [line.replace("the one confirmatory endpoint", "the one primary endpoint, conditional on the corpus assumptions") for line in lines]
     return lines
 
 
@@ -524,7 +539,7 @@ def _results_rows(result, metrics_to_show, weightings, primary_cell) -> list[lis
             if block is None:
                 continue
             decision = block["decision"]
-            verdict = decision["verdict"]
+            verdict = _verdict_text(decision)
             if "delta_candidate_minus_baseline" in block:
                 ci = block.get("ci_delta", {})
                 estimate_str = _fmt_signed(block["delta_candidate_minus_baseline"])
@@ -646,7 +661,7 @@ def format_comparison_table(
                     f"{primary.get('weighting')}_weighted")
 
     lines = _section_title(a_label, b_label, n_items, iters, conf_pct, num_eval_tokens,
-                           ci_method=result.get("ci_method"))
+                           ci_method=result.get("ci_method"), sampling=result.get("sampling"))
     lines += _section_inputs(result, reference_label, n_items)
     execution = result.get("execution")
     if execution:
@@ -659,7 +674,7 @@ def format_comparison_table(
     lines += _section_reference_likelihood(result.get("reference_metrics"),
                                            reference_label, weightings)
     lines += _section_verdict_summary(result, weightings)
-    lines += _section_results_intro(primary, multiplicity, conf_pct)
+    lines += _section_results_intro(primary, multiplicity, conf_pct, conditional=bool(result.get("sampling")))
 
     ci_header = f"{_format_confidence_level(conf)} CI" if conf is not None else "CI"
     headers = ["metric", "weighting", "a mean", "b mean", "b − a (or b ÷ a)",

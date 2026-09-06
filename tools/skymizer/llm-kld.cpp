@@ -28,6 +28,9 @@
 //   --num-eval-tokens <int>            Stop teacher-forcing after this many answer
 //                                      positions (-1 = all, default; clamped to
 //                                      L - n_prefill)
+//   --perplexity-window                Decode one full even-length context window per side, like classic np1 perplexity.
+//                                      Requires L = -c = -b = -ub and n_prefill = L/2 + 1; scores all L/2 - 1 targets.
+//                                      Input tokens must already include the caller's BOS policy; no tokens are changed.
 //   -ngl <int>                         GPU layers to offload, per model (default 99)
 //   -c <int>                           Context size, per model (default 32768)
 //   -b <int>                           Logical batch size for prefill (default 2048)
@@ -87,6 +90,7 @@
 //                                              actually moves when the vision
 //                                              budget changes; 0 = not recorded,
 //                                              i.e. written before this field)
+//                                              With --perplexity-window, this is L because the whole window was decoded.
 // followed by n_positions packed records of 76 bytes:
 //   float32 kld                                KL(p_ref || p_cand), nats
 //   float32 reversed_kld                       KL(p_cand || p_ref), nats
@@ -177,6 +181,7 @@ struct vlm_kld_args {
     llama_flash_attn_type flash_attn_type = LLAMA_FLASH_ATTN_TYPE_AUTO;
     bool swa_full = false;             // see load_side()
     bool allow_vocab_attr_mismatch = false;  // see validate_vocab_id_mapping()
+    bool perplexity_window = false;
     bool self_test = false;
     bool print_vlmk_version = false;
 };
@@ -222,6 +227,7 @@ static bool parse_args(int argc, char ** argv, vlm_kld_args & a) {
                 : LLAMA_FLASH_ATTN_TYPE_DISABLED;
         }
         else if (k == "--swa-full")         { a.swa_full = true; }
+        else if (k == "--perplexity-window") { a.perplexity_window = true; }
         else if (k == "--allow-vocab-attr-mismatch") { a.allow_vocab_attr_mismatch = true; }
         else if (k == "--self-test")        { a.self_test = true; }
         else if (k == "--vlmk-version")     { a.print_vlmk_version = true; }
@@ -267,9 +273,33 @@ static bool parse_args(int argc, char ** argv, vlm_kld_args & a) {
         fprintf(stderr, "--metric-threads must be -1 (auto) or >= 1, got %d\n", a.metric_threads);
         return false;
     }
+    if (a.perplexity_window &&
+            (a.n_ctx < 4 || a.n_ctx % 2 != 0 || a.n_batch != a.n_ctx || a.n_ubatch != a.n_ctx ||
+             (a.tf_chunk != -1 && a.tf_chunk != a.n_ctx) ||
+             (a.num_eval_tokens != -1 && a.num_eval_tokens != a.n_ctx / 2 - 1))) {
+        fprintf(stderr, "--perplexity-window requires even -c >= 4, -b = -ub = -c, --tf-chunk -1 or -c, and all -c/2 - 1 targets\n");
+        return false;
+    }
     return true;
 }
 
+
+static bool validate_perplexity_window_input(const vlm_kld_args & args, size_t n_tokens, stderr_prefix * lp) {
+    if (n_tokens != (size_t) args.n_ctx || args.n_prefill != args.n_ctx / 2 + 1) {
+        prefixed_fprintf(lp, "--perplexity-window requires exactly %d tokens and n_prefill=%d, got %zu tokens and n_prefill=%d\n",
+                         args.n_ctx, args.n_ctx / 2 + 1, n_tokens, args.n_prefill);
+        return false;
+    }
+    return true;
+}
+
+static bool validate_perplexity_window_vocab(const llama_vocab * ref, const llama_vocab * cand) {
+    if (llama_vocab_get_add_eos(ref) || llama_vocab_get_add_eos(cand)) {
+        fprintf(stderr, "--perplexity-window requires add_eos=false for both vocabularies\n");
+        return false;
+    }
+    return true;
+}
 
 // ---------------------------------------------------------------------------
 // output writer
@@ -295,8 +325,8 @@ static bool write_vlmk_file(
     }
     bool ok = true;
     // Sixth word: llama.cpp's OWN position count after prefill. For a
-    // text-only model that always equals n_prefill (asserted at the call
-    // site); the field exists so both lanes' headers carry the same
+    // text-only model that equals n_prefill, or the whole window length in perplexity-window mode.
+    // The field exists so both lanes' headers carry the same
     // contract, and 0 still means "not recorded".
     const uint32_t header[6] = {
         VLMK_MAGIC, VLMK_VERSION, n_vocab,
@@ -473,6 +503,64 @@ static bool prefill_side(model_side & s,
     return true;
 }
 
+static bool score_perplexity_window(
+        const vlm_kld_args & args,
+        model_side & ref,
+        model_side & cand,
+        int32_t n_vocab,
+        int32_t n_batch,
+        const std::vector<int32_t> & tokens,
+        stderr_prefix * lp) {
+    const int length = (int) tokens.size();
+    if (n_batch != length || llama_n_ctx(ref.lctx.get()) != (uint32_t) length ||
+            llama_n_ctx(cand.lctx.get()) != (uint32_t) length ||
+            llama_n_ubatch(ref.lctx.get()) != (uint32_t) length ||
+            llama_n_ubatch(cand.lctx.get()) != (uint32_t) length) {
+        prefixed_fprintf(lp, "--perplexity-window effective context and batch sizes must equal the window length\n");
+        return false;
+    }
+    const int first = length / 2;
+    const int n_eval = length - first - 1;
+    std::vector<kld_record> records(n_eval);
+    std::vector<const float *> ref_rows, cand_rows;
+    std::vector<int32_t> targets;
+    ref_rows.reserve(n_eval);
+    cand_rows.reserve(n_eval);
+    targets.reserve(n_eval);
+
+    llama_batch batch = llama_batch_init(length, 0, 1);
+    common_batch_clear(batch);
+    for (int pos = 0; pos < length; ++pos) {
+        common_batch_add(batch, tokens[pos], pos, {0}, pos >= first);
+    }
+    const bool decoded = llama_decode(ref.lctx.get(), batch) == 0 && llama_decode(cand.lctx.get(), batch) == 0;
+    llama_batch_free(batch);
+    if (!decoded) {
+        prefixed_fprintf(lp, "llama_decode failed for the full perplexity window\n");
+        return false;
+    }
+    ref.n_past = cand.n_past = length;
+    for (int pos = first; pos < length - 1; ++pos) {
+        const float * r = llama_get_logits_ith(ref.lctx.get(), pos);
+        const float * c = llama_get_logits_ith(cand.lctx.get(), pos);
+        if (!r || !c) {
+            prefixed_fprintf(lp, "missing logits for perplexity window position %d\n", pos);
+            return false;
+        }
+        ref_rows.push_back(r);
+        cand_rows.push_back(c);
+        targets.push_back(tokens[pos + 1]);
+    }
+    compute_records_parallel(ref_rows, cand_rows, targets, n_vocab,
+                             resolve_metric_threads(args.metric_threads), records.data());
+    for (int i = 0; i < n_eval; ++i) {
+        if (!validate_kld_record_finite(records[i], i, lp)) {
+            return false;
+        }
+    }
+    return write_vlmk_file(args.output_metrics_path, n_vocab, args.n_prefill, length, records, lp);
+}
+
 // Score one item: prefill both sides, teacher-force the shared answer tokens
 // through both in chunks, and compute one kld_record per answer position from
 // the two in-memory logit rows. Records are buffered (76 B/position) and the
@@ -485,13 +573,16 @@ static bool score_one(
         int32_t n_batch,
         stderr_prefix * lp) {
     // Every item starts from clean KV on both sides (no-op on first use).
-    llama_memory_clear(llama_get_memory(ref.lctx.get()),  false);
-    llama_memory_clear(llama_get_memory(cand.lctx.get()), false);
+    llama_memory_clear(llama_get_memory(ref.lctx.get()),  args.perplexity_window);
+    llama_memory_clear(llama_get_memory(cand.lctx.get()), args.perplexity_window);
 
     // --- read tokens ---
     std::vector<int32_t> tokens_full = read_tokens_bin(args.tokens_in_path, lp);
     if (tokens_full.empty()) {
         prefixed_fprintf(lp, "tokens-in is empty or unreadable\n");
+        return false;
+    }
+    if (args.perplexity_window && !validate_perplexity_window_input(args, tokens_full.size(), lp)) {
         return false;
     }
     const int L = (int) tokens_full.size();
@@ -508,6 +599,10 @@ static bool score_one(
                        : n_answer;
     prefixed_fprintf(lp, "tokens_full=%d, n_prefill=%d, n_answer=%d, n_eval=%d, vocab=%d\n",
                      L, args.n_prefill, n_answer, n_eval, n_vocab);
+
+    if (args.perplexity_window) {
+        return score_perplexity_window(args, ref, cand, n_vocab, n_batch, tokens_full, lp);
+    }
 
     // --- prefill both sides ---
     if (!prefill_side(ref,  tokens_full, args.n_prefill, n_batch, lp) ||
@@ -547,6 +642,25 @@ int main(int argc, char ** argv) {
     if (!args.manifest_path.empty() && !read_manifest(args.manifest_path, manifest_entries)) {
         return 1;
     }
+    if (args.perplexity_window) {
+        const auto valid_input = [](const vlm_kld_args & row) {
+            return validate_perplexity_window_input(row, read_tokens_bin(row.tokens_in_path, nullptr).size(), nullptr);
+        };
+        if (args.manifest_path.empty()) {
+            if (!valid_input(args)) { return 1; }
+        } else {
+            for (const auto & entry : manifest_entries) {
+                if (!entry.ok) {
+                    fprintf(stderr, "%s\n", entry.error.c_str());
+                    return 1;
+                }
+                vlm_kld_args row = args;
+                row.tokens_in_path = entry.tokens_in_path;
+                row.n_prefill = entry.n_prefill;
+                if (!valid_input(row)) { return 1; }
+            }
+        }
+    }
 
     try {
         std::vector<skymizer_identity::json> expected;
@@ -574,6 +688,9 @@ int main(int argc, char ** argv) {
     // share one vocabulary. (Quantizations of the same base model do.)
     const llama_vocab * ref_vocab  = llama_model_get_vocab(ref.model.get());
     const llama_vocab * cand_vocab = llama_model_get_vocab(cand.model.get());
+    if (args.perplexity_window && !validate_perplexity_window_vocab(ref_vocab, cand_vocab)) {
+        return 1;
+    }
     if (!validate_vocab_id_mapping(ref_vocab, cand_vocab, nullptr,
                                    args.allow_vocab_attr_mismatch)) {
         return 1;

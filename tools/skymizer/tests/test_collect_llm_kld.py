@@ -650,3 +650,17 @@ collector.main()
     from lib.collection_state import require_completed_attempts
     with pytest.raises(ValueError, match='interrupted'):
         require_completed_attempts(tmp_path/'out')
+
+
+def test_perplexity_runtime_and_mode_are_explicit(tmp_path):
+    args = _args(tmp_path, perplexity_window=True, n_ctx=512, n_batch=512,
+                 n_ubatch=512, tf_chunk=-1, llama_llm_kld="/bin/llama-llm-kld")
+    ck.validate_perplexity_runtime(args)
+    assert "--perplexity-window" in ck._scorer_argv(args, tmp_path / "manifest.jsonl")
+    assert ck.build_collect_meta(args)["perplexity_window"] is True
+    for field, value in (("n_ctx", 511), ("n_batch", 2048), ("n_ubatch", 256),
+                         ("num_eval_tokens", 254), ("tf_chunk", 1), ("sort_by", "id"),
+                         ("sort_desc", True), ("max_total_tokens", 512)):
+        changed = argparse.Namespace(**{**vars(args), field: value})
+        with pytest.raises(ValueError, match="perplexity-window"):
+            ck.validate_perplexity_runtime(changed)

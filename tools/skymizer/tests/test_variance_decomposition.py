@@ -8,6 +8,7 @@ where t belongs, and the var_between clamp let the between-item share print
 negative and the JSON export token_noise_share > 1.
 """
 
+import json
 import math
 
 import numpy as np
@@ -52,16 +53,17 @@ def test_required_n_uses_t_not_z_and_so_exceeds_the_z_answer():
 
 def test_required_n_is_monotone_and_self_consistent():
     prev = None
-    for snr in (1.0, 0.5, 0.25, 0.1):
+    for snr in (1.0, 0.5, 0.432, 0.427, 0.4, 0.396, 0.292, 0.25, 0.1):
         n = vd.required_n(snr, 0.95, 0.8)
         assert n is not None and n >= 3
         if prev is not None:
             assert n > prev
         prev = n
-        # the fixed point really is a fixed point
-        df = n - 1
-        t_sum = vd.t_ppf(0.975, df) + vd.t_ppf(0.8, df)
-        assert n == max(3, math.ceil((t_sum / snr) ** 2))
+        t_sum = vd.t_ppf(0.975, n - 1) + vd.t_ppf(0.8, n - 1)
+        assert n >= max(3, math.ceil((t_sum / snr) ** 2))
+        if n > 3:
+            previous_sum = vd.t_ppf(0.975, n - 2) + vd.t_ppf(0.8, n - 2)
+            assert n - 1 < math.ceil((previous_sum / snr) ** 2)
 
 
 def test_required_n_is_none_when_the_effect_is_not_bounded_away_from_zero():
@@ -211,3 +213,39 @@ def test_cost_model_from_manifest(tmp_path):
     assert cm["ctok"] == pytest.approx(0.004, rel=0.05)
     assert cm["r2"] > 0.99
     assert vd.cost_model_from_manifest(tmp_path / "missing.csv") is None
+
+
+def test_zero_effect_zero_variance_does_not_claim_infinite_signal(tmp_path):
+    from test_saved_metrics_paired_compare import _make_pair
+
+    a_dir, b_dir = _make_pair(tmp_path, n_items=3)
+    for root in (a_dir, b_dir):
+        for path in (root / "metrics").glob("*.npz"):
+            with np.load(path) as data:
+                payload = {name: data[name].copy() for name in data.files}
+            payload["kld"][:] = 0.0
+            np.savez(path, **payload)
+    output = tmp_path / "variance.json"
+    assert vd.main(["--candidate-a", str(a_dir), "--candidate-b", str(b_dir),
+                    "--output-json", str(output)]) == 0
+    payload = json.loads(output.read_text(), parse_constant=lambda value: pytest.fail(value))
+    assert payload["snr_now"] is None
+    assert payload["snr_inf"] is None
+    assert payload["n_required_now"] is None
+    for row in payload["curve"]:
+        assert row["snr"] is None
+        assert row["n_required"] is None
+        assert row["snr_status"] == "zero_effect_zero_variance"
+
+
+def test_variance_loader_does_not_drop_short_rows(tmp_path):
+    from test_saved_metrics_paired_compare import _make_pair
+
+    a_dir, b_dir = _make_pair(tmp_path, n_items=4, npos_list=[1, 4, 4, 4])
+    with pytest.raises(SystemExit, match="at least two.*positions"):
+        vd.collect_deltas(a_dir, b_dir, "kld", -1)
+
+
+def test_required_n_handles_extreme_finite_effect_sizes():
+    assert vd.required_n(1e-50, 0.95, 0.8) > 1e100
+    assert vd.required_n(1e-300, 0.95, 0.8) is None
