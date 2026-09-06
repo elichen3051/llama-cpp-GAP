@@ -367,9 +367,37 @@ def test_model_reference_launcher_keeps_gpu_source_and_mode_explicit(tmp_path):
     assert command[command.index("-n") + 1] == "16384"
     assert command[command.index("--spec-type") + 1] == "draft-mtp"
     assert command[command.index("-ngl") + 1] == "all"
+    assert command[command.index("-np") + 1] == "1"
+    assert command[command.index("-c") + 1] == "32768"
     assert "--image-max-tokens" not in command
+    runtime["parallel"] = 2
+    with pytest.raises(ValueError, match="MTP reference generation requires one sequence"):
+        launch.build_command(args, profiles)
     args.mtp = "off"
-    assert "--spec-type" not in launch.build_command(args, profiles)
+    command = launch.build_command(args, profiles)
+    assert "--spec-type" not in command
+    assert command[command.index("-np") + 1] == "2"
+    assert command[command.index("-c") + 1] == "65536"
+    args.parallel = 3
+    args.ctx = 24576
+    command = launch.build_command(args, profiles)
+    assert command[command.index("-np") + 1] == "3"
+    assert command[command.index("-c") + 1] == "73728"
+    args.max_new_tokens = 24576
+    with pytest.raises(ValueError, match="generation cap"):
+        launch.build_command(args, profiles)
+    args.max_new_tokens = None
+    args.ctx = None
+    args.parallel = None
+    for invalid in (0, -1, 1.5, "2", True):
+        runtime["parallel"] = invalid
+        with pytest.raises(ValueError, match="positive integer"):
+            launch.build_command(args, profiles)
+    runtime["parallel"] = 1
+    for invalid in ("0", "-1", "1.5"):
+        with pytest.raises(SystemExit):
+            launch.parse_args(["--model", "qwen", "--mode", "thinking", "--source", "image-only",
+                               "--gpu", "0", "--out", str(tmp_path / "out"), "--parallel", invalid])
     args.mtp = "3"
     profiles["models"]["qwen"]["mtp"] = None
     with pytest.raises(ValueError, match="no supported local MTP head"):
@@ -430,7 +458,8 @@ for r in map(json.loads,Path(a.requests).read_text().splitlines()):
         assert attempts[1]["requested_ids"] == ["second", "first"]
 
 
-def test_native_reference_supervisor_rejects_corrupt_terminal_journal(tmp_path):
+@pytest.mark.parametrize("scenario", ["terminal", "result_without_start"])
+def test_native_reference_supervisor_rejects_corrupt_terminal_journal(tmp_path, scenario):
     from lib.reference_run import run_native
     binary = tmp_path / "fake-native"
     binary.write_text('''#!/usr/bin/env python3
@@ -438,11 +467,15 @@ import json,sys
 from pathlib import Path
 a=sys.argv;d=Path(a[a.index('--out-dir')+1]);d.mkdir()
 (d/'metadata.json').write_text('{}')
-(d/'events.jsonl').write_text(json.dumps({'event':'row_failed','id':'a','error':'bad','retryable':False})+'\\n')
+if a[a.index('--scenario')+1]=='terminal':
+ (d/'events.jsonl').write_text(json.dumps({'event':'row_failed','id':'a','error':'bad','retryable':False})+'\\n')
+else:
+ (d/'generations.jsonl').write_text(json.dumps({'id':'a'})+'\\n')
 ''')
     binary.chmod(0o755)
-    with pytest.raises(ValueError, match="terminal event"):
-        run_native(binary, [], [{"id": "a"}], tmp_path / "run")
+    message = "terminal event" if scenario == "terminal" else "result without a row start"
+    with pytest.raises(ValueError, match=message):
+        run_native(binary, ["--scenario", scenario], [{"id": "a"}], tmp_path / "run")
 
 
 @pytest.mark.parametrize("flags", [[], ["--seed", "-1"], ["-s", "-1"], ["--seed=-1"], ["--seed=4294967295"]])
@@ -823,3 +856,52 @@ def test_kld_launcher_uses_matching_runtime_without_generation_or_analysis(tmp_p
     args.source = "not-in-study"
     with pytest.raises(ValueError, match="not in the study"):
         launch.build_command(args, plan, profiles, tmp_path / "archived")
+
+
+@pytest.mark.parametrize("scenario", ["parallel_crash", "parallel_partial", "parallel_timeout", "too_many_slots"])
+def test_native_reference_supervisor_recovers_parallel_rows(tmp_path, scenario):
+    from lib.reference_run import run_native
+    binary = tmp_path / "parallel-native"
+    binary.write_text('''#!/usr/bin/env python3
+import argparse, json, os, time
+from pathlib import Path
+p=argparse.ArgumentParser()
+p.add_argument('--requests');p.add_argument('--out-dir');p.add_argument('--continue-on-error',action='store_true');p.add_argument('--scenario')
+a=p.parse_args();d=Path(a.out_dir);d.mkdir()
+state=d.parents[2]/'parallel-state'
+(d/'metadata.json').write_text(json.dumps({'model':'fixed','total_slots':1 if a.scenario=='too_many_slots' else 2}))
+e=(d/'events.jsonl').open('w');o=(d/'generations.jsonl').open('w')
+def event(kind,i):e.write(json.dumps({'event':kind,'id':i})+'\\n');e.flush()
+def result(i):o.write(json.dumps({'id':i})+'\\n');o.flush();event('row_succeeded',i)
+rows=[r['id'] for r in map(json.loads,Path(a.requests).read_text().splitlines())]
+if state.exists():
+ for i in rows:event('row_started',i);result(i)
+else:
+ state.write_text('once')
+ event('row_started',rows[0]);event('row_started',rows[1])
+ if a.scenario=='parallel_partial':result(rows[1])
+ if a.scenario=='parallel_timeout':
+  result(rows[1]);time.sleep(1.2)
+  event('row_started',rows[2]);result(rows[2]);time.sleep(30)
+ os._exit(7)
+''')
+    binary.chmod(0o755)
+    out = tmp_path / "run"
+    out.mkdir()
+    rows = [{"id": name} for name in ("first", "second", "third")]
+    if scenario == "too_many_slots":
+        with pytest.raises(ValueError, match="declared parallel slots"):
+            run_native(binary, ["--scenario", scenario], rows, out)
+        return
+    results, failures, metadata = run_native(binary, ["--scenario", scenario], rows, out,
+                                            row_timeout=0.1 if scenario == "parallel_timeout" else 1800)
+    assert set(results) == {"first", "second", "third"} and not failures
+    assert metadata["total_slots"] == 2
+    merged = [json.loads(line)["id"] for line in (out / "native/generations.jsonl").read_text().splitlines()]
+    assert merged == ["first", "second", "third"]
+    attempts = json.loads((out / "native-attempts.json").read_text())
+    assert len(attempts) == 2
+    expected_retry = {"parallel_crash": ["third", "first", "second"],
+                      "parallel_partial": ["third", "first"], "parallel_timeout": ["first"]}
+    assert attempts[1]["requested_ids"] == expected_retry[scenario]
+    assert attempts[0]["timed_out"] is (scenario == "parallel_timeout")

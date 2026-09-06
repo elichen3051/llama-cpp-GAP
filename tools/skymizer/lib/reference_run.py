@@ -59,7 +59,8 @@ def run_native(binary, native_args, requests, out, timeout=None, row_retries=1, 
             proc = subprocess.Popen(command, stdout=log, stderr=subprocess.STDOUT)
             try:
                 started = last_progress = time.monotonic()
-                event_size = 0
+                event_size = event_count = 0
+                active_since = {}
                 while True:
                     try:
                         code = proc.wait(timeout=1)
@@ -67,11 +68,18 @@ def run_native(binary, native_args, requests, out, timeout=None, row_retries=1, 
                     except subprocess.TimeoutExpired:
                         journal = native / "events.jsonl"
                         size = journal.stat().st_size if journal.exists() else 0
-                        if size != event_size:
-                            last_progress, event_size = time.monotonic(), size
                         now = time.monotonic()
+                        if size != event_size:
+                            observed = read_records(journal, allow_partial=True)
+                            for event in observed[event_count:]:
+                                if event.get("event") == "row_started":
+                                    active_since[event["id"]] = now
+                                elif event.get("event") in ("row_succeeded", "row_failed"):
+                                    active_since.pop(event["id"], None)
+                            last_progress, event_size, event_count = now, size, len(observed)
+                        oldest = min(active_since.values(), default=last_progress)
                         if ((timeout is not None and now - started > timeout)
-                                or (row_timeout is not None and now - last_progress > row_timeout)):
+                                or (row_timeout is not None and now - oldest > row_timeout)):
                             timed_out = True
                             proc.kill()
                             code = proc.wait()
@@ -91,6 +99,21 @@ def run_native(binary, native_args, requests, out, timeout=None, row_retries=1, 
         allowed = set(record["requested_ids"])
         results = read_records(native / "generations.jsonl", allow_partial=code != 0)
         events = read_records(native / "events.jsonl", allow_partial=code != 0)
+        try:
+            current = json.loads((native / "metadata.json").read_text())
+        except (OSError, ValueError):
+            if results or events:
+                raise ValueError("native row work has missing/corrupt metadata")
+            current = None
+        if current is not None:
+            identity = {k: v for k, v in current.items() if k != "command"}
+            if metadata is not None and identity != {k: v for k, v in metadata.items() if k != "command"}:
+                raise ValueError("effective native settings changed between attempts")
+            metadata = current
+        slots = (current or {}).get("total_slots", 1)
+        if type(slots) is not int or slots <= 0:
+            raise ValueError("invalid native slot count")
+        active = set()
         seen = set()
         for result in results:
             row_id = result.get("id")
@@ -107,11 +130,15 @@ def run_native(binary, native_args, requests, out, timeout=None, row_retries=1, 
                 if row_id in starts:
                     raise ValueError(f"duplicate native row start: {row_id}")
                 starts.add(row_id)
+                active.add(row_id)
+                if len(active) > slots:
+                    raise ValueError("native journal exceeds declared parallel slots")
                 tries[row_id] = tries.get(row_id, 0) + 1
             elif event["event"] in ("row_failed", "row_succeeded"):
                 if row_id not in starts or row_id in terminals:
                     raise ValueError(f"native terminal event without one unique start: {row_id}")
                 terminals.add(row_id)
+                active.remove(row_id)
                 if event["event"] == "row_failed":
                     if row_id in seen:
                         raise ValueError(f"native row has both a result and failure: {row_id}")
@@ -120,25 +147,16 @@ def run_native(binary, native_args, requests, out, timeout=None, row_retries=1, 
                     raise ValueError(f"native success has no durable result: {row_id}")
             else:
                 raise ValueError(f"unknown native journal event: {event['event']}")
+        if not seen <= starts:
+            raise ValueError("native result without a row start")
         inflight = starts - seen - set(errors)
-        if len(inflight) > 1:
-            raise ValueError("native journal has multiple unfinished rows")
+        if code == 0 and starts != terminals:
+            raise ValueError("native process succeeded with unfinished journal rows")
         for row_id in inflight:
             errors[row_id] = {"id": row_id, "retryable": True,
                               "error": "native timeout" if timed_out else f"native process exit {code}"}
         if code == 0 and any(r["id"] not in seen and r["id"] not in errors for r in pending):
             raise ValueError("native process succeeded without a terminal outcome for every request")
-        try:
-            current = json.loads((native / "metadata.json").read_text())
-        except (OSError, ValueError):
-            if results or starts:
-                raise ValueError("native row work has missing/corrupt metadata")
-            current = None
-        if current is not None:
-            identity = {k: v for k, v in current.items() if k != "command"}
-            if metadata is not None and identity != {k: v for k, v in metadata.items() if k != "command"}:
-                raise ValueError("effective native settings changed between attempts")
-            metadata = current
         for row_id, error in errors.items():
             if row_id in outcomes:
                 continue
@@ -155,7 +173,7 @@ def run_native(binary, native_args, requests, out, timeout=None, row_retries=1, 
                                         "error": f"native startup failed {startup_failures} times; see attempt logs",
                                         "attempts": 0, "last_native_attempt": number}
                 remaining = []
-        # Process untouched rows before retrying the row that crashed.
+        # Process untouched rows before retrying interrupted rows.
         pending = [r for r in remaining if r["id"] not in errors] + [r for r in remaining if r["id"] in errors]
         atomic_json(out / "progress.json", {"status": "running" if pending else "processed",
                     "requested": len(requests), "generated_ids": list(outcomes), "failures": list(failures.values()),

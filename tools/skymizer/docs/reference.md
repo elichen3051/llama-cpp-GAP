@@ -26,7 +26,9 @@ UV_PROJECT_ENVIRONMENT="$PWD/.venv" uv sync --project tools/skymizer --python 3.
 For a text-only dataset, omit `--mmproj`. A run with a projector can mix text,
 single-image, and multi-image rows. All native options follow `--`; use
 `build/bin/llama-reference --help` for llama.cpp flags. The tool uses a context
-of 8192 and a generation cap of 128 unless overridden. It requires one sequence.
+of 8192 and a generation cap of 128 unless overridden. Autoregressive generation supports `-np N` parallel sequences in one model/context; MTP currently requires `-np 1`.
+
+With the default separate KV allocation, native `-c` is total context: use `-np 4 -c 131072` to retain 32768 positions per sequence. The high-level `generate_model_reference.py --parallel 4` instead treats profile `ctx` and `--ctx` as per-sequence capacity and multiplies by the slot count. Check actual `n_ctx`, `n_ctx_per_seq` and `total_slots` in metadata. Each row has its own sampler, seed, repetition history, positions and token/logprob buffers; image prefill is serial, and active rows share batched autoregressive decode. Completion order may differ from request order; the Python driver restores source order. Different batch shapes can change floating-point results and sampled trajectories, even with the same seed.
 
 Source input can be a Hub dataset (`--subset`, `--split`, `--revision`) or a local
 `Dataset.save_to_disk` / `DatasetDict.save_to_disk` directory. It needs a
@@ -88,7 +90,7 @@ The output directory must be new:
 - `metadata.json`: effective settings and provenance, also embedded in rows.
 - `requests.jsonl`: exact prepared requests; `attempts/NNNN/` preserves each native command, request subset, log, exit status, row journal, and raw results.
 - `native/metadata.json`, `native/generations.jsonl`: direct C++ output; each row is flushed.
-- `inputs/`: original encoded images; `scripts/`: copies of the Python/native producer sources and profiles used.
+- `inputs/`: original encoded images; `scripts/`: copies of the Python/native producer sources and the built-in profile. Preserve any externally selected profile and its checksum separately.
 - `run_start.json`, `run_state.json`, `progress.json`: source/execution identity, lifecycle status, and remaining IDs.
 - `excluded.jsonl`, `failures.jsonl`: repetition evidence and classified row failures.
 - `complete.json`: written atomically after every requested ID has an eligible, excluded, or failed outcome; `complete_with_failures` does not mean every row generated successfully.
@@ -191,23 +193,25 @@ Every 32 committed output tokens, the online detector examines the last 2048 tok
 
 Native results keep repetition offsets, unit length, repeat count, repeated span, detection position, and stage. Python retains all completed native results but excludes flagged rows from `dataset/`, preserving their text and evidence in `excluded.jsonl`. IDs never change after filtering. `metadata.cohort` records the ordered requested/eligible/excluded/failed IDs, their digests, and counts. `generated` counts validated eligible plus excluded records; `native_generated` also includes any raw result that failed validation. Both KLD candidates must consume the same saved eligible dataset. Do not regenerate/filter separately and intersect their successful rows.
 
-`--row-retries` defaults to 1 retry for a crashed/backend-failed row. Invalid input/context-budget rows are terminal failures. `--startup-retries` defaults to 1; persistent model startup failure leaves the remaining IDs explicitly unattempted. Pending untouched rows run before the crashed row is retried. A flushed `row_started` journal entry identifies the current row; durable output wins if a crash occurred before the success journal entry. A model startup crash is never attributed to the first unstarted row.
+`--row-retries` defaults to 1 retry for a crashed/backend-failed row. Invalid input/context-budget rows are terminal failures. `--startup-retries` defaults to 1; persistent model startup failure leaves the remaining IDs explicitly unattempted. Pending untouched rows run before interrupted rows are retried. Each active ID has one flushed `row_started` entry; durable output wins if a crash occurred before its success journal entry. Recovery retains completed rows and applies the retry budget to every interrupted row, while checking the declared slot limit. A model startup crash is never attributed to the first unstarted row.
 
-`--row-timeout` defaults to 1800 seconds without a row-journal update, including model startup. The supervisor kills and waits for a timed-out native process before restarting. `--native-timeout` optionally limits total time per native process. Intentional SIGINT/SIGTERM records interruption and stops the child; it does not trigger infinite retries. Every attempt and partial trailing record remains available for diagnosis. Interior journal corruption, changed execution/settings, or irreconcilable IDs fail the job rather than silently accepting uncertain data.
+`--row-timeout` defaults to 1800 seconds for each active row, measured from its observed start journal entry, or 1800 seconds without journal progress during startup/idle periods. Other rows completing do not extend a stalled row's deadline. The supervisor kills and waits for a timed-out native process before restarting. `--native-timeout` optionally limits total time per native process. Intentional SIGINT/SIGTERM records interruption and stops the child; it does not trigger infinite retries. Every attempt and partial trailing record remains available for diagnosis. Interior journal corruption, changed execution/settings, or irreconcilable IDs fail the job rather than silently accepting uncertain data.
 
 Native `--no-repetition-stop` disables both online and final repetition checks for controlled diagnostics. Production profiles use the default enabled policy. Native `--continue-on-error` enables recoverable row continuation; the Python driver supplies it automatically. The standalone binary's `--help` also lists ordinary llama.cpp options.
 
 ## Production profiles, shared GPU queue, and publication
 
+The current RunPod protocol calls the 100-row cohort the pilot. Its generation caps differ from the 500-row cohort; the four size/mode values are pending confirmation and are not yet represented by the shared defaults below. The current model roster and readiness gaps are in [the reference handover](reference-runpod-handover.md).
+
 `generate_model_reference.py` uses `scripts/reference_model_profiles.json` for one BF16 model, source subset, and mode. It pins the prepared dataset revision, model-card sampling, default image budget, and generation caps: 8192 instruct or 16384 thinking. The profile records pinned model/projector hashes, which restoration, campaign validation, and publication verify. Later KLD uses at most 2048 or 4096 generated positions respectively. The profile selects MTP only where the local speed tests support it; H100 entries are unmeasured starting points.
 
 Non-causal image attention requires the complete image chunk to fit in both `-b` and `-ub`. The producer rejects an insufficient capacity before decoding and records a recoverable row failure. Gemma 4 26B/31B use ubatch2048 to accommodate their default image budget. Do not split such an image into smaller causal batches to bypass the requirement. Apply sufficient image capacity to a later VLM scorer too, with identical settings for both paired candidates.
 
-A campaign job is one model/source/mode. One worker per selected GPU takes jobs from a shared queue; each native process has one sequence. Two separate upload workers allow GPU generation to advance while uploads run. A single host can use four or six GPU identifiers; separate hosts can select disjoint models with `--models` and keep their own output directories.
+A campaign job is one model/source/mode. One worker per selected GPU takes jobs from a shared queue; the native process uses the selected runtime profile's parallel count (default 1). Two separate upload workers allow GPU generation to advance while uploads run. A single host can use four or six GPU identifiers; separate hosts can select disjoint models with `--models` and keep their own output directories.
 
 ```bash
 .venv/bin/python tools/skymizer/cli/run_reference_campaign.py \
-  --out ~/gap/native-reference-pivot --size 100 --gpus 0,1,2,3 --hardware pro6000
+  --out /opt/dlami/nvme/native-reference-pilot --size 100 --gpus 0,1,2,3 --hardware pro6000
 ```
 
 The campaign defaults to all six production models, seven sources, both modes, and upload enabled: 84 jobs, each requesting 100 rows. Use size500 and a new directory for collect-500. A diagnostic run can use `--sources mmmu-pro-vision --num-samples 1 --no-upload`; short runs cannot be published into formal configs. Keep the host/GPU identity and hardware profile consistent inside one campaign.
@@ -216,7 +220,7 @@ The campaign defaults to all six production models, seven sources, both modes, a
 
 Ordinary row/job/upload failures do not stop the remaining queue. Generation jobs have a 48-hour whole-process timeout, including data preparation; uploads have a one-hour timeout and three attempts. `--job-timeout`, `--upload-timeout` and `--kill-grace` can change these before freezing the plan. Cancellation and timeouts terminate child process groups, then kill descendants after the grace period. Native recovery retains completed rows within one driver invocation. A host restart or interrupted Python driver reruns that whole job in a new attempt directory. Completed cohorts with failed rows remain final; modified or missing completed artifacts require investigation.
 
-`upload_reference.py` validates the full source cohort, exact eligible/excluded/failed partition, BF16 identities, mode/cap, native template/image policy and frozen effective sampling. It publishes to `elichen-skymizer/<model>-pivot` or `<model>-collect-500`, with the original source config plus `-ins`/`-think` and split `train`. Only eligible rows are published; exclusions and failures remain in the audit, without replacement samples. Non-repeating capped answers remain eligible for later quality review.
+`upload_reference.py` validates the full source cohort, exact eligible/excluded/failed partition, BF16 identities, mode/cap, native template/image policy and frozen effective sampling. It publishes to `elichen-skymizer/<model>-pilot` or `<model>-collect-500`, with the original source config plus `-ins`/`-think` and split `train`. Only eligible rows are published; exclusions and failures remain in the audit, without replacement samples. Non-repeating capped answers remain eligible for later quality review.
 
 Publication adds parquet, dataset-card mapping and audit files in one compare-and-swap Hub commit. Occupied namespaces or existing configs that would absorb the new files fail closed. Repeating the same upload verifies every audit file, parquet hash and README mapping at the pinned commit. `upload/receipt.json` records verified publication; a process exit alone is insufficient. Full native logs and attempt scripts remain in the local campaign archive and should be copied to research storage by the operator.
 

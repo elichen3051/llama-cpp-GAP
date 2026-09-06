@@ -25,14 +25,15 @@ def parse_args(argv=None):
     p.add_argument("--out", type=Path, required=True)
     p.add_argument("--llama-reference", type=Path, default=SKYMIZER.parents[1] / "build/bin/llama-reference")
     p.add_argument("--num-samples", type=int, help="optional first N rows for a small smoke")
-    p.add_argument("--ctx", type=int, help="override the context size")
+    p.add_argument("--ctx", type=int, help="override the context size per sequence")
+    p.add_argument("--parallel", type=int, help="parallel sequences (default: runtime profile value or 1)")
     p.add_argument("--max-new-tokens", type=int, help="override the generation cap")
     p.add_argument("--mtp", choices=["profile", "off", "3", "5", "8"], default="profile")
     p.add_argument("--dry-run", action="store_true", help="print the command without loading data or weights")
     args = p.parse_args(argv)
     if not args.gpu or "," in args.gpu or args.gpu == "-1":
         p.error("--gpu must select exactly one GPU")
-    for name in ("ctx", "max_new_tokens", "num_samples"):
+    for name in ("ctx", "parallel", "max_new_tokens", "num_samples"):
         value = getattr(args, name)
         if value is not None and value <= 0:
             p.error(f"--{name.replace('_', '-')} must be positive")
@@ -47,12 +48,17 @@ def build_command(args, profiles):
     model = profiles["models"][args.model]
     settings = model["runtime"][args.hardware][args.mode]
     ctx = args.ctx or settings["ctx"]
+    parallel = args.parallel if args.parallel is not None else settings.get("parallel", 1)
+    if type(parallel) is not int or parallel <= 0:
+        raise ValueError("parallel must be a positive integer")
     cap = args.max_new_tokens or profiles["generation_caps"][args.mode]
     if cap >= ctx:
         raise ValueError("generation cap must be smaller than context; image/prompt tokens also need room")
     draft = settings["draft_max"] if args.mtp == "profile" else (0 if args.mtp == "off" else int(args.mtp))
     if draft and not model["mtp"]:
         raise ValueError(f"{args.model} has no supported local MTP head")
+    if draft and parallel != 1:
+        raise ValueError("MTP reference generation requires one sequence; use --parallel 1 or --mtp off")
     paths = {key: args.models_dir.expanduser().resolve() / model[key] for key in ("model", "mmproj")}
     if draft and model["mtp"] == "sidecar":
         paths["head"] = args.models_dir.expanduser().resolve() / model["head"]
@@ -67,9 +73,9 @@ def build_command(args, profiles):
     if args.num_samples is not None:
         command += ["--num-samples", str(args.num_samples)]
     command += ["--", "-m", str(paths["model"]), "--mmproj", str(paths["mmproj"]),
-                "-ngl", "all", "-c", str(ctx), "-b", str(settings["batch"]), "-ub", str(settings["ubatch"]),
+                "-ngl", "all", "-c", str(ctx * parallel), "-b", str(settings["batch"]), "-ub", str(settings["ubatch"]),
                 "-t", str(settings["threads"]), "-tb", str(settings["threads_batch"]),
-                "-fa", "on", "-ctk", "f16", "-ctv", "f16", "-np", "1", "--fit", "off",
+                "-fa", "on", "-ctk", "f16", "-ctv", "f16", "-np", str(parallel), "--fit", "off",
                 "-n", str(cap), "--seed", str(profiles["seed"]), *model["sampling_args"][args.mode]]
     if draft:
         command += ["--spec-type", "draft-mtp", "--spec-draft-n-max", str(draft),

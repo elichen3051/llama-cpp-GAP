@@ -61,6 +61,27 @@ static json sampling_json(const common_params_sampling & p, const common_sampler
 
 using sampler_ptr = std::unique_ptr<common_sampler, decltype(&common_sampler_free)>;
 
+struct reference_row {
+    llama_seq_id sequence = 0;
+    llama_pos evaluated = 0;
+    size_t n_prefill = 0;
+    llama_tokens tokens;
+    llama_tokens processed_tokens;
+    common_params_sampling sampling;
+    sampler_ptr sampler{nullptr, common_sampler_free};
+    common_speculative_ptr spec;
+    std::vector<double> logprobs;
+    std::vector<std::string> stops;
+    std::string content;
+    std::string finish = "length";
+    std::string stop_type = "limit";
+    std::string stopping_word;
+    json repetition = nullptr;
+    json result;
+    json stats = {{"drafted_tokens", 0}, {"accepted_draft_tokens", 0}, {"verification_batches", 0},
+                  {"rollback_batches", 0}, {"checkpoint_replays", 0}};
+};
+
 struct reference_context {
     common_params params;
     common_init_result_ptr loaded;
@@ -152,7 +173,7 @@ struct reference_context {
             {"n_ctx", llama_n_ctx(ctx)}, {"n_ctx_per_seq", llama_n_ctx_seq(ctx)},
             {"n_batch", llama_n_batch(ctx)}, {"n_ubatch", llama_n_ubatch(ctx)},
             {"n_threads", llama_n_threads(ctx)}, {"n_threads_batch", llama_n_threads_batch(ctx)},
-            {"total_slots", 1}, {"n_predict", params.n_predict},
+            {"total_slots", params.n_parallel}, {"n_predict", params.n_predict},
             {"image_min_tokens", params.image_min_tokens}, {"image_max_tokens", params.image_max_tokens},
             {"image_token_budget_source", "mtmd_init_params"},
             {"media_marker", mtmd_default_marker()}, {"image_placeholder_id", LLAMA_TOKEN_NULL},
@@ -183,11 +204,21 @@ struct reference_context {
         }
     }
 
-    json generate(const json & request) {
+    std::unique_ptr<reference_row> prepare(const json & request, llama_seq_id sequence) {
+        auto row = std::make_unique<reference_row>();
+        row->sequence = sequence;
+        auto & tokens = row->tokens;
+        auto & evaluated = row->evaluated;
+        auto & spec = row->spec;
+        auto & sampler = row->sampler;
+        auto & sampling = row->sampling;
         auto * ctx = loaded->context();
         auto * vocab = llama_model_get_vocab(loaded->model());
-        llama_memory_clear(llama_get_memory(ctx), true);
-        common_speculative_ptr spec;
+        if (params.n_parallel == 1) {
+            llama_memory_clear(llama_get_memory(ctx), true);
+        } else {
+            require(llama_memory_seq_rm(llama_get_memory(ctx), sequence, -1, -1), "cannot clear reference sequence");
+        }
         if (draft_loaded) {
             llama_memory_clear(llama_get_memory(draft_loaded->context()), true);
             spec.reset(common_speculative_init(params.speculative, 1));
@@ -244,7 +275,6 @@ struct reference_context {
 
         mtmd::bitmaps bitmaps;
         mtmd::input_chunks chunks(mtmd_input_chunks_init());
-        std::vector<llama_token> tokens;
         json layout_chunks = json::array();
         llama_pos n_pos = 0;
         if (vision) {
@@ -294,7 +324,6 @@ struct reference_context {
         require(!tokens.empty(), "template produced an empty prompt");
         require(std::max(size_t(n_pos), tokens.size()) + params.n_predict <= llama_n_ctx_seq(ctx),
                 "prompt plus generation cap exceeds context; no truncation or context shift is allowed");
-        llama_pos evaluated = 0;
         auto prefill_text = [&](const llama_token * ids, size_t count) {
             const int capacity = std::min(llama_n_batch(ctx), llama_n_ubatch(ctx));
             llama_batch part = llama_batch_init(capacity, 0, 1);
@@ -303,7 +332,7 @@ struct reference_context {
                     common_batch_clear(part);
                     const size_t n = std::min(size_t(capacity), count - start);
                     for (size_t i = 0; i < n; ++i) {
-                        common_batch_add(part, ids[start + i], evaluated + i, {0}, i + 1 == n);
+                        common_batch_add(part, ids[start + i], evaluated + i, {sequence}, i + 1 == n);
                     }
                     require(llama_decode(ctx, part) == 0, "MTP text prefill failed");
                     require(common_speculative_process(spec.get(), part), "MTP prompt processing failed");
@@ -324,110 +353,181 @@ struct reference_context {
                     const auto * ids = mtmd_input_chunk_get_tokens_text(chunk, &n);
                     prefill_text(ids, n);
                 } else {
-                    require(mtmd_helper_eval_chunk_single(vision.get(), ctx, chunk, evaluated, 0, llama_n_batch(ctx), false, &evaluated) == 0,
+                    require(mtmd_helper_eval_chunk_single(vision.get(), ctx, chunk, evaluated, sequence, llama_n_batch(ctx), false, &evaluated) == 0,
                             "MTP image prefill failed");
                 }
             }
         } else if (spec) {
             prefill_text(tokens.data(), tokens.size());
         } else if (vision) {
-            require(mtmd_helper_eval_chunks(vision.get(), ctx, chunks.ptr.get(), 0, 0, llama_n_batch(ctx), true, &evaluated) == 0,
+            require(mtmd_helper_eval_chunks(vision.get(), ctx, chunks.ptr.get(), 0, sequence, llama_n_batch(ctx), true, &evaluated) == 0,
                     "mtmd prefill failed");
         } else {
-            for (size_t i = 0; i < tokens.size(); i += llama_n_batch(ctx)) {
-                int32_t n = std::min(size_t(llama_n_batch(ctx)), tokens.size() - i);
-                auto batch = llama_batch_get_one(tokens.data() + i, n);
-                require(llama_decode(ctx, batch) == 0, "text prefill failed");
-                evaluated += n;
+            llama_batch batch = llama_batch_init(llama_n_batch(ctx), 0, 1);
+            try {
+                for (size_t i = 0; i < tokens.size(); i += llama_n_batch(ctx)) {
+                    int32_t n = std::min(size_t(llama_n_batch(ctx)), tokens.size() - i);
+                    common_batch_clear(batch);
+                    for (int32_t j = 0; j < n; ++j) {
+                        common_batch_add(batch, tokens[i + j], evaluated + j, {sequence}, j + 1 == n);
+                    }
+                    require(llama_decode(ctx, batch) == 0, "text prefill failed");
+                    evaluated += n;
+                }
+            } catch (...) {
+                llama_batch_free(batch);
+                throw;
             }
+            llama_batch_free(batch);
         }
         require(evaluated == n_pos, "evaluated prompt positions differ from tokenized layout");
-        const size_t n_prefill = tokens.size();
-        auto sampling = params.sampling;
+        row->n_prefill = tokens.size();
+        sampling = params.sampling;
         if (request.contains("seed")) {
             const int64_t seed = request.at("seed").get<int64_t>();
             require(seed >= 0 && seed < UINT32_MAX, "seed must be between 0 and UINT32_MAX-1");
             sampling.seed = seed;
         }
-        sampler_ptr sampler(common_sampler_init(loaded->model(), sampling), common_sampler_free);
+        sampler.reset(common_sampler_init(loaded->model(), sampling));
         require(bool(sampler), "failed to initialize row sampler");
         for (auto token : tokens) {
             if (token != LLAMA_TOKEN_NULL) {
                 common_sampler_accept(sampler.get(), token, false);
             }
         }
-        json row_sampling = sampling_json(sampling, sampler.get());
-        std::vector<double> logprobs;
-        std::string content;
-        std::string finish = "length";
-        std::string stop_type = "limit";
-        std::string stopping_word;
-        llama_tokens processed_tokens;
+        row->stops = chat.additional_stops;
         for (auto token : tokens) {
             if (token != LLAMA_TOKEN_NULL) {
-                processed_tokens.push_back(token);
+                row->processed_tokens.push_back(token);
             }
         }
         if (spec) {
-            common_speculative_begin(spec.get(), 0, processed_tokens);
+            common_speculative_begin(spec.get(), sequence, row->processed_tokens);
         }
-        json repetition = nullptr;
-        auto record_repetition = [&](skymizer_repetition::match m, const char * stage) {
-            if (m) {
-                repetition = {{"start", m.start}, {"unit_len", m.unit_len}, {"repeats", m.repeats},
-                              {"repeated_len", m.repeated_len}, {"detected_at_generated_token", logprobs.size()}, {"stage", stage}};
-            }
+        row->result = {
+            {"id", request.at("id")}, {"prompt", prompt},
+            {"n_prefill_tokens", row->n_prefill}, {"n_past_prefill", n_pos},
+            {"prompt_layout", {{"n_tokens", row->n_prefill}, {"n_pos", n_pos}, {"chunks", layout_chunks}}},
+            {"sampling", sampling_json(sampling, sampler.get())}, {"add_special", true},
+            {"stripped_leading_bos", stripped_bos}, {"enable_thinking", input.enable_thinking},
+            {"chat_template_kwargs", input.chat_template_kwargs},
         };
-        json stats = {{"drafted_tokens", 0}, {"accepted_draft_tokens", 0}, {"verification_batches", 0},
-                      {"rollback_batches", 0}, {"checkpoint_replays", 0}};
-        auto sample = [&](int index) {
-            const float * logits = llama_get_logits_ith(ctx, index);
-            const int n_vocab = llama_vocab_n_tokens(vocab);
-            require(logits != nullptr, "target logits are missing");
-            std::vector<float> raw(logits, logits + n_vocab);
-            double max_logit = *std::max_element(raw.begin(), raw.end());
-            double sum = 0;
-            for (float value : raw) {
-                sum += std::exp(double(value) - max_logit);
+        return row;
+    }
+
+    std::pair<llama_token, double> sample(reference_row & row, int index) {
+        auto * ctx = loaded->context();
+        auto * vocab = llama_model_get_vocab(loaded->model());
+        const float * logits = llama_get_logits_ith(ctx, index);
+        const int n_vocab = llama_vocab_n_tokens(vocab);
+        require(logits != nullptr, "target logits are missing");
+        std::vector<float> raw(logits, logits + n_vocab);
+        double max_logit = *std::max_element(raw.begin(), raw.end());
+        double sum = 0;
+        for (float value : raw) {
+            sum += std::exp(double(value) - max_logit);
+        }
+        require(std::isfinite(max_logit) && sum > 0 && std::isfinite(sum), "non-finite model logits");
+        llama_token token = common_sampler_sample(row.sampler.get(), ctx, index);
+        require(token >= 0 && token < n_vocab, "sampler returned an invalid token");
+        double logprob = double(raw[token]) - max_logit - std::log(sum);
+        require(std::isfinite(logprob), "non-finite sampled-token logprob");
+        return std::make_pair(token, logprob);
+    }
+
+    void emit(reference_row & row, llama_token token, double logprob) {
+        auto * ctx = loaded->context();
+        auto * vocab = llama_model_get_vocab(loaded->model());
+        row.tokens.push_back(token);
+        row.logprobs.push_back(logprob);
+        common_sampler_accept(row.sampler.get(), token, true);
+        if (llama_vocab_is_eog(vocab, token) && !row.sampling.ignore_eos) {
+            row.finish = "stop";
+            row.stop_type = "eos";
+            return;
+        }
+        row.content += common_token_to_piece(ctx, token, true);
+        for (const auto & stop : row.stops) {
+            if (!stop.empty() && row.content.size() >= stop.size() && row.content.compare(row.content.size() - stop.size(), stop.size(), stop) == 0) {
+                row.stopping_word = stop;
+                row.content.resize(row.content.size() - stop.size());
+                row.finish = "stop";
+                row.stop_type = "word";
+                break;
             }
-            require(std::isfinite(max_logit) && sum > 0 && std::isfinite(sum), "non-finite model logits");
-            llama_token token = common_sampler_sample(sampler.get(), ctx, index);
-            require(token >= 0 && token < n_vocab, "sampler returned an invalid token");
-            double logprob = double(raw[token]) - max_logit - std::log(sum);
-            require(std::isfinite(logprob), "non-finite sampled-token logprob");
-            return std::make_pair(token, logprob);
-        };
-        auto emit = [&](llama_token token, double logprob) {
-            tokens.push_back(token);
-            logprobs.push_back(logprob);
-            common_sampler_accept(sampler.get(), token, true);
-            if (llama_vocab_is_eog(vocab, token) && !sampling.ignore_eos) {
-                finish = "stop";
-                stop_type = "eos";
-                return;
+        }
+        if (repetition_stop && row.logprobs.size() % skymizer_repetition::interval == 0) {
+            record_repetition(row, skymizer_repetition::tail(row.tokens.data() + row.n_prefill, row.logprobs.size()), "online");
+            if (!row.repetition.is_null()) {
+                row.finish = "stop";
+                row.stop_type = "repetition";
             }
-            content += common_token_to_piece(ctx, token, true);
-            for (const auto & stop : chat.additional_stops) {
-                if (!stop.empty() && content.size() >= stop.size() && content.compare(content.size() - stop.size(), stop.size(), stop) == 0) {
-                    stopping_word = stop;
-                    content.resize(content.size() - stop.size());
-                    finish = "stop";
-                    stop_type = "word";
-                    break;
+        }
+    }
+
+    void record_repetition(reference_row & row, skymizer_repetition::match match, const char * stage) {
+        if (match) {
+            row.repetition = {{"start", match.start}, {"unit_len", match.unit_len}, {"repeats", match.repeats},
+                              {"repeated_len", match.repeated_len}, {"detected_at_generated_token", row.logprobs.size()}, {"stage", stage}};
+        }
+    }
+
+    bool finished(const reference_row & row) const {
+        return row.finish == "stop" || row.logprobs.size() >= size_t(params.n_predict);
+    }
+
+    json finish_row(reference_row & row) {
+        if (repetition_stop && row.repetition.is_null()) {
+            record_repetition(row, skymizer_repetition::full(row.tokens.data() + row.n_prefill, row.logprobs.size()), "final");
+        }
+        row.result.update({
+            {"input_ids", row.tokens}, {"content", row.content}, {"finish_reason", row.finish},
+            {"stop_type", row.stop_type}, {"stopping_word", row.stopping_word},
+            {"repetition", row.repetition}, {"token_logprobs", row.logprobs}, {"decoding_stats", row.stats},
+        });
+        return std::move(row.result);
+    }
+
+    void decode(std::vector<std::unique_ptr<reference_row>> & slots) {
+        auto * ctx = loaded->context();
+        llama_batch batch = llama_batch_init(params.n_parallel, 0, 1);
+        try {
+            for (const auto & row : slots) {
+                if (row) {
+                    common_batch_add(batch, row->tokens.back(), row->evaluated, {row->sequence}, true);
                 }
             }
-            if (repetition_stop && logprobs.size() % skymizer_repetition::interval == 0) {
-                record_repetition(skymizer_repetition::tail(tokens.data() + n_prefill, logprobs.size()), "online");
-                if (!repetition.is_null()) {
-                    finish = "stop";
-                    stop_type = "repetition";
+            require(batch.n_tokens > 0 && llama_decode(ctx, batch) == 0, "parallel generation decode failed");
+            int index = 0;
+            for (auto & row : slots) {
+                if (row) {
+                    auto next = sample(*row, index++);
+                    emit(*row, next.first, next.second);
+                    ++row->evaluated;
                 }
             }
-        };
+        } catch (...) {
+            llama_batch_free(batch);
+            throw;
+        }
+        llama_batch_free(batch);
+    }
+
+    json generate(const json & request) {
+        auto prepared = prepare(request, 0);
+        auto & row = *prepared;
+        auto * ctx = loaded->context();
+        auto & tokens = row.tokens;
+        auto & evaluated = row.evaluated;
+        auto & spec = row.spec;
+        auto & processed_tokens = row.processed_tokens;
+        auto & logprobs = row.logprobs;
+        auto & finish = row.finish;
+        auto & stats = row.stats;
         llama_batch batch = llama_batch_init(spec ? std::min(llama_n_batch(ctx), llama_n_ubatch(ctx)) : 1, 0, 1);
         try {
-            auto first = sample(-1);
-            emit(first.first, first.second);
+            auto first = sample(row, -1);
+            emit(row, first.first, first.second);
             while (finish != "stop" && logprobs.size() < size_t(params.n_predict)) {
                 const llama_pos start = evaluated;
                 llama_tokens draft;
@@ -460,8 +560,8 @@ struct reference_context {
                 require(llama_decode(ctx, batch) == 0, "generation verification decode failed");
                 int accepted = 0;
                 for (size_t i = 0; i <= draft.size(); ++i) {
-                    auto next = sample(i);
-                    emit(next.first, next.second);
+                    auto next = sample(row, i);
+                    emit(row, next.first, next.second);
                     ++accepted;
                     if (finish == "stop" || logprobs.size() == size_t(params.n_predict) || i == draft.size() || next.first != draft[i]) {
                         break;
@@ -495,23 +595,14 @@ struct reference_context {
             throw;
         }
         llama_batch_free(batch);
-        if (repetition_stop && repetition.is_null()) {
-            record_repetition(skymizer_repetition::full(tokens.data() + n_prefill, logprobs.size()), "final");
-        }
-        return {
-            {"id", request.at("id")}, {"prompt", prompt}, {"input_ids", tokens},
-            {"n_prefill_tokens", n_prefill}, {"n_past_prefill", n_pos},
-            {"prompt_layout", {{"n_tokens", n_prefill}, {"n_pos", n_pos}, {"chunks", layout_chunks}}},
-            {"content", content}, {"finish_reason", finish}, {"stop_type", stop_type}, {"stopping_word", stopping_word},
-            {"repetition", repetition}, {"token_logprobs", logprobs}, {"decoding_stats", stats}, {"sampling", row_sampling}, {"add_special", true},
-            {"stripped_leading_bos", stripped_bos}, {"enable_thinking", input.enable_thinking},
-            {"chat_template_kwargs", input.chat_template_kwargs},
-        };
+        return finish_row(row);
     }
+
 };
 
 static void usage(int, char ** argv) {
     fprintf(stderr, "\n%s -m MODEL [--mmproj PROJECTOR] --requests rows.jsonl --out-dir DIR -n TOKENS [llama.cpp options]\n"
+                    "  -np N: batch N autoregressive sequences; -c is total context (MTP requires -np 1)\n"
                     "  --describe: load the model and print effective metadata, without generating\n"
                     "  rows: {id, question, images: [local paths], enable_thinking?: bool, seed?: int, system_prompt?: str}\n"
                     "  output: metadata.json and generations.jsonl; text/image support, one model load, no HTTP or HF tokenizer\n", argv[0]);
@@ -574,7 +665,9 @@ int main(int argc, char ** argv) {
             params.n_outputs_max = limits.total;
             params.n_outputs_max_per_seq = limits.per_seq;
         }
-        require(params.n_parallel == 1, "reference generation requires one sequence");
+        require(params.n_parallel > 0 && params.n_parallel <= std::min(params.n_batch, params.n_ubatch),
+                "parallel sequences must fit in batch and ubatch");
+        require(!mtp || params.n_parallel == 1, "MTP reference generation requires one sequence");
         require(params.n_predict > 0, "-n must be positive");
         require(params.prompt.empty() && params.image.empty(), "use --requests for prompts and images");
         require(params.antiprompt.empty(), "custom reverse prompts are unsupported; model EOG and template stops are used");
@@ -613,38 +706,74 @@ int main(int argc, char ** argv) {
             events.flush();
             require(bool(events), "failed to write row journal");
         };
-        std::set<std::string> seen;
-        std::string line;
-        size_t count = 0;
-        while (std::getline(requests, line)) {
-            if (line.empty()) {
-                continue;
-            }
-            auto request = json::parse(line);
-            auto id = request.at("id").get<std::string>();
-            require(!id.empty(), "request id must not be empty");
-            require(seen.insert(id).second, "duplicate request id: " + id);
-            ++count;
-            event({{"event", "row_started"}, {"id", id}, {"index", count - 1}});
-            json result;
-            try {
-                result = context.generate(request);
-            } catch (const std::exception & error) {
-                const std::string message = error.what();
-                const bool data_error = message.find("exceeds context") != std::string::npos ||
-                    message.find("non-causal image exceeds") != std::string::npos ||
-                    message.find("cannot read image") != std::string::npos || message.find("template") != std::string::npos ||
-                    message.find("question") != std::string::npos;
-                event({{"event", "row_failed"}, {"id", id}, {"index", count - 1}, {"error", message}, {"retryable", !data_error}});
-                std::cerr << "[reference] failed id=" << id << " error=" << message << '\n';
-                if (!continue_on_error || !data_error) { return 2; }
-                continue;
-            }
+        auto write_result = [&](json result) {
+            auto id = result.at("id").get<std::string>();
             output << result.dump(-1, ' ', false, json::error_handler_t::replace) << '\n';
             output.flush();
             require(bool(output), "failed to write generation");
-            event({{"event", "row_succeeded"}, {"id", id}, {"index", count - 1}});
-            std::cerr << "[reference] row " << count << " id=" << id << " tokens=" << result["token_logprobs"].size() << '\n';
+            event({{"event", "row_succeeded"}, {"id", id}});
+            std::cerr << "[reference] id=" << id << " tokens=" << result["token_logprobs"].size() << '\n';
+        };
+        auto row_error = [&](const std::string & id, const std::exception & error) {
+            const std::string message = error.what();
+            const bool data_error = message.find("exceeds context") != std::string::npos ||
+                message.find("non-causal image exceeds") != std::string::npos ||
+                message.find("cannot read image") != std::string::npos || message.find("template") != std::string::npos ||
+                message.find("question") != std::string::npos;
+            event({{"event", "row_failed"}, {"id", id}, {"error", message}, {"retryable", !data_error}});
+            std::cerr << "[reference] failed id=" << id << " error=" << message << '\n';
+            return continue_on_error && data_error;
+        };
+        std::vector<std::unique_ptr<reference_row>> slots(context.params.n_parallel);
+        std::set<std::string> seen;
+        std::string line;
+        size_t count = 0;
+        bool exhausted = false;
+        while (true) {
+            for (size_t sequence = 0; sequence < slots.size(); ++sequence) {
+                auto & slot = slots[sequence];
+                while (!slot && !exhausted) {
+                    if (!std::getline(requests, line)) {
+                        exhausted = true;
+                        break;
+                    }
+                    if (line.empty()) {
+                        continue;
+                    }
+                    auto request = json::parse(line);
+                    auto id = request.at("id").get<std::string>();
+                    require(!id.empty(), "request id must not be empty");
+                    require(seen.insert(id).second, "duplicate request id: " + id);
+                    ++count;
+                    event({{"event", "row_started"}, {"id", id}, {"index", count - 1}, {"sequence", sequence}});
+                    try {
+                        if (slots.size() == 1) {
+                            write_result(context.generate(request));
+                        } else {
+                            slot = context.prepare(request, sequence);
+                            auto first = context.sample(*slot, -1);
+                            context.emit(*slot, first.first, first.second);
+                            if (context.finished(*slot)) {
+                                write_result(context.finish_row(*slot));
+                                slot.reset();
+                            }
+                        }
+                    } catch (const std::exception & error) {
+                        slot.reset();
+                        if (!row_error(id, error)) { return 2; }
+                    }
+                }
+            }
+            if (std::none_of(slots.begin(), slots.end(), [](const auto & row) { return bool(row); })) {
+                break;
+            }
+            context.decode(slots);
+            for (auto & row : slots) {
+                if (row && context.finished(*row)) {
+                    write_result(context.finish_row(*row));
+                    row.reset();
+                }
+            }
         }
         require(count > 0, "requests file is empty");
         return 0;

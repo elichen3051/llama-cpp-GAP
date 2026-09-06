@@ -47,7 +47,7 @@ def parse_args(argv=None):
     p.add_argument("--native-timeout", type=float, default=None, help="optional total subprocess timeout in seconds")
     p.add_argument("--row-retries", type=int, default=1, help="retries after a native row crash; data errors are terminal")
     p.add_argument("--startup-retries", type=int, default=1)
-    p.add_argument("--row-timeout", type=float, default=1800, help="restart native process after this many seconds without a row journal update")
+    p.add_argument("--row-timeout", type=float, default=1800, help="restart when any active row exceeds this many seconds, or startup makes no journal progress")
     p.add_argument("llama_args", nargs=argparse.REMAINDER)
     args = p.parse_args(argv)
     if args.row_timeout <= 0:
