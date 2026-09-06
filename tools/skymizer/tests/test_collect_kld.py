@@ -229,7 +229,6 @@ def test_scorer_argv_forwards_explicit_execution_protocol(tmp_path):
         "--cand-model", args.cand_model, "--cand-mmproj", args.cand_mmproj,
         "--manifest", str(manifest),
         "--num-eval-tokens", "1024",
-        "--image-min-tokens", "-1", "--image-max-tokens", "-1",
         "-b", "2048", "-c", "32768", "-ub", "512", "-ngl", "99",
         "--tf-chunk", "2048", "-t", "8", "--metric-threads", "8",
         "--flash-attn",

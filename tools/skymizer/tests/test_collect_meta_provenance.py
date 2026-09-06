@@ -350,7 +350,7 @@ parquet = export / "train-00000-of-00001.parquet"
 parquet.write_bytes(b"fake parquet")
 sha = lambda path: hashlib.sha256(path.read_bytes()).hexdigest()
 subset = metadata["dataset_source"]["subset"] + ("-think" if a.mode == "thinking" else "-ins")
-manifest = {"repo": "elichen-skymizer/" + a.model + "-pivot", "subset": subset, "rows": completion["rows"], "split": "train",
+manifest = {"repo": "elichen-skymizer/" + a.model + "-pilot", "subset": subset, "rows": completion["rows"], "split": "train",
             "cohort": completion["cohort"], "metadata_sha256": sha(run / "metadata.json"), "parquet_sha256": sha(parquet),
             "audit_sha256": {name: sha(run / name) for name in ("metadata.json", "complete.json", "run_start.json", "excluded.jsonl", "failures.jsonl", "native-attempts.json")}}
 (export / "manifest.json").write_text(json.dumps(manifest))

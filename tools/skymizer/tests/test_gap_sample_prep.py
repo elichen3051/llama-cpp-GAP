@@ -562,7 +562,7 @@ def test_upload_cohort_names_and_image_parquet_roundtrip(upload_run, size, mode)
     from lib.reference_dataset import raw_images
     run, profiles = upload_run(size, mode)
     manifest, parquet = upload.prepare(run, 'test-model', mode, profiles)
-    assert manifest['repo'] == 'elichen-skymizer/test-model-' + ('pivot' if size == 100 else 'collect-500')
+    assert manifest['repo'] == 'elichen-skymizer/test-model-' + ('pilot' if size == 100 else 'collect-500')
     assert manifest['subset'] == f'mmmu-pro-vision-subsample-{size}-' + ('ins' if mode == 'instruct' else 'think')
     assert manifest['rows'] == 2 and manifest['cohort']['requested'] == size
     ds = Dataset.from_parquet(str(parquet))
@@ -811,7 +811,7 @@ def test_kld_launcher_uses_matching_runtime_without_generation_or_analysis(tmp_p
     assert "--spec-type" not in command and "--model-draft" not in command
     assert command[1] == str(tmp_path / "archived/cli/collect_kld.py")
     subset = "mmmu-pro-vision-subsample-100-" + ("ins" if mode == "instruct" else "think")
-    assert flag("--subset") == subset and flag("--dataset") == f"elichen-skymizer/{model}-pivot"
+    assert flag("--subset") == subset and flag("--dataset") == f"elichen-skymizer/{model}-pilot"
     assert out == tmp_path / "study/artifacts" / model / subset / "kld/Q4_K_M"
     overview = study_overview(profiles, plan)
     assert overview["models"][model]["kld_runtime"][mode]["n_ubatch"] == ubatch

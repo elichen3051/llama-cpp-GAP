@@ -120,7 +120,7 @@ def prepare(run, model, mode, profiles):
     failures = read_records(run / "failures.jsonl")
     if cohort["native_generated"] != cohort["generated"] + sum(r["status"] == "validation_failed" for r in failures):
         raise ValueError("native result count differs from validated results and validation failures")
-    repo = f"elichen-skymizer/{model}-" + ("pivot" if size == 100 else "collect-500")
+    repo = f"elichen-skymizer/{model}-" + ("pilot" if size == 100 else "collect-500")
     subset = source["subset"] + ("-think" if mode == "thinking" else "-ins")
     export = run / "upload"
     export.mkdir(exist_ok=True)

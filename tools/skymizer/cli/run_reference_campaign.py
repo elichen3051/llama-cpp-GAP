@@ -209,7 +209,7 @@ def validate_receipt(run, model, subset, size):
     manifest = json.loads((run / "upload/manifest.json").read_text())
     receipt = json.loads((run / "upload/receipt.json").read_text())
     completion = json.loads((run / "complete.json").read_text())
-    repo = f"elichen-skymizer/{model}-" + ("pivot" if size == 100 else "collect-500")
+    repo = f"elichen-skymizer/{model}-" + ("pilot" if size == 100 else "collect-500")
     expected = {"repo": repo, "subset": subset, "rows": completion["rows"]}
     if any(manifest.get(k) != v or receipt.get(k) != v for k, v in expected.items()):
         raise ValueError("upload receipt does not describe this job")

@@ -56,7 +56,7 @@ def build_command(args, plan, profiles, scripts):
     subset = f"{args.source}-subsample-{plan['size']}-" + ("ins" if args.mode == "instruct" else "think")
     out = args.study.expanduser().resolve() / "artifacts" / args.model / subset / "kld" / args.candidate
     dataset = str(args.dataset.expanduser().resolve()) if args.dataset else (
-        f"elichen-skymizer/{args.model}-" + ("pivot" if plan["size"] == 100 else "collect-500"))
+        f"elichen-skymizer/{args.model}-" + ("pilot" if plan["size"] == 100 else "collect-500"))
     command = [sys.executable, str(scripts / "cli/collect_kld.py"),
                "--dataset", dataset, "--subset", "" if args.dataset else subset, "--split", "train",
                "--ref-model", str(model_root / profile["model"]), "--ref-mmproj", str(model_root / profile["mmproj"]),

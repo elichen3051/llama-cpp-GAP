@@ -18,7 +18,7 @@ def kld_runtime(profiles, model, mode, hardware):
 def study_overview(profiles, plan):
     model_root = Path(plan["models_dir"])
     modes = plan["modes"]
-    suffix = "pivot" if plan["size"] == 100 else "collect-500"
+    suffix = "pilot" if plan["size"] == 100 else "collect-500"
     models = {}
     for name in plan["models"]:
         profile = profiles["models"][name]
