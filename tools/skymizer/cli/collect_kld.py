@@ -5,17 +5,16 @@
 # Sweep a HuggingFace VLM ground-truth dataset with a (reference, candidate)
 # GGUF model pair and save per-row ON-THE-FLY fidelity metrics — no logits are
 # stored. The C++ scorer (llama-vlm-kld) loads both models once, teacher-forces
-# each row's answer tokens through both, and writes one 44-byte record per
+# each row's answer tokens through both, and writes one 76-byte record per
 # answer position (kld / reversed_kld / js_kld / nll_ref / nll_cand /
-# entropy_ref / entropy_cand / ear / target / argmax_ref / argmax_cand).
+# entropy_ref / entropy_cand / ear / the EAR_K family / target / argmax_ref / argmax_cand).
 #
 #     dataset --collect_kld (ref=F16, cand=Q4_K_M)--> <out_a>/   (metrics only)
 #     dataset --collect_kld (ref=F16, cand=OTHER) --> <out_b>/
 #                                  \________ numpy/torch postprocessing ______
 #
-# This path needs only ~44 KiB/row at npos=1024 and computes every metric
-# over the complete vocabulary, but fixes the (reference, candidate)
-# pairing at collection time.
+# This path needs only ~76 KiB/row at npos=1024, including full-vocabulary and
+# reference top-K metrics. It fixes the (reference, candidate) pairing at collection time.
 # Runs that must be comparable — e.g. ref-vs-A and ref-vs-B sharing the same
 # reference — MUST use the same --tf-chunk / --n-ubatch (the reference side's
 # logits depend on decode batching; FP non-associativity).

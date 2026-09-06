@@ -66,7 +66,8 @@ def _write_metrics_dir(d: Path, items: dict, meta: dict | None = BASE_META,
         if int(key.split("_", 1)[0]) in skipped:
             continue
         bin_path = d / "metrics" / f"{key}.bin"
-        version = kio.VLMK_VERSION if "ear" in rec.dtype.names else 1
+        version = next(v for v in kio.VLMK_SUPPORTED_VERSIONS
+                       if rec.dtype == kio.kld_record_dt(v))
         write_vlmk(bin_path, rec, vocab=11, n_prefill=7, version=version,
                    n_past_actual=n_past_actual)
         kio.convert_kld_bin_to_npz(bin_path, bin_path.with_suffix(".npz"))
@@ -1072,3 +1073,53 @@ def test_failed_root_sync_cannot_publish_completed_attempt(tmp_path, monkeypatch
         attempt.finish()
     with pytest.raises(ValueError, match="attempt is running"):
         state.require_completed_attempts(root)
+
+
+@pytest.mark.parametrize("version_b", [4, 5])
+def test_v4_compare_omits_ear64_without_fabricating_columns(tmp_path, version_b):
+    a, b = _make_pair(tmp_path, version=4, version_b=version_b)
+    rc, md, js = _run_main(a, b, tmp_path)
+    assert rc == 0
+    result = json.loads(js.read_text())
+    assert result["vlmk_versions"] == {"candidate_a": [4], "candidate_b": [version_b]}
+    warnings = "\n".join(result["alignment"]["warnings"])
+    for key in ("ear_64", "ear_64_normalized"):
+        assert key not in result["metrics"]
+        assert key in warnings and key in md.read_text()
+        with pytest.raises(SystemExit, match=key + ".*candidate-a.*VLMK v4"):
+            _run_main(a, b, tmp_path, "--metrics", "kld", key)
+    assert "candidate-a (VLMK v4)" in warnings
+    if version_b == 5:
+        assert "candidate-b (VLMK" not in warnings
+    assert "ear_20" in result["metrics"]
+    assert "ear_20_normalized" in result["metrics"]
+
+
+def test_ear64_report_uses_saved_prefix_means_and_higher_is_better(tmp_path):
+    a, b = _make_pair(tmp_path, npos_list=[2, 3, 5])
+    for side, offset in ((a, 0.0), (b, 0.1)):
+        for path in (side / "metrics").glob("*.npz"):
+            with np.load(path) as z:
+                payload = {key: z[key] for key in z.files}
+            npos = int(payload["npos"])
+            payload["ear_64"] = np.linspace(0.25 + offset, 0.75 + offset, npos, dtype=np.float32)
+            payload["ear_64_normalized"] = np.linspace(0.5 + offset, 0.8 + offset, npos, dtype=np.float32)
+            np.savez(path, **payload)
+    rc, md, js = _run_main(a, b, tmp_path, "--num-eval-tokens", "3")
+    assert rc == 0
+    result = json.loads(js.read_text())
+    assert result["multiplicity"]["family_size"] == 29
+    for key in ("ear_64", "ear_64_normalized"):
+        block = result["metrics"][key]
+        assert block["score_direction"] == "higher_is_better"
+        assert key in md.read_text()
+        means, weights = [], []
+        for path in sorted((a / "metrics").glob("*.npz")):
+            with np.load(path) as z:
+                prefix = z[key][:3].astype(np.float64)
+                means.append(float(prefix.mean()))
+                weights.append(len(prefix))
+        assert block["item_weighted"]["baseline_mean"] == pytest.approx(np.mean(means), abs=1e-12)
+        assert block["token_weighted"]["baseline_mean"] == pytest.approx(np.average(means, weights=weights), abs=1e-12)
+        assert block["item_weighted"]["delta_candidate_minus_baseline"] > 0
+        assert block["item_weighted"]["decision"]["verdict"] == "B closer"

@@ -4,8 +4,8 @@
 // (e.g. Q4_K_M) — runs the SAME teacher-forced prompt+answer through both, and
 // computes per-answer-token divergence metrics from the two full-vocab logit
 // rows while they are still in memory. Only the metrics are written to disk:
-// 68 bytes/position instead of vocab * 4 bytes/position of dense fp32 logits
-// (~14,000x smaller at vocab ~152k); every metric covers the full vocabulary.
+// 76 bytes/position instead of vocab * 4 bytes/position of dense fp32 logits
+// (~8,000x smaller at vocab ~152k). Top-K metrics select reference tokens.
 //
 // Deliberately a STANDALONE module, independent of vlm-score.cpp (which dumps
 // logits for offline comparison): the two tools answer different questions and
@@ -100,7 +100,7 @@
 //
 // Output binary layout (LE on x86_64), magic "VLMK":
 //   uint32_t magic = 0x564C4D4B                ("VLMK")
-//   uint32_t version = 2                       (v1 = 40-byte records without ear)
+//   uint32_t version = 5                       (v1 = 40-byte records without ear)
 //   uint32_t vocab_size                        (== llama_vocab_n_tokens, both models)
 //   uint32_t n_positions                       (# answer tokens scored)
 //   uint32_t n_prefill                         (HF ground-truth sequential
@@ -110,7 +110,7 @@
 //                                              actually moves when the vision
 //                                              budget changes; 0 = not recorded,
 //                                              i.e. written before this field)
-// followed by n_positions packed records of 68 bytes:
+// followed by n_positions packed records of 76 bytes:
 //   float32 kld                                KL(p_ref || p_cand), nats
 //   float32 reversed_kld                       KL(p_cand || p_ref), nats
 //   float32 js_kld                             Jensen-Shannon divergence, nats
@@ -128,8 +128,8 @@
 //   int32   target                             teacher-forced target token id
 //   int32   argmax_ref                         reference argmax token id
 //   int32   argmax_cand                        candidate argmax token id
-// All metrics are accumulated in float64 over the full vocab and stored as
-// float32. Derivable downstream: same_top = (argmax_ref == argmax_cand),
+//   float32 ear_64, ear_64_normalized (v5, after the v4 prefix)
+// All metrics use float64 accumulation and float32 storage. Derivable downstream: same_top = (argmax_ref == argmax_cand),
 // p(target) = exp(-nll), delta-p at target, perplexities = exp(mean nll).
 // `ear` is the per-position Expected Acceptance Rate (arXiv:2605.02404): the
 // probability-mass overlap sum_i min(p_ref(i), p_cand(i)) = 1 - d_TV, i.e. the
@@ -177,7 +177,7 @@
 #endif
 
 static constexpr uint32_t VLMK_MAGIC   = 0x564C4D4B; // "VLMK"
-static constexpr uint32_t VLMK_VERSION = 4;          // v4: 68-byte records (+ ear_K and ear_K_normalized, K=20/10/5); v3 = 56, v2 = 44 (+ ear), v1 = 40
+static constexpr uint32_t VLMK_VERSION = 5;          // v5: 76-byte records (+ EAR_64); v4 = 68, v3 = 56, v2 = 44, v1 = 40
 
 
 // ---------------------------------------------------------------------------
@@ -325,7 +325,7 @@ static bool parse_args(int argc, char ** argv, vlm_kld_args & a) {
 // ---------------------------------------------------------------------------
 
 // Write the whole VLMK file at once (header + records), to <path>.tmp first,
-// fsync, then atomically rename. Metrics are tiny (68 bytes/position), so
+// fsync, then atomically rename. Metrics are tiny (76 bytes/position), so
 // unlike vlm-score's streaming vlms_writer there is no need to stream — a
 // buffered single-shot write keeps the commit logic trivially reviewable and
 // a crashed/partial run never leaves a complete-looking output behind.
@@ -675,7 +675,7 @@ static bool prefill_side(model_side & s,
 
 // Score one item: prefill both sides, teacher-force the shared answer tokens
 // through both in chunks, and compute one kld_record per answer position from
-// the two in-memory logit rows. Records are buffered (68 B/position) and the
+// the two in-memory logit rows. Records are buffered (76 B/position) and the
 // output is committed atomically at the end.
 static bool score_one(
         const vlm_kld_args & args,

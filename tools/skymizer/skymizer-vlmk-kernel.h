@@ -15,6 +15,7 @@
 #include <atomic>
 #include <cmath>
 #include <cstdint>
+#include <cstddef>
 #include <cstdio>
 #include <cstring>
 #include <fstream>
@@ -47,8 +48,11 @@ struct kld_record {
     int32_t target;         // teacher-forced target token id
     int32_t argmax_ref;     // reference argmax token id
     int32_t argmax_cand;    // candidate argmax token id
+    float   ear_64;         // reference top-64 share of EAR (v5, appended after the v4 record)
+    float   ear_64_normalized; // both rows renormalized on the reference top-64 (v5)
 };
-static_assert(sizeof(kld_record) == 68, "kld_record must be 68 packed bytes (on-disk layout)");
+static_assert(offsetof(kld_record, ear_64) == 68, "v5 must preserve the v4 record prefix");
+static_assert(sizeof(kld_record) == 76, "kld_record must be 76 packed bytes (on-disk layout)");
 
 static bool kld_record_all_finite(const kld_record & rec) {
     const float values[] = {
@@ -56,6 +60,7 @@ static bool kld_record_all_finite(const kld_record & rec) {
         rec.nll_cand, rec.entropy_ref, rec.entropy_cand, rec.ear,
         rec.ear_20, rec.ear_10, rec.ear_5,
         rec.ear_20_normalized, rec.ear_10_normalized, rec.ear_5_normalized,
+        rec.ear_64, rec.ear_64_normalized,
     };
     for (float value : values) {
         if (!std::isfinite(value)) {
@@ -72,12 +77,14 @@ static bool validate_kld_record_finite(
         rec.nll_cand, rec.entropy_ref, rec.entropy_cand, rec.ear,
         rec.ear_20, rec.ear_10, rec.ear_5,
         rec.ear_20_normalized, rec.ear_10_normalized, rec.ear_5_normalized,
+        rec.ear_64, rec.ear_64_normalized,
     };
     const char * names[] = {
         "kld", "reversed_kld", "js_kld", "nll_ref",
         "nll_cand", "entropy_ref", "entropy_cand", "ear",
         "ear_20", "ear_10", "ear_5",
         "ear_20_normalized", "ear_10_normalized", "ear_5_normalized",
+        "ear_64", "ear_64_normalized",
     };
     for (size_t i = 0; i < sizeof(values) / sizeof(values[0]); ++i) {
         if (!std::isfinite(values[i])) {
@@ -110,6 +117,8 @@ struct kld_values {
     double  ear_20_normalized = 0.0;
     double  ear_10_normalized = 0.0;
     double  ear_5_normalized  = 0.0;
+    double  ear_64       = 0.0;
+    double  ear_64_normalized = 0.0;
     int32_t target       = 0;
     int32_t argmax_ref   = 0;
     int32_t argmax_cand  = 0;
@@ -134,6 +143,8 @@ static kld_record to_kld_record(const kld_values & v) {
     rec.target       = v.target;
     rec.argmax_ref   = v.argmax_ref;
     rec.argmax_cand  = v.argmax_cand;
+    rec.ear_64       = (float) v.ear_64;
+    rec.ear_64_normalized = (float) v.ear_64_normalized;
     return rec;
 }
 
@@ -161,7 +172,7 @@ static row_stats compute_row_stats(const float * x, int n) {
     return s;
 }
 
-// EAR_K family (v4), on the REFERENCE's K most likely tokens (the K vocab
+// EAR_K family (v4: K=5/10/20; v5 adds K=64), on the REFERENCE's K most likely tokens (the K vocab
 // slots with the largest reference logits, ties -> lower index; K clamped to
 // n_vocab):
 //   ear_K            = sum over those slots of min(p_ref, p_cand) with the
@@ -176,7 +187,7 @@ static row_stats compute_row_stats(const float * x, int n) {
 //                      set is ignored, so it is NOT monotone in K. 0 when the
 //                      candidate has no mass on any of the K slots.
 // For n_vocab <= K both equal `ear` up to rounding.
-static constexpr int EAR_TOPK_MAX = 20;
+static constexpr int EAR_TOPK_MAX = 64;
 
 // One pass with a sorted insertion buffer: once K slots are filled the common
 // case is a single failed compare per vocab entry. Strict `>` on entry and
@@ -320,6 +331,8 @@ static kld_values compute_kld_values(const float * ref, const float * cand, int 
         v.ear_20 = e20.mass;  v.ear_20_normalized = e20.normalized;
         v.ear_10 = e10.mass;  v.ear_10_normalized = e10.normalized;
         v.ear_5  = e5.mass;   v.ear_5_normalized  = e5.normalized;
+        const ear_topk_pair e64 = ear_topk_values(cand, top_idx, top_val, n_top, sr.log_z, sc.log_z);
+        v.ear_64 = e64.mass;  v.ear_64_normalized = e64.normalized;
     }
     return v;
 }
@@ -446,6 +459,8 @@ static kld_values naive_kld_values(const std::vector<float> & ref, const std::ve
     v.ear_20_normalized = ear_k_normalized(20);
     v.ear_10_normalized = ear_k_normalized(10);
     v.ear_5_normalized  = ear_k_normalized(5);
+    v.ear_64 = ear_k_mass(64);
+    v.ear_64_normalized = ear_k_normalized(64);
     return v;
 }
 
@@ -500,6 +515,8 @@ static bool run_self_test() {
         ok &= self_test_close("2-token ear_20_normalized", rec.ear_20_normalized, 0.75, 1e-6);
         ok &= self_test_close("2-token ear_10_normalized", rec.ear_10_normalized, 0.75, 1e-6);
         ok &= self_test_close("2-token ear_5_normalized",  rec.ear_5_normalized,  0.75, 1e-6);
+        ok &= self_test_close("2-token ear_64", rec.ear_64, 0.75, 1e-6);
+        ok &= self_test_close("2-token ear_64_normalized", rec.ear_64_normalized, 0.75, 1e-6);
         ok &= self_test_close("2-token nll_ref",      rec.nll_ref,      std::log(2.0),  1e-6);
         ok &= self_test_close("2-token nll_cand",     rec.nll_cand,     std::log(4.0 / 3.0), 1e-6);
         ok &= self_test_close("2-token entropy_ref",  rec.entropy_ref,  std::log(2.0),  1e-6);
@@ -532,6 +549,8 @@ static bool run_self_test() {
             ok &= self_test_close(tag, got.ear_20_normalized, want.ear_20_normalized, tol);
             ok &= self_test_close(tag, got.ear_10_normalized, want.ear_10_normalized, tol);
             ok &= self_test_close(tag, got.ear_5_normalized,  want.ear_5_normalized,  tol);
+            ok &= self_test_close(tag, got.ear_64, want.ear_64, tol);
+            ok &= self_test_close(tag, got.ear_64_normalized, want.ear_64_normalized, tol);
             ok &= self_test_close(tag, got.nll_ref,      want.nll_ref,      tol);
             ok &= self_test_close(tag, got.nll_cand,     want.nll_cand,     tol);
             ok &= self_test_close(tag, got.entropy_ref,  want.entropy_ref,  tol);
@@ -570,7 +589,9 @@ static bool run_self_test() {
                 // ear_K (full-vocab mass on the reference top-K) is monotone in K
                 // and never above the full ear; the normalized variants are in [0, 1]
                 got.ear_5 < -1e-6f || got.ear_5 > got.ear_10 + 1e-6f ||
-                got.ear_10 > got.ear_20 + 1e-6f || got.ear_20 > got.ear + 1e-6f ||
+                got.ear_10 > got.ear_20 + 1e-6f || got.ear_20 > got.ear_64 + 1e-6f ||
+                got.ear_64 > got.ear + 1e-6f ||
+                got.ear_64_normalized < -1e-6f || got.ear_64_normalized > 1.0f + 1e-6f ||
                 got.ear_20_normalized < -1e-6f || got.ear_20_normalized > 1.0f + 1e-6f ||
                 got.ear_10_normalized < -1e-6f || got.ear_10_normalized > 1.0f + 1e-6f ||
                 got.ear_5_normalized  < -1e-6f || got.ear_5_normalized  > 1.0f + 1e-6f ||
@@ -585,6 +606,7 @@ static bool run_self_test() {
                  std::abs(got.js_kld) > 1e-9f || std::abs(got.ear - 1.0f) > 1e-6f ||
                  // identity: the normalized variants are exactly 1; the mass
                  // variants equal the reference's own top-K mass (checked vs naive)
+                 std::abs(got.ear_64_normalized - 1.0f) > 1e-6f ||
                  std::abs(got.ear_20_normalized - 1.0f) > 1e-6f ||
                  std::abs(got.ear_10_normalized - 1.0f) > 1e-6f ||
                  std::abs(got.ear_5_normalized - 1.0f) > 1e-6f)) {
@@ -664,6 +686,8 @@ static bool run_self_test() {
             ok &= self_test_close_rel("prod ear_20_normalized", got.ear_20_normalized, want.ear_20_normalized, rtol);
             ok &= self_test_close_rel("prod ear_10_normalized", got.ear_10_normalized, want.ear_10_normalized, rtol);
             ok &= self_test_close_rel("prod ear_5_normalized",  got.ear_5_normalized,  want.ear_5_normalized,  rtol);
+            ok &= self_test_close_rel("prod ear_64", got.ear_64, want.ear_64, rtol);
+            ok &= self_test_close_rel("prod ear_64_normalized", got.ear_64_normalized, want.ear_64_normalized, rtol);
             ok &= self_test_close_rel("prod nll_ref",      got.nll_ref,      want.nll_ref,      rtol);
             ok &= self_test_close_rel("prod nll_cand",     got.nll_cand,     want.nll_cand,     rtol);
             ok &= self_test_close_rel("prod entropy_ref",  got.entropy_ref,  want.entropy_ref,  rtol);
@@ -726,7 +750,8 @@ static bool run_self_test() {
                 !std::isfinite(got.entropy_cand) || !std::isfinite(got.ear) ||
                 !std::isfinite(got.ear_20) || !std::isfinite(got.ear_10) || !std::isfinite(got.ear_5) ||
                 !std::isfinite(got.ear_20_normalized) || !std::isfinite(got.ear_10_normalized) ||
-                !std::isfinite(got.ear_5_normalized)) {
+                !std::isfinite(got.ear_5_normalized) ||
+                !std::isfinite(got.ear_64) || !std::isfinite(got.ear_64_normalized)) {
                 fprintf(stderr, "self-test FAIL: masked-vocab metrics not finite "
                                 "(kld=%g rkld=%g jsd=%g ent_r=%g ent_c=%g ear=%g)\n",
                         got.kld, got.reversed_kld, got.js_kld,
@@ -772,6 +797,8 @@ static bool run_self_test() {
                 ok = false;
             } else {
                 ok &= self_test_close("one-sided ear",          got.ear,          want.ear,          2e-6);
+                ok &= self_test_close("one-sided ear_64", got.ear_64, want.ear_64, 2e-6);
+                ok &= self_test_close("one-sided ear_64_normalized", got.ear_64_normalized, want.ear_64_normalized, 2e-6);
                 ok &= self_test_close("one-sided reversed_kld", got.reversed_kld, want.reversed_kld, 2e-6);
                 ok &= self_test_close("one-sided js_kld",       got.js_kld,       want.js_kld,       2e-6);
                 ok &= self_test_close("one-sided nll_ref",      got.nll_ref,      want.nll_ref,      2e-6);
@@ -783,6 +810,54 @@ static bool run_self_test() {
                     fprintf(stderr, "self-test FAIL: one-sided mask: argmax/target mismatch\n");
                     ok = false;
                 }
+            }
+        }
+    }
+
+    // EAR_64 boundaries and selected-support normalization, without changing earlier RNG trials.
+    for (const int n_vocab : {1, 2, 63, 64, 65, 128}) {
+        std::vector<float> r(n_vocab), c(n_vocab);
+        for (int i = 0; i < n_vocab; ++i) {
+            r[i] = (float) ((i * 17) % 23) / 4.0f;
+            c[i] = r[i] + (float) ((i * 7) % 11) / 8.0f;
+        }
+        const kld_values got = compute_kld_values(r.data(), c.data(), n_vocab, n_vocab - 1);
+        const kld_values want = naive_kld_values(r, c, n_vocab - 1);
+        ok &= self_test_close("boundary ear_64", got.ear_64, want.ear_64, 1e-12);
+        ok &= self_test_close("boundary ear_64_normalized", got.ear_64_normalized, want.ear_64_normalized, 1e-12);
+        if (n_vocab <= 64) {
+            ok &= self_test_close("clamped ear_64", got.ear_64, got.ear, 1e-12);
+            ok &= self_test_close("clamped ear_64_normalized", got.ear_64_normalized, got.ear, 1e-12);
+        }
+    }
+    {
+        std::vector<float> r(65, 0.0f), c(65, 0.0f);
+        c[64] = (float) std::log(64.0);
+        const kld_values got = compute_kld_values(r.data(), c.data(), 65, 0);
+        const double selected_mass = 64.0 / (64.0 + std::exp((double) c[64]));
+        ok &= self_test_close("cutoff tie ear_64", got.ear_64, selected_mass, 1e-12);
+        ok &= self_test_close("outside mass ear_64_normalized", got.ear_64_normalized, 1.0, 1e-12);
+        int32_t ids[EAR_TOPK_MAX];
+        float logits[EAR_TOPK_MAX];
+        const int count = select_ref_topk(r.data(), 65, ids, logits);
+        ok &= self_test_close("cutoff tie count", count, 64, 0);
+        for (int i = 0; i < count; ++i) {
+            ok &= self_test_close("cutoff tie token id", ids[i], i, 0);
+        }
+        for (const float selected : {-std::numeric_limits<float>::infinity(), -1000.0f}) {
+            std::fill(c.begin(), c.end(), selected);
+            c[64] = 0.0f;
+            const kld_values masked = compute_kld_values(r.data(), c.data(), 65, 64);
+            ok &= self_test_close("zero full-row selected mass", masked.ear_64, 0.0, 0);
+            ok &= self_test_close("local selected softmax", masked.ear_64_normalized,
+                                  std::isfinite(selected) ? 1.0 : 0.0, 1e-12);
+        }
+        for (float kld_record::* field : {&kld_record::ear_64, &kld_record::ear_64_normalized}) {
+            kld_record rec = to_kld_record(got);
+            rec.*field = std::numeric_limits<float>::quiet_NaN();
+            if (kld_record_all_finite(rec) || validate_kld_record_finite(rec, 0, nullptr)) {
+                fprintf(stderr, "self-test FAIL: finite gate ignored an EAR_64 NaN\n");
+                ok = false;
             }
         }
     }

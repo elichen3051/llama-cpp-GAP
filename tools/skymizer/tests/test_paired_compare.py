@@ -86,6 +86,7 @@ def test_constants_and_imports():
     assert DEFAULT_METRICS == (
         "nll", "kld", "reversed_kld", "js_kld", "ear", "ear_20", "ear_10", "ear_5",
         "ear_20_normalized", "ear_10_normalized", "ear_5_normalized",
+        "ear_64", "ear_64_normalized",
         "same_top_rate", "mse_dp",
     )
     assert POOLED_TOKEN_METRICS == ("kld", "ear", "dp")

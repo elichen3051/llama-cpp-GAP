@@ -86,7 +86,7 @@
 #       [--allow-ref-drift] [--show-diagnostic-metrics] \
 #       [--output-json tmp/paired-q4km.json]
 #
-# Speed/memory: metric files are ~44 KiB/item at npos=1024, so loading and
+# Speed/memory: metric files are ~76 KiB/item at npos=1024, so loading and
 # per-item scoring run serially in seconds — no --jobs/--device machinery is
 # needed (or provided). The one super-linear step is the pooled-token KLD
 # tail bootstrap (item-cluster resampling over ALL tokens, --bootstrap-iters

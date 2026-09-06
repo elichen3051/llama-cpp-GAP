@@ -234,3 +234,15 @@ int main() {
     exe = tmp_path / "repeat"
     subprocess.run(["g++", "-std=c++17", "-O2", "-I", str(SKYMIZER), str(source), "-o", str(exe)], check=True)
     subprocess.run([str(exe)], check=True)
+
+
+@pytest.mark.parametrize("tool", TOOLS)
+def test_kld_metric_self_test_and_current_format(tool):
+    import lib.kld_metrics_io as kio
+    result = subprocess.run([str(_binary(tool)), "--self-test"],
+                            capture_output=True, text=True, timeout=30)
+    assert result.returncode == 0, result.stderr
+    assert "self-test PASS" in result.stderr
+    version = subprocess.run([str(_binary(tool)), "--vlmk-version"],
+                             capture_output=True, text=True, check=True)
+    assert version.stdout.strip() == str(kio.VLMK_VERSION)

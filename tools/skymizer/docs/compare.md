@@ -141,20 +141,27 @@ collapses to the point estimate and records the same key.
 #### Multiplicity: one confirmatory endpoint, Holm over the rest
 
 Every base metric is reported item- **and** token-weighted, so a default run
-emits 14 verdicts at nominal α = 0.05. Driven with exchangeable A/B data
-(identical distributions, a shared per-item latent, n=50) the uncorrected
-grid's **family-wise false-positive rate measured 0.35**.
+emits 30 verdicts at nominal alpha = 0.05 when all VLMK v5 metrics are
+available (26 for v4). In the original 14-cell grid, exchangeable A/B data
+(identical distributions, a shared per-item latent, n=50) gave an uncorrected
+**family-wise false-positive rate of 0.35**.
 
 So the report designates exactly one **confirmatory endpoint**, marked `★`:
 `--primary-metric` (default `kld`) at `--primary-weighting` (default `item`).
 Its interval is the report's claim and spends the whole α. Every other cell is
 **exploratory** and carries `p (Holm)` — the Holm–Bonferroni-adjusted p-value
-across the remaining 13 cells, with `✓` when it survives at α and `·` when it
+across the remaining 29 cells (25 for the v4 metric set), with `✓` when it survives at α and `·` when it
 does not. Holm is the right correction here rather than Benjamini–Hochberg:
 it controls the family-wise rate under *arbitrary* dependence, and nothing in
 this family is independent (the two weightings are views of the same numbers;
 `kld` / `reversed_kld` / `js_kld` are three functionals of the same
 distribution pair).
+
+Adding EAR_64 to the default report expands the exploratory Holm family, so
+adjusted p-values can change. Existing metric values, means, raw p-values and
+CIs retain their definitions. Use the same explicit `--metrics` list for
+reports with the same multiplicity family. Old dumps omit unavailable metrics
+with a saved warning; explicitly requesting a missing metric requires recollection.
 
 Each p-value is obtained by **inverting the interval that was actually built**
 — solving for the confidence level whose endpoint lands on 0 — so `p ≤ α` and
@@ -194,8 +201,8 @@ nothing paired about it.
 | `reversed_kld` | lower better | Reverse `KL(p_cand ‖ p_ref)` — mode-seeking |
 | `js_kld` | lower better | Jensen-Shannon divergence (symmetric, bounded by ln 2) |
 | `ear` | higher better | Expected Acceptance Rate ([arXiv:2605.02404](https://arxiv.org/abs/2605.02404)): per position `Σ_v min(p_ref, p_cand)` = `1 − TV distance`, averaged over the full vocabulary. `EAR 0.99` ⇒ the two models emit the same token 99% of the time under optimal coupling — the speculative-decoding acceptance probability |
-| `ear_20` / `ear_10` / `ear_5` | higher better | The **reference's top-K share of EAR**: `Σ_{v ∈ top-K_ref} min(p_ref, p_cand)` with full-vocab probabilities, top-K_ref = the K ids with the largest reference logits (ties → lower id). Decomposes `ear` (`ear_5 ≤ ear_10 ≤ ear_20 ≤ ear`); its ceiling is the reference's own top-K mass, so a flat reference caps it regardless of the candidate. VLMK v4+ dumps only |
-| `ear_20_normalized` / `ear_10_normalized` / `ear_5_normalized` | higher better | Same K ids, but both rows renormalized over exactly those ids (softmax of the K logits) before `Σ_k min(p̃_ref, p̃_cand)`. Answers "how well does the candidate reproduce the reference's relative preferences among its K most likely tokens" — `1.0` = identical shape on that set. Candidate mass outside the reference's top-K is ignored by design, so it is not monotone in K and should be read together with `ear`. VLMK v4+ dumps only |
+| `ear_64` / `ear_20` / `ear_10` / `ear_5` | higher better | The **reference's top-K share of EAR**: `Σ_{v ∈ top-K_ref} min(p_ref, p_cand)` with full-vocab probabilities, top-K_ref = the K ids with the largest reference logits (ties → lower id). Decomposes `ear` (`ear_5 <= ear_10 <= ear_20 <= ear_64 <= ear`); its ceiling is the reference's own top-K mass, so a flat reference caps it regardless of the candidate. K=64 requires VLMK v5+; K=5/10/20 requires v4+ |
+| `ear_64_normalized` / `ear_20_normalized` / `ear_10_normalized` / `ear_5_normalized` | higher better | Same K ids, but both rows renormalized over exactly those ids (softmax of the K logits) before `Σ_k min(p̃_ref, p̃_cand)`. Answers "how well does the candidate reproduce the reference's relative preferences among its K most likely tokens" — `1.0` = identical shape on that set. Candidate mass outside the reference's top-K is ignored by design, so it is not monotone in K and should be read together with `ear`. K=64 requires VLMK v5+; normalized K=5/10/20 is present in v3+ |
 | `same_top_rate` | higher better | Fraction of positions where `argmax_ref == argmax_cand` |
 | `mse_dp` | lower better | `mean((p_cand(target) − p_ref(target))²)` in pp² |
 

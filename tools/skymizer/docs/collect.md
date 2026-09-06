@@ -166,8 +166,8 @@ the same (batched) setting so the comparison stays self-consistent.
 (model, mmproj) at once, teacher-forces each row's answer tokens through
 both, and computes per-answer-token metrics from the two full-vocab logit
 rows while they are in memory. Only the metrics hit the disk: one packed
-44-byte record per position, ~44 KiB/row at `npos=1024` — every metric is
-full-vocabulary by construction, and no logits are ever stored.
+76-byte VLMK v5 record per position, ~76 KiB/row at `npos=1024`. Full-vocabulary
+distributions also supply the reference top-K metrics; no logits are stored.
 
 ```
 dataset ─collect_kld (ref=BF16, cand=Q4_K_M·mmF16)─► <out_a>/metrics/*.npz
@@ -217,14 +217,18 @@ Per-token record fields (all derivations downstream are trivial):
 | `nll_ref` / `nll_cand` | f32 | `−log p(target)` per side; `p(target) = exp(−nll)` |
 | `entropy_ref` / `entropy_cand` | f32 | Self entropy per side, nats |
 | `ear` | f32 | Expected Acceptance Rate: `Σ_v min(p_ref, p_cand)` = `1 − TV` ([arXiv:2605.02404](https://arxiv.org/abs/2605.02404)); VLMK v2+ dumps only |
-| `ear_20` / `ear_10` / `ear_5` | f32 | `Σ_{v ∈ top-K_ref} min(p_ref(v), p_cand(v))` with the full-vocab probabilities, where top-K_ref = the K token ids with the largest reference logits (ties → lower id): the share of `ear` that the reference's K most likely tokens contribute. Monotone in K, `≤ ear`, bounded by the reference's own top-K mass. K clamped to the vocabulary size; VLMK v4+ dumps only |
-| `ear_20_normalized` / `ear_10_normalized` / `ear_5_normalized` | f32 | Same K slots, but both rows are first renormalized over exactly those slots (softmax of the K logits), then `Σ_k min(p̃_ref, p̃_cand)`. 1.0 = the candidate reproduces the reference's relative preferences among its K most likely tokens; candidate mass outside the set is ignored by design, so it is NOT monotone in K (typically ear ≤ ear_20_normalized ≤ ear_10_normalized ≤ ear_5_normalized because quantization error concentrates on low-probability tokens). VLMK v4+ dumps only (v3 interim dumps carry only this trio) |
+| `ear_64` / `ear_20` / `ear_10` / `ear_5` | f32 | `Σ_{v ∈ top-K_ref} min(p_ref(v), p_cand(v))` with the full-vocab probabilities, where top-K_ref = the K token ids with the largest reference logits (ties → lower id): the share of `ear` that the reference's K most likely tokens contribute. Monotone in K, `≤ ear`, bounded by the reference's own top-K mass. K clamped to the vocabulary size; K=64 requires VLMK v5+, K=5/10/20 requires v4+ |
+| `ear_64_normalized` / `ear_20_normalized` / `ear_10_normalized` / `ear_5_normalized` | f32 | Same K slots, but both rows are first renormalized over exactly those slots (softmax of the K logits), then `Σ_k min(p̃_ref, p̃_cand)`. 1.0 = the candidate reproduces the reference's relative preferences among its K most likely tokens; candidate mass outside the set is ignored by design, so it is NOT monotone in K. Returns 0 if a side has no support on the selected set; finite logits use a stable local softmax even when full-vocabulary probabilities underflow. K=64 requires VLMK v5+; K=5/10/20 is present in v3+ |
 | `target` | i32 | Teacher-forced target token id |
 | `argmax_ref` / `argmax_cand` | i32 | Per-side argmax; `same_top = (argmax_ref == argmax_cand)` |
 
 All metrics are accumulated in float64 over the full vocab inside the C++
 scorer (`--metric-threads` parallelises the kernel across a chunk's
 positions) and stored as float32.
+
+Both collectors include `ear_64` and `ear_64_normalized` by default; no extra
+flag is needed. Rebuild both scorers before collecting VLMK v5. Existing
+v1-v4 files remain readable but need recollection to obtain the new metrics.
 
 Each row lands as `metrics/<idx>_<item_id>.npz` — directly `np.load`-able,
 no repo imports needed:

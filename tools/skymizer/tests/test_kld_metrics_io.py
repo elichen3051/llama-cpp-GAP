@@ -27,17 +27,19 @@ def vlmk_bin(tmp_path):
 # record layout contract
 # ---------------------------------------------------------------------------
 
-def test_record_layout_is_68_bytes_in_cpp_field_order():
-    """KLD_RECORD_DT must mirror the packed kld_record struct in
-    skymizer-vlmk-kernel.h (current = v4, 68 bytes with `ear` and both EAR_K
-    families); the v1/v2/v3 layouts stay pinned for the legacy readers."""
-    assert kio.VLMK_VERSION == 4
-    assert kio.KLD_RECORD_DT.itemsize == 68
+def test_record_layout_is_76_bytes_with_the_v4_prefix():
+    """V5 appends EAR_64 after the frozen v4 fields, including integer IDs."""
+    assert kio.VLMK_VERSION == 5
+    assert kio.KLD_RECORD_DT.itemsize == 76
     assert kio.KLD_METRIC_KEYS == (
         "kld", "reversed_kld", "js_kld", "nll_ref", "nll_cand",
         "entropy_ref", "entropy_cand", "ear", "ear_20", "ear_10", "ear_5",
         "ear_20_normalized", "ear_10_normalized", "ear_5_normalized",
-        "target", "argmax_ref", "argmax_cand")
+        "target", "argmax_ref", "argmax_cand", "ear_64", "ear_64_normalized")
+    assert kio.kld_record_dt(4).itemsize == 68
+    assert kio.kld_record_dt(4).descr == kio.KLD_RECORD_DT.descr[:-2]
+    assert kio.KLD_RECORD_DT.fields["ear_64"][1] == 68
+    assert kio.KLD_RECORD_DT.fields["ear_64_normalized"][1] == 72
     assert kio.kld_record_dt(3).itemsize == 56
     assert kio.kld_metric_keys(3) == (
         "kld", "reversed_kld", "js_kld", "nll_ref", "nll_cand",
@@ -55,9 +57,10 @@ def test_record_layout_is_68_bytes_in_cpp_field_order():
         "entropy_ref", "entropy_cand", "target", "argmax_ref", "argmax_cand")
     assert kio.VERSIONED_METRIC_KEYS == (
         "ear", "ear_20", "ear_10", "ear_5",
-        "ear_20_normalized", "ear_10_normalized", "ear_5_normalized")
+        "ear_20_normalized", "ear_10_normalized", "ear_5_normalized",
+        "ear_64", "ear_64_normalized")
     with pytest.raises(ValueError, match="version"):
-        kio.kld_record_dt(5)
+        kio.kld_record_dt(6)
 
 
 # ---------------------------------------------------------------------------
@@ -386,3 +389,35 @@ def test_item_means_is_what_the_consumer_reports(tmp_path):
     full = kio.item_means(m)[0]
     for key in family:
         assert full[key] == float(m[key].astype(np.float64).mean())
+
+
+@pytest.mark.parametrize("version", [4, 5])
+def test_ear64_versioned_roundtrip_and_prefix_aggregation(tmp_path, version):
+    rec = make_records(npos=4, version=version)
+    if version == 5:
+        rec["ear_64"] = [0.0, 0.125, 0.5, 1.0]
+        rec["ear_64_normalized"] = [1.0, 0.75, 0.25, 0.0]
+    src, dest = tmp_path / "row.bin", tmp_path / "row.npz"
+    write_vlmk(src, rec, version=version)
+    kio.convert_kld_bin_to_npz(src, dest)
+    for path in (src, dest):
+        metrics, header = kio.load_kld_metrics(path)
+        assert header["version"] == version
+        assert tuple(metrics) == rec.dtype.names
+        for key in rec.dtype.names:
+            assert metrics[key].dtype == rec.dtype[key]
+            assert metrics[key].tobytes() == rec[key].tobytes()
+        for keep in (2, 4):
+            means, _ = kio.item_means(metrics, keep)
+            for key in ("ear_64", "ear_64_normalized"):
+                if version == 4:
+                    assert key not in metrics and key not in means
+                else:
+                    assert means[key] == float(rec[key][:keep].astype(np.float64).mean())
+    if version == 4:
+        with pytest.raises(ValueError, match="outdated"):
+            kio.assert_kld_current_version(header, src)
+    else:
+        src.write_bytes(src.read_bytes()[:-4])
+        with pytest.raises(ValueError, match="truncated or corrupt"):
+            kio.assert_kld_file_complete(src)

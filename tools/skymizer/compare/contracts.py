@@ -16,13 +16,13 @@ SCHEMA_VERSION = "vlm-paired-compare-v3"
 DEFAULT_METRICS = ("nll", "kld", "reversed_kld", "js_kld", "ear",
                    "ear_20", "ear_10", "ear_5",
                    "ear_20_normalized", "ear_10_normalized", "ear_5_normalized",
+                   "ear_64", "ear_64_normalized",
                    "same_top_rate", "mse_dp")
 
 # Multiplicity policy. Every base metric is reported item- AND token-weighted,
-# so a default run fires 26 independent 95% verdicts (14 before the EAR_K
-# family was added); driven with exchangeable
-# A/B (identical distributions, shared per-item latent, n=50) the family-wise
-# false-positive rate of the uncorrected grid measured 0.35.
+# so a complete v5 run emits 30 nominal 95% verdicts (26 for v4).
+# In the original 14-cell grid, exchangeable A/B data (identical distributions,
+# shared per-item latent, n=50) gave an uncorrected family-wise false-positive rate of 0.35.
 #
 # So exactly ONE cell is confirmatory: its interval is the report's claim and
 # spends the whole alpha. Every other cell is EXPLORATORY and carries a

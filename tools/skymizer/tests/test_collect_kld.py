@@ -141,12 +141,13 @@ def test_postprocess_rejects_n_prefill_mismatch(tmp_path):
         ck.postprocess_kld_result(row, num_eval_tokens=-1, elapsed_s=0.0)
 
 
-def test_postprocess_rejects_nonfinite_metrics(tmp_path):
+@pytest.mark.parametrize("metric", ["kld", "ear_64", "ear_64_normalized"])
+def test_postprocess_rejects_nonfinite_metrics(tmp_path, metric):
     """The metrics are the ONLY artifact; a numerical blowup must fail the
     row, not be recorded OK and poison downstream means."""
     row = _make_row(tmp_path)
     rec = np.fromfile(row["metrics_path"], dtype=kio.KLD_RECORD_DT, offset=24)
-    rec["kld"][1] = np.nan
+    rec[metric][1] = np.nan
     write_vlmk(row["metrics_path"], rec, n_prefill=row["n_prefill"])
     with pytest.raises(ValueError, match="non-finite"):
         ck.postprocess_kld_result(row, num_eval_tokens=-1, elapsed_s=0.0)
@@ -180,11 +181,12 @@ def test_postprocess_keeps_valid_dump_until_converted(tmp_path):
     assert row["metrics_path"].with_suffix(".npz").exists()
 
 
-def test_kld_float_keys_are_the_fourteen_metric_columns():
+def test_kld_float_keys_are_the_sixteen_metric_columns():
     assert ck.KLD_FLOAT_KEYS == ("kld", "reversed_kld", "js_kld", "nll_ref",
                                  "nll_cand", "entropy_ref", "entropy_cand",
                                  "ear", "ear_20", "ear_10", "ear_5",
-                                 "ear_20_normalized", "ear_10_normalized", "ear_5_normalized")
+                                 "ear_20_normalized", "ear_10_normalized", "ear_5_normalized",
+                                 "ear_64", "ear_64_normalized")
 
 
 def test_dump_stem_contract():

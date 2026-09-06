@@ -6,9 +6,9 @@
 #
 # A VLMK dump holds PER-ANSWER-TOKEN fidelity metrics computed on the fly from
 # a (reference, candidate) model pair — no logits are stored. One position is
-# one packed record (see KLD_RECORD_DT; 68 bytes at the current version 4,
+# one packed record (see KLD_RECORD_DT; 76 bytes at the current version 5, 68 for v4,
 # 56 for v3, 44 for v2 dumps without the EAR_K family, 40 for legacy v1 dumps
-# without `ear`); a 1024-position item is ~68 KiB vs ~600 MiB of fp32 dense
+# without `ear`); a 1024-position item is ~76 KiB vs ~600 MiB of fp32 dense
 # logits at vocab ~152k (Qwen3-VL).
 #
 # Version history:
@@ -24,6 +24,8 @@
 #         probabilities, the top-K share of `ear`) and `ear_20_normalized`,
 #         `ear_10_normalized`, `ear_5_normalized` (both rows renormalized on
 #         those K slots first), in that order after `ear`
+#     v5  76-byte records: append float32 `ear_64`, `ear_64_normalized`
+#         after the complete v4 record (including its token indices)
 # Readers accept every version (per-version dtype dispatch); the collectors
 # only WRITE the current version (their scorer binary is version-gated).
 #
@@ -93,7 +95,7 @@ def read_npz_member_headers(path) -> dict[str, tuple[tuple, np.dtype]]:
 
 
 VLMK_MAGIC = 0x564C4D4B   # "VLMK"
-VLMK_VERSION = 4          # writer-current version (68-byte records with ear + the EAR_K family)
+VLMK_VERSION = 5          # writer-current version (76-byte records, adds EAR_64)
 
 # Sixth word: llama.cpp's OWN position count after prefill. n_prefill (the
 # fifth) is the HF ground-truth sequential length echoed from the manifest,
@@ -111,6 +113,7 @@ KLD_HEADER_DT = np.dtype([
 # `ear` (Expected Acceptance Rate, sum min(p_ref, p_cand) = 1 - TV) -> 44
 # bytes; v3 adds the three renormalized top-K EARs -> 56 bytes; v4 adds
 # `ear_20/10/5` (top-K share of ear) AND `ear_20/10/5_normalized` -> 68 bytes.
+# V5 appends the two EAR_64 fields after the v4 record -> 76 bytes.
 KLD_RECORD_DT_V1 = np.dtype([
     ("kld", "<f4"), ("reversed_kld", "<f4"), ("js_kld", "<f4"),
     ("nll_ref", "<f4"), ("nll_cand", "<f4"),
@@ -138,6 +141,10 @@ KLD_RECORD_DT_V4 = np.dtype([
     ("ear_20_normalized", "<f4"), ("ear_10_normalized", "<f4"), ("ear_5_normalized", "<f4"),
     ("target", "<i4"), ("argmax_ref", "<i4"), ("argmax_cand", "<i4"),
 ])
+KLD_RECORD_DT_V5 = np.dtype(KLD_RECORD_DT_V4.descr + [
+    ("ear_64", "<f4"), ("ear_64_normalized", "<f4"),
+])
+assert KLD_RECORD_DT_V5.itemsize == 76, "v5 record layout drifted from skymizer-vlmk-kernel.h"
 assert KLD_RECORD_DT_V1.itemsize == 40, "v1 record layout drifted"
 assert KLD_RECORD_DT_V2.itemsize == 44, "v2 record layout drifted"
 assert KLD_RECORD_DT_V3.itemsize == 56, "v3 record layout drifted"
@@ -148,7 +155,7 @@ assert KLD_RECORD_DT_V4.itemsize == 68, "v4 record layout drifted from skymizer-
 # edits this dict + VLMK_VERSION (+ the C++ constant); nothing else is
 # hand-listed.
 _KLD_RECORD_DT_BY_VERSION = {1: KLD_RECORD_DT_V1, 2: KLD_RECORD_DT_V2, 3: KLD_RECORD_DT_V3,
-                             4: KLD_RECORD_DT_V4}
+                             4: KLD_RECORD_DT_V4, 5: KLD_RECORD_DT_V5}
 VLMK_SUPPORTED_VERSIONS = tuple(sorted(_KLD_RECORD_DT_BY_VERSION))
 assert VLMK_VERSION in _KLD_RECORD_DT_BY_VERSION, "VLMK_VERSION has no record layout"
 
@@ -191,10 +198,11 @@ def assert_kld_current_version(header: dict, path) -> dict:
 KLD_RECORD_DT = kld_record_dt(VLMK_VERSION)
 KLD_METRIC_KEYS = KLD_RECORD_DT.names
 # Record columns that older versions lack (v2 added `ear`, v3/v4 the EAR_K
-# family); per-item aggregation and the comparator's default metric set
+# family, v5 adds K=64); per-item aggregation and the comparator's default metric set
 # include them only when the dump carries them.
 VERSIONED_METRIC_KEYS = ("ear", "ear_20", "ear_10", "ear_5",
-                         "ear_20_normalized", "ear_10_normalized", "ear_5_normalized")
+                         "ear_20_normalized", "ear_10_normalized", "ear_5_normalized",
+                         "ear_64", "ear_64_normalized")
 
 # Header fields preserved in a .npz dump as 0-d uint32 arrays (magic excluded —
 # the .npz container itself plays that role).
@@ -355,7 +363,7 @@ def item_means(m, keep=None):
     `keep` positions (None = all) -- the ONE VLMK per-item aggregation
     (saved_metrics_paired_compare's per-item scores). Every column is
     upcast to float64 before averaging. `ear` (VLMK v2+) and the EAR_K
-    family (v3+/v4+) are present only when the dump carries them.
+    family (v3+/v4+/v5+) are present only when the dump carries them.
     Returns (scores, dp): the flat score dict and the signed per-token
     delta-p in percentage points, which callers derive tails / per-token
     columns from."""
