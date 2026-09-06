@@ -45,8 +45,17 @@ def load_dataset_sorted(dataset, subset, split, sort_by, sort_desc=False):
     """Load and optionally sort the HF dataset. Lazy `datasets` import so this
     module stays importable for hermetic tests with only numpy installed."""
     from datasets import load_dataset
-    ds = (load_dataset(dataset, subset, split=split) if subset
-          else load_dataset(dataset, split=split))
+    local = Path(dataset)
+    if (local / "state.json").is_file() or (local / "dataset_dict.json").is_file():
+        from datasets import DatasetDict, load_from_disk
+        if subset:
+            raise ValueError("--subset does not apply to a local dataset")
+        ds = load_from_disk(str(local))
+        if isinstance(ds, DatasetDict):
+            ds = ds[split]
+    else:
+        ds = (load_dataset(dataset, subset, split=split) if subset
+              else load_dataset(dataset, split=split))
     if sort_by:
         if sort_desc:
             ds = ds.sort([sort_by], reverse=True)
@@ -124,6 +133,14 @@ def prep_row(row, out_dir: Path) -> dict:
     out_dir.mkdir(parents=True, exist_ok=True)
 
     sanity_check_row(row)
+    if row.get("num_images", 0):
+        raise PrepError("LLM scoring requires text-only rows; use the VLM collector for images")
+    if row.get("generation_schema_version"):
+        from lib.reference_dataset import validate_reference_row
+        try:
+            validate_reference_row(row)
+        except ValueError as error:
+            raise PrepError(str(error)) from error
     np.asarray(row["input_ids"], dtype=np.int32).tofile(out_dir / "tokens.bin")
 
     meta = build_meta(row)

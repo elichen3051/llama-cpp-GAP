@@ -8,12 +8,11 @@ dependencies = [
     "datasets>=4.8.5",
     "numpy>=1.26.4",
     "pillow>=12.2.0",
-    "transformers>=5.5.1",
-    # Kimi-VL's remote-code tokenizer (tokenization_moonshot.py) imports
-    # tiktoken, whose vocab loader imports blobfile without declaring it.
-    "tiktoken>=0.14.0",
-    "blobfile>=3.0.0",
 ]
+
+[project.optional-dependencies]
+# Only legacy HF/vLLM datasets need an HF tokenizer to reconstruct prompts.
+hf-tokenizer = ["transformers>=5.5.1", "tiktoken>=0.14.0", "blobfile>=3.0.0"]
 
 # Skymizer is a repository-local collection of scripts, not an installable
 # Python library. Tell uv not to invoke setuptools' ambiguous flat-layout
@@ -24,7 +23,7 @@ package = false
 
 # Developer-only dependencies use a PEP 735 dependency group instead of a
 # published `dev` extra. Users get only [project].dependencies (and may opt
-# into the GPU extra); `uv sync --group dev` gives contributors the complete
+# into the HF tokenizer extra); `uv sync --group dev` gives contributors the complete
 # test/oracle environment.
 [dependency-groups]
 dev = [

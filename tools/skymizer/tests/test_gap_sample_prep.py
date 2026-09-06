@@ -165,3 +165,74 @@ def test_prep_row_end_to_end_on_real_rows(sample, tmp_path):
         assert len(list(out.glob("img_*.png"))) == row["num_images"]
         stored = json.loads((out / "meta.json").read_text())
         assert stored["n_prefill"] == meta["n_prefill"] == row["n_prefill_tokens"]
+
+
+def native_row(with_image=True):
+    from lib.reference_dataset import build_row
+    prefix = [1, -1, -1, 2] if with_image else [1, 2]
+    chunks = ([{"type": "text", "start": 0, "n_tokens": 1, "n_pos": 1, "tokens": [1]},
+               {"type": "image", "start": 1, "n_tokens": 2, "n_pos": 1, "grid_x": 2, "grid_y": 1, "grid_t": 1},
+               {"type": "text", "start": 3, "n_tokens": 1, "n_pos": 1, "tokens": [2]}]
+              if with_image else [{"type": "text", "start": 0, "n_tokens": 2, "n_pos": 2, "tokens": prefix}])
+    request = {"id": "image" if with_image else "text", "question": "What color?", "images": []}
+    result = {
+        "id": request["id"], "input_ids": prefix + [3, 4], "n_prefill_tokens": len(prefix),
+        "n_past_prefill": 3 if with_image else 2,
+        "prompt_layout": {"n_tokens": len(prefix), "n_pos": 3 if with_image else 2, "chunks": chunks},
+        "content": "red", "finish_reason": "stop", "sampling": {"seed": 1234},
+        "chat_template_kwargs": {}, "enable_thinking": False, "token_logprobs": [-0.5, -0.1],
+        "prompt": "<__media__>What color?" if with_image else "What color?",
+        "add_special": True, "stripped_leading_bos": False, "stop_type": "eos", "stopping_word": "",
+    }
+    metadata = {"model_path": "/models/test.gguf", "build_info": "test-build", "image_min_tokens": -1,
+                "image_max_tokens": -1, "image_token_budget_source": "mtmd_init_params", "media_marker": "<__media__>",
+                "vocab_size": 8}
+    import io
+    from PIL import Image
+    image = io.BytesIO()
+    Image.new("RGB", (2, 2), "red").save(image, format="PNG")
+    return build_row({}, request, result, metadata, [image.getvalue()] if with_image else [])
+
+
+@pytest.mark.parametrize("corruption", ["bytes", "layout", "position", "vocab", "logprobs", "version"])
+def test_native_contract_rejects_replay_corruption(corruption):
+    from lib.reference_dataset import validate_reference_row
+    from lib.reference_contract import GTContractError
+    row = native_row()
+    if corruption == "bytes":
+        row["images"][0]["bytes"] += b"changed"
+    elif corruption in ("layout", "position"):
+        layout = json.loads(row["llamacpp_prompt_layout"])
+        layout["chunks"][0]["tokens" if corruption == "layout" else "n_pos"] = [7] if corruption == "layout" else 9
+        row["llamacpp_prompt_layout"] = json.dumps(layout)
+    elif corruption == "vocab":
+        row["input_ids"][-1] = row["labels"][-1] = 100
+    elif corruption == "logprobs":
+        row["generation_token_logprobs"][0] = float("nan")
+    else:
+        row["generation_schema_version"] = "future-version"
+    with pytest.raises(GTContractError):
+        validate_reference_row(row)
+
+
+def test_native_dataset_storage_and_both_preppers_without_hf_tokenizer(tmp_path, monkeypatch):
+    datasets = pytest.importorskip("datasets")
+    from lib.reference_dataset import reference_features, validate_reference_row
+    from cli import prep_llm_score_from_hf as llm_prep
+    rows = [native_row(False), native_row(True)]
+    path = tmp_path / "dataset"
+    datasets.Dataset.from_list(rows, features=reference_features()).save_to_disk(str(path))
+    monkeypatch.setattr(prep, "load_tokenizer", lambda *_: pytest.fail("HF tokenizer must not load"))
+    ds = llm_prep.load_dataset_sorted(str(path), None, "train", "")
+    for row in ds:
+        validate_reference_row(row)
+    llm_prep.prep_row(ds[0], tmp_path / "llm")
+    row = ds[1]
+    raw = [im["bytes"] for im in row["images"]]
+    meta = prep.prep_row(row, None, tmp_path / "vlm", raw_images=raw)
+    assert (tmp_path / "vlm" / meta["image_files"][0]).read_bytes() == raw[0]
+    assert (tmp_path / "vlm/formatted_chat.txt").read_text() == row["llamacpp_prompt_string"]
+    assert np.fromfile(tmp_path / "llm/tokens.bin", dtype=np.int32).tolist() == rows[0]["input_ids"]
+    assert np.fromfile(tmp_path / "vlm/tokens.bin", dtype=np.int32).tolist() == row["input_ids"]
+    with pytest.raises(llm_prep.PrepError, match="text-only"):
+        llm_prep.prep_row(row, tmp_path / "wrong-lane")

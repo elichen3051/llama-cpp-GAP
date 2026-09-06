@@ -1,7 +1,10 @@
 # Skymizer — VLM/LLM KLD metrics & paired comparison
 
-Helpers built around `llama-vlm-kld` / `llama-llm-kld` for evaluating
-quantization fidelity against a HuggingFace ground-truth dataset.
+Generate reference datasets and evaluate quantization fidelity with llama.cpp.
+`llama-reference` renders GGUF chat templates, tokenizes with the GGUF vocabulary,
+and generates text/image trajectories directly with llama.cpp and mtmd.
+[Native reference generation](docs/reference.md) needs neither llama-server nor an HF tokenizer.
+The existing collectors consume the resulting local dataset or a legacy Hub dataset.
 
 > [!NOTE]
 > **What this measures, precisely: text-token fidelity CONDITIONED on an
@@ -27,6 +30,7 @@ tools/skymizer/
 │   ├── 03_paired_test_kld.sh [vlm|llm]   the paired A-vs-B report
 │   └── 04_power_analysis.sh  [vlm|llm]   optional sample-size planning
 ├── cli/                    the Python entry points the scripts drive
+│   ├── generate_reference.py     native GGUF reference dataset generator
 │   ├── collect_kld.py            VLM collector (one (ref, cand) pair)
 │   ├── collect_llm_kld.py        LLM collector
 │   ├── saved_metrics_paired_compare.py   two metric dirs → report
@@ -44,6 +48,7 @@ tools/skymizer/
 │   └── kld_metrics_io.py         VLMK reader/writer (.bin/.npz)
 ├── compare/                the statistics/report engine
 │   (contracts, student_t, inference, tokens, engine, render, cli_common)
+├── reference.cpp                native batch producer and --describe
 ├── vlm-kld.cpp llm-kld.cpp skymizer-common.h skymizer-vlmk-kernel.h
 ├── tests/                  hermetic pytest suite + vendored real GAP rows
 ├── review-functionality/   manual GPU smokes & integration checks
@@ -91,7 +96,7 @@ tools/skymizer/env_setup.sh
 
 # or by hand:
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DGGML_CUDA=ON
-cmake --build build --target llama-vlm-kld llama-llm-kld -j
+cmake --build build --target llama-reference llama-vlm-kld llama-llm-kld -j
 UV_PROJECT_ENVIRONMENT="$PWD/.venv" uv sync --project tools/skymizer --python 3.12 --group dev
 source .venv/bin/activate
 ```
@@ -103,8 +108,10 @@ ground-truth dataset from the `elichen-skymizer` GAP collection
 config's generating model family must match the GGUFs; registered families:
 Qwen3-VL, Qwen3.5, Qwen3.6, Gemma-4, Kimi-VL (`cli/prep_vlm_score_from_hf.py
 MODEL_FAMILIES`). Kimi-VL's tokenizer is repository code (`tiktoken` +
-`blobfile`, both project dependencies; prep passes `trust_remote_code` for
-that family only).
+`blobfile`; prep passes `trust_remote_code` for that family only). Legacy
+HF/vLLM dataset prep needs `uv sync --extra hf-tokenizer`. Native reference
+rows use their saved GGUF prompt and raw image bytes, without this extra or a
+registered HF model family.
 
 ### Step 1 — configure the experiment
 

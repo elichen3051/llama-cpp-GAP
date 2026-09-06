@@ -91,7 +91,7 @@ fi
 log "driver CUDA: ${DRIVER_CUDA:-none} | scorer build: GGML_CUDA=$GGML_CUDA"
 
 # ---- 4. build Skymizer C++ scorers -----------------------------------------
-SCORER_TARGETS=(llama-vlm-kld llama-llm-kld)
+SCORER_TARGETS=(llama-reference llama-vlm-kld llama-llm-kld)
 PRIMARY_BIN="$BUILD_DIR/bin/llama-vlm-kld"
 if [[ "${SKIP_BUILD:-0}" != 1 ]]; then
     CMAKE_ARGS=(-DCMAKE_BUILD_TYPE=Release "-DGGML_CUDA=$GGML_CUDA")
@@ -121,9 +121,9 @@ fi
 
 log "verifying python env"
 "$VENV_DIR/bin/python" - <<'PY'
-import numpy, PIL, datasets, transformers
+import numpy, PIL, datasets
 print(f"  numpy {numpy.__version__} | pillow {PIL.__version__} | "
-      f"datasets {datasets.__version__} | transformers {transformers.__version__}")
+      f"datasets {datasets.__version__}")
 PY
 
 if [[ "${SKIP_TESTS:-0}" != 1 ]]; then

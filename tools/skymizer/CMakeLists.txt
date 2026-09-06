@@ -17,3 +17,11 @@ foreach(tool IN ITEMS vlm-kld llm-kld)
     endif()
     target_compile_features(${target} PRIVATE cxx_std_17)
 endforeach()
+
+# Batch reference generation uses GGUF templates/tokenization and native sampling.
+add_executable(llama-reference reference.cpp)
+target_link_libraries(llama-reference PRIVATE llama-common mtmd Threads::Threads)
+target_compile_features(llama-reference PRIVATE cxx_std_17)
+if (LLAMA_TOOLS_INSTALL)
+    install(TARGETS llama-reference RUNTIME)
+endif()

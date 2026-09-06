@@ -625,6 +625,12 @@ def prep_row(row, tok, out_dir: Path, raw_images=None) -> dict:
     out_dir.mkdir(parents=True, exist_ok=True)
 
     sanity_check_row(row)
+    if row.get("generation_schema_version"):
+        from lib.reference_dataset import validate_reference_row
+        try:
+            validate_reference_row({**row, "images": raw_images or []})
+        except ValueError as error:
+            raise PrepError(str(error)) from error
 
     # (1) images -> files (raw bytes when supplied, else PNG re-encode)
     image_files = write_prep_images(row, out_dir, raw_images)
@@ -656,7 +662,7 @@ def main():
           file=sys.stderr)
 
     try:
-        tok = load_tokenizer(row["generation_model_name_or_path"])
+        tok = None if is_llamacpp_row(row) else load_tokenizer(row["generation_model_name_or_path"])
     except Exception as e:   # transformers raises ValueError/OSError variants
         sys.exit(f"tokenizer load failed for "
                  f"{row['generation_model_name_or_path']!r}: {e}")
