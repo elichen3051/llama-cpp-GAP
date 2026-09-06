@@ -31,7 +31,7 @@ For a CPU-only build, configure a separate build directory with `-DGGML_CUDA=OFF
 The runner collects candidate A, candidate B, and an independent repeat of A. It checks every manifest row, VLMK version, non-finite values, metric bounds, identical repeat columns, strict shared-reference alignment, and zero self-pair deltas and confidence intervals. It emits the normal paired Markdown/JSON reports and `summary.json`. The default is three rows and 64 answer tokens per row. Use a fresh output directory on each run; existing collections are refused.
 
 ```bash
-q35="$HOME/models/qwen3.5-4b/bartowski-qwen3.5-4b"
+q35="$HOME/models/qwen3.5-4b/bartowski"
 .venv/bin/python tools/skymizer/review-functionality/smoke_kld.py \
     --ref-model "$q35/Qwen_Qwen3.5-4B-bf16.gguf" \
     --cand-a-model "$q35/Qwen_Qwen3.5-4B-Q4_K_M.gguf" \
@@ -61,7 +61,7 @@ Both datasets contain actual images. `full-ref-text` in the second dataset name 
 The supplied datasets are multimodal. For the text lane, take frozen answer tokens from the Qwen3.5 dataset, use the first 16 as a text prompt, and score the next 64. The helper writes a local parquet dataset and a provenance sidecar. It does not feed image placeholder tokens into the text model or re-tokenize the answer. This fixture checks the LLM pipeline, not the original multimodal task accuracy.
 
 ```bash
-q35="$HOME/models/qwen3.5-4b/bartowski-qwen3.5-4b"
+q35="$HOME/models/qwen3.5-4b/bartowski"
 text_data="$PWD/tools/skymizer/outputs/smoke-inputs/llm-answer-continuations"
 .venv/bin/python tools/skymizer/review-functionality/prepare_text_smoke.py --out "$text_data"
 .venv/bin/python tools/skymizer/review-functionality/smoke_kld.py --lane llm \

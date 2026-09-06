@@ -67,3 +67,26 @@ def make_records(npos=5, vocab=11, seed=0, version=kio.VLMK_VERSION):
         else:
             rec[k] = rng.integers(0, vocab, size=npos).astype(np.int32)
     return rec
+
+
+EXECUTION_IDENTITY = {
+    "scheme": "skymizer-execution-sha256-v2", "binary_sha256": "a" * 64,
+    "libraries": [], "gpu": ["CPU fixture"], "environment": {},
+}
+
+
+def completed_collection(root, keys, skipped=()):
+    """Publish declared fixture rows independently of metric contents."""
+    import csv
+    from lib.collection_state import CollectionAttempt
+    rows = [(int(k.split("_", 1)[0]), k.split("_", 1)[1]) for k in keys]
+    attempt = CollectionAttempt(root, min(i for i, _ in rows), max(i for i, _ in rows) + 1)
+    attempt.declare(rows)
+    with (root / "manifest.csv").open("w", newline="") as stream:
+        writer = csv.DictWriter(stream, fieldnames=["row_idx", "item_id", "status"])
+        writer.writeheader()
+        for idx, item in rows:
+            record = {"row_idx": idx, "item_id": item, "status": "SKIP_OVER_BUDGET" if idx in skipped else "OK"}
+            writer.writerow(record)
+            attempt.record(record)
+    attempt.finish()

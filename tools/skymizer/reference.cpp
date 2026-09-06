@@ -1,4 +1,5 @@
 #include "arg.h"
+#include "skymizer-identity.h"
 #include "build-info.h"
 #include "chat.h"
 #include "common.h"
@@ -109,8 +110,9 @@ struct reference_context {
             default_thinking = thinking->second == "true";
         }
         metadata = {
-            {"schema_version", "skymizer-reference-v1"}, {"generation_engine", "llama.cpp"},
+            {"schema_version", "skymizer-reference-v2"}, {"generation_engine", "llama.cpp"},
             {"producer", "llama-reference"}, {"build_info", llama_build_info()},
+            {"decoding", {{"method", "autoregressive"}, {"logprob_source", "target_raw_logits"}, {"token_source", "target_accepted"}}},
             {"model_path", fs::absolute(params.model.path).string()},
             {"mmproj_path", params.mmproj.path.empty() ? "" : fs::absolute(params.mmproj.path).string()},
             {"modalities", {{"text", true}, {"vision", bool(vision)}}},
@@ -121,6 +123,7 @@ struct reference_context {
             {"image_min_tokens", params.image_min_tokens}, {"image_max_tokens", params.image_max_tokens},
             {"image_token_budget_source", "mtmd_init_params"},
             {"media_marker", mtmd_default_marker()}, {"image_placeholder_id", LLAMA_TOKEN_NULL},
+            {"vocabulary", skymizer_identity::vocabulary(vocab)},
             {"vocab_size", llama_vocab_n_tokens(vocab)}, {"bos_token_id", llama_vocab_bos(vocab)},
             {"eos_token_id", llama_vocab_eos(vocab)}, {"eot_token_id", llama_vocab_eot(vocab)},
             {"add_bos", llama_vocab_get_add_bos(vocab)},
@@ -334,6 +337,8 @@ static void usage(int, char ** argv) {
 }
 
 int main(int argc, char ** argv) {
+    const int identity_command = skymizer_identity::command(argc, argv);
+    if (identity_command >= 0) { return identity_command; }
     try {
         common_params params;
         params.n_predict = 128;
@@ -363,6 +368,10 @@ int main(int argc, char ** argv) {
         require(!params.model.path.empty() && fs::is_regular_file(params.model.path), "provide an existing local GGUF with -m");
         require(params.model.hf_repo.empty() && params.model.url.empty() && params.mmproj.hf_repo.empty() && params.mmproj.url.empty(),
                 "reference generation requires local GGUF files");
+        require(std::all_of(params.speculative.types.begin(), params.speculative.types.end(),
+                            [](auto type) { return type == COMMON_SPECULATIVE_TYPE_NONE; }) &&
+                !params.speculative.has_dft() && !params.speculative.has_synth(),
+                "llama-reference has no MTP/speculative driver yet; these options cannot be silently ignored");
         require(params.n_parallel == 1, "reference generation requires one sequence");
         require(params.n_predict > 0, "-n must be positive");
         require(params.prompt.empty() && params.image.empty(), "use --requests for prompts and images");

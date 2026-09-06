@@ -108,6 +108,8 @@ from lib.kld_metrics_io import (                             # noqa: E402
     KLD_METRIC_KEYS, VERSIONED_METRIC_KEYS, VLMK_VERSION, item_means, kld_metric_keys,
     load_kld_metrics,
 )
+from lib.collection_state import comparison_locks, require_completed_attempts
+from lib.collect_meta_provenance import require_execution_alignment
 from lib.collect_common import manifest_row_statuses              # noqa: E402
 from compare.contracts import (                          # noqa: E402
     AlignmentError, DEFAULT_METRICS, POOLED_TOKEN_METRICS,
@@ -329,6 +331,7 @@ def require_collection_success(root: Path, role: str) -> None:
     unconverted = sorted((root / "metrics").glob("*.bin"))
     temporary = sorted((root / "metrics").glob("*.tmp"))
     if not failed and not rejected and not unconverted and not temporary:
+        require_completed_attempts(root)
         return
     details = []
     if failed:
@@ -498,6 +501,14 @@ def main(argv=None) -> int:
     argv_for_metadata = metadata_argv(argv, "saved_metrics_paired_compare.py")
     args = parse_args(argv)
     validate_shared_paired_args(args)
+    try:
+        with comparison_locks((args.candidate_a, args.candidate_b)):
+            return _main_locked(args, argv_for_metadata)
+    except ValueError as error:
+        sys.exit(str(error))
+
+
+def _main_locked(args, argv_for_metadata):
 
     for flag, d in (("--candidate-a", args.candidate_a),
                     ("--candidate-b", args.candidate_b)):
@@ -512,6 +523,7 @@ def main(argv=None) -> int:
         require_collection_success(args.candidate_b, "candidate-b")
         a_meta = load_kld_collect_meta(args.candidate_a)
         b_meta = load_kld_collect_meta(args.candidate_b)
+        require_execution_alignment(a_meta, b_meta)
         warnings = check_kld_meta_alignment(a_meta, b_meta)
     except (AlignmentError, ValueError) as e:
         sys.exit(str(e))
@@ -698,6 +710,7 @@ def main(argv=None) -> int:
     # the collectors, not a claim reconstructed from the comparison host.
     result["execution"]["metrics_collection"] = {
         "mode": "on-the-fly",
+        "scorer_identity": a_meta["execution_identity"],
         "gpu_by_candidate": {
             "candidate-a": (a_meta or {}).get("gpu_name") or "unknown",
             "candidate-b": (b_meta or {}).get("gpu_name") or "unknown",
@@ -705,6 +718,8 @@ def main(argv=None) -> int:
     }
     result["alignment"] = {
         "n_matched": len(used),
+        "collection_complete": True,
+        "execution_identity_verified": True,
         "drops": drops,
         "warnings": warnings,
         "allow_interaction": bool(args.allow_interaction),

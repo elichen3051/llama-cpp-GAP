@@ -56,7 +56,7 @@ LLM_KLD_BIN=${LLM_KLD_BIN:-../../build/bin/llama-llm-kld}
 # keep the LLM GGUF identical across A and B and vary the mmproj
 # (see docs/compare.md "What gets compared").
 # ---------------------------------------------------------------------------
-VLM_MODEL_DIR=${VLM_MODEL_DIR:-$HOME/models/qwen3.5-4b/bartowski-qwen3.5-4b}
+VLM_MODEL_DIR=${VLM_MODEL_DIR:-$HOME/models/qwen3.5-4b/bartowski}
 
 VLM_REF_MODEL=${VLM_REF_MODEL:-$VLM_MODEL_DIR/Qwen_Qwen3.5-4B-bf16.gguf}
 VLM_REF_MMPROJ=${VLM_REF_MMPROJ:-$VLM_MODEL_DIR/mmproj-Qwen_Qwen3.5-4B-bf16.gguf}
@@ -87,7 +87,7 @@ IMAGE_MAX_TOKENS=${IMAGE_MAX_TOKENS:--1}
 # tokenized by the same model family as the GGUFs — a locally prepared
 # ground-truth directory containing parquet files works as --dataset too.
 # ---------------------------------------------------------------------------
-LLM_MODEL_DIR=${LLM_MODEL_DIR:-$HOME/models/qwen3.5-4b/bartowski-qwen3.5-4b}
+LLM_MODEL_DIR=${LLM_MODEL_DIR:-$HOME/models/qwen3.5-4b/bartowski}
 
 LLM_REF_MODEL=${LLM_REF_MODEL:-$LLM_MODEL_DIR/Qwen_Qwen3.5-4B-bf16.gguf}
 LLM_CAND_A_MODEL=${LLM_CAND_A_MODEL:-$LLM_MODEL_DIR/Qwen_Qwen3.5-4B-Q4_K_M.gguf}

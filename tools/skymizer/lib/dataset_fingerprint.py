@@ -14,7 +14,7 @@
 # formats VLM chat), and the encoded image bytes -- over the
 # post-load_dataset_sorted view, in row order (row_idx keys the on-disk
 # artifacts, so order is part of the identity). The value is scheme-tagged
-# ("ds-v2:...") like the model fingerprints, so a future field-set change
+# ("ds-v3:...") like the model fingerprints, so a future field-set change
 # coexists instead of colliding. The collectors record the hashes when a
 # --out is first created AND re-derive + verify them for every later shard
 # (check_dataset_content_hash / check_model_fingerprints);
@@ -87,9 +87,13 @@ def _resolve_id_column(column_names) -> str:
 # Hashed when present, with the same normalization in both paths so the HF
 # fast path and the generic fallback stay hash-equal.
 _SCALAR_FIELDS = (("n_prefill_tokens", b"pre"),
-                  ("generation_model_name_or_path", b"gen"))
+                  ("generation_model_name_or_path", b"gen"),
+                  ("generation_schema_version", b"schema"),
+                  ("generation_metadata", b"generation"),
+                  ("generation_request", b"request"),
+                  ("generation_sampling_params", b"sampling"))
 
-DATASET_HASH_SCHEME = "ds-v2"
+DATASET_HASH_SCHEME = "ds-v3"
 
 
 def _hash_hf(ds) -> str:
@@ -153,10 +157,7 @@ def _hash_generic(ds) -> str:
 
 
 def dataset_content_hash(ds) -> str:
-    """Scheme-tagged sha256 over (row id, input_ids, n_prefill_tokens,
-    generation model, encoded image bytes) in dataset order. ds-v2 added the
-    boundary and generation-model fields; no unprefixed v1 value ever shipped,
-    so there is no legacy decode path."""
+    """Hash row identities, conditioning, images, and native generation provenance in dataset order."""
     if hasattr(ds, "select_columns") and hasattr(ds, "features"):
         return f"{DATASET_HASH_SCHEME}:{_hash_hf(ds)}"
     return f"{DATASET_HASH_SCHEME}:{_hash_generic(ds)}"
@@ -260,6 +261,20 @@ def file_content_fingerprint(path) -> str:
     return f"{FILE_FINGERPRINT_SCHEME}:{h.hexdigest()}"
 
 
+MODEL_FINGERPRINT_SCHEME = "gguf-shards-sampled-v1"
+
+
+def model_content_fingerprint(path) -> str:
+    from lib.model_files import model_files
+    files = model_files(path)
+    digest = hashlib.sha256()
+    _update(digest, b"count", str(len(files)).encode())
+    for index, file in enumerate(files):
+        _update(digest, b"index", str(index).encode())
+        _update(digest, b"file", file_content_fingerprint(file).encode())
+    return f"{MODEL_FINGERPRINT_SCHEME}:{digest.hexdigest()}"
+
+
 def maybe_file_fingerprint(path) -> str | None:
     """file_content_fingerprint when `path` is an existing file, else None.
 
@@ -268,14 +283,14 @@ def maybe_file_fingerprint(path) -> str | None:
     the None branch omits the field instead of failing meta construction.
     Real collector runs validate the paths before main() reaches here."""
     p = Path(path)
-    return file_content_fingerprint(p) if p.is_file() else None
+    return model_content_fingerprint(p) if p.is_file() else None
 
 
 def logged_file_fingerprint(label: str, path) -> str:
     """file_content_fingerprint + the collectors' startup stderr line
     (scheme + 16 hex digits + timing), mirroring the dataset-hash log."""
     t0 = time.time()
-    fp = file_content_fingerprint(path)
-    print(f"  {label} = {fp[:len(FILE_FINGERPRINT_SCHEME) + 17]}… "
+    fp = model_content_fingerprint(path)
+    print(f"  {label} = {fp[:len(MODEL_FINGERPRINT_SCHEME) + 17]}… "
           f"({time.time() - t0:.3f}s)", file=sys.stderr)
     return fp

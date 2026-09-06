@@ -138,7 +138,7 @@ def test_dataset_content_hash_is_stable_on_the_real_rows(sample):
     ds = sample.ds
     h1 = dataset_content_hash(ds)
     h2 = dataset_content_hash(ds)
-    assert h1 == h2 and h1.startswith("ds-v2:")
+    assert h1 == h2 and h1.startswith("ds-v3:")
     reversed_ds = ds.select([1, 0])
     assert dataset_content_hash(reversed_ds) != h1
 
@@ -186,7 +186,10 @@ def native_row(with_image=True):
     }
     metadata = {"model_path": "/models/test.gguf", "build_info": "test-build", "image_min_tokens": -1,
                 "image_max_tokens": -1, "image_token_budget_source": "mtmd_init_params", "media_marker": "<__media__>",
-                "vocab_size": 8}
+                "vocab_size": 8,
+                "vocabulary": {"scheme": "llama-vocabulary-sha256-v1", "size": 8, "type": 2,
+                               "mapping": "a" * 64, "attributes": "b" * 64},
+                "decoding": {"method": "autoregressive", "token_source": "target_accepted", "logprob_source": "target_raw_logits"}}
     import io
     from PIL import Image
     image = io.BytesIO()
@@ -236,3 +239,54 @@ def test_native_dataset_storage_and_both_preppers_without_hf_tokenizer(tmp_path,
     assert np.fromfile(tmp_path / "vlm/tokens.bin", dtype=np.int32).tolist() == row["input_ids"]
     with pytest.raises(llm_prep.PrepError, match="text-only"):
         llm_prep.prep_row(row, tmp_path / "wrong-lane")
+
+
+@pytest.mark.parametrize("source", ["embedded", "sidecar"])
+def test_mtp_reference_preserves_target_vocabulary_without_loading_head(tmp_path, source):
+    from lib.reference_dataset import validate_reference_row
+    from cli import prep_llm_score_from_hf as llm_prep
+    row = native_row(False)
+    metadata = json.loads(row["generation_metadata"])
+    files = [{"path": "/not-present/head.gguf", "sha256": "c" * 64, "size": 12}]
+    metadata["model_files"] = files
+    metadata["decoding"] = {"method": "mtp", "token_source": "target_accepted", "logprob_source": "target_raw_logits",
+                            "mtp": {"head_source": source, "head_files": files, "settings": {"n_max": 3}}}
+    row["generation_metadata"] = json.dumps(metadata)
+    validate_reference_row(row)
+    meta = llm_prep.prep_row(row, tmp_path / "prep")
+    assert meta["reference_vocabulary"] == metadata["vocabulary"]
+    assert meta["reference_generation"]["decoding"] == metadata["decoding"]
+    metadata["decoding"]["logprob_source"] = "draft_logits"
+    row["generation_metadata"] = json.dumps(metadata)
+    with pytest.raises(ValueError, match="raw target logprobs"):
+        validate_reference_row(row)
+
+
+def test_native_reference_requires_vocabulary_mapping_digest():
+    from lib.reference_dataset import validate_reference_row
+    row = native_row(False)
+    metadata = json.loads(row["generation_metadata"])
+    del metadata["vocabulary"]["mapping"]
+    row["generation_metadata"] = json.dumps(metadata)
+    with pytest.raises(ValueError, match="target vocabulary identity"):
+        validate_reference_row(row)
+
+
+@pytest.mark.parametrize("corruption", ["missing", "null", "positive", "short", "boolean", "string"])
+def test_native_reference_requires_complete_nonpositive_logprobs(tmp_path, corruption):
+    from lib.reference_dataset import validate_reference_row
+    from lib.reference_contract import GTContractError
+    from cli import prep_llm_score_from_hf as llm_prep
+    row = native_row(False)
+    if corruption == "missing":
+        row.pop("generation_token_logprobs")
+    elif corruption == "null":
+        row["generation_token_logprobs"] = None
+    elif corruption == "short":
+        row["generation_token_logprobs"] = []
+    else:
+        row["generation_token_logprobs"][0] = {"positive": 1.0, "boolean": False, "string": "-1.0"}[corruption]
+    with pytest.raises(GTContractError, match="generation_token_logprobs"):
+        validate_reference_row(row)
+    with pytest.raises(llm_prep.PrepError, match="generation_token_logprobs"):
+        llm_prep.prep_row(row, tmp_path / "prep")

@@ -10,15 +10,16 @@
 # monkeypatch surface the tests use (cl.dataset_content_hash and friends),
 # and run_locked() here is the single copy of the lifecycle.
 #
-# Fidelity contract: this body is the historical _run_locked text with the
-# divergence points replaced by spec hooks. Messages, statuses,
-# ordering, flush points, and failure semantics are preserved verbatim --
-# byte-identical artifacts and manifests for identical inputs.
+# Each attempt records declared rows and terminal statuses before comparison can use its metrics.
+import os
+import signal
+import threading
 import shutil
 import subprocess
 import sys
 import time
 from types import SimpleNamespace
+from lib.collection_state import CollectionAttempt, refuse_unfinished_attempts
 
 from lib.collect_common import (
     SKIP_OVER_BUDGET,
@@ -41,6 +42,25 @@ def format_row_progress(idx: int, n_rows: int) -> str:
 
 
 def run_locked(args, manifest_path, spec):
+    refuse_unfinished_attempts(args.out)
+    attempt = CollectionAttempt(args.out, args.start, args.end)
+    previous = None
+    if threading.current_thread() is threading.main_thread():
+        def terminate(signum, frame):
+            raise KeyboardInterrupt(f"collection interrupted by signal {signum}")
+        previous = signal.signal(signal.SIGTERM, terminate)
+    try:
+        _run_attempt(args, manifest_path, spec, attempt)
+        attempt.finish()
+    except BaseException as error:
+        attempt.stop(error)
+        raise
+    finally:
+        if previous is not None:
+            signal.signal(signal.SIGTERM, previous)
+
+
+def _run_attempt(args, manifest_path, spec, attempt):
     """Everything after the output-root lock is held. `spec` fields:
 
     pre_run(args)                             e.g. scorer-binary preflight; no-op default
@@ -116,6 +136,7 @@ def run_locked(args, manifest_path, spec):
     print(f"  dataset_content_hash = {ds_hash[:16]}… "
           f"({time.time() - hash_t0:.2f}s)", file=sys.stderr)
     spec.stamp_meta(args, ds_hash)
+    attempt.declare((idx, item_ids[idx]) for idx in range(args.start, end))
     for sub in (*spec.artifact_subdirs, "logs", "_prep"):
         (args.out / sub).mkdir(exist_ok=True)
     print(f"dataset has {n_rows} rows; sweeping [{args.start}, {end})", file=sys.stderr)
@@ -125,7 +146,13 @@ def run_locked(args, manifest_path, spec):
     score_log_path = args.out / "logs" / spec.log_filename
 
     with open(manifest_path, "a", newline="") as mf:
-        write_row = manifest_row_writer(mf, manifest_path, spec.manifest_columns)
+        raw_write_row = manifest_row_writer(mf, manifest_path, spec.manifest_columns)
+        def write_row(row):
+            raw_write_row(row)
+            mf.flush()
+            os.fsync(mf.fileno())
+            record = row if isinstance(row, dict) else dict(zip(spec.manifest_columns, row))
+            attempt.record(record)
 
         n_failed = 0
         n_skipped_over_budget = 0
@@ -167,6 +194,12 @@ def run_locked(args, manifest_path, spec):
                 if row is None:
                     row = ds[idx]
                 meta = spec.prep(args, row, prep_dir, state)
+                if row.get("generation_schema_version"):
+                    import json
+                    attempt.reference(idx, item_id, json.loads(row["generation_metadata"]), {
+                        key: row.get(key) for key in ("generation_request", "generation_sampling_params",
+                            "generation_enable_thinking", "generation_chat_template_kwargs",
+                            "generation_token_logprobs", "finish_reason")})
 
                 prep_wall_s = time.time() - prep_start_t
                 pending.append({
@@ -227,8 +260,11 @@ def run_locked(args, manifest_path, spec):
                 [spec.manifest_entry(row) for row in pending],
             )
 
+            spec.verify_execution(args)
             score_returncode = None
             score_error = None
+            score_interrupted = None
+            proc = None
             # Parsed "DONE output_*=... wall_s=..." markers, keyed by the exact
             # path the scorer was handed (same path we put in the manifest
             # entry, so str(output path) round-trips).
@@ -257,13 +293,25 @@ def run_locked(args, manifest_path, spec):
                             print(spec.saved_line(path, wall_s), file=sys.stderr)
                     proc.wait()
                     score_returncode = proc.returncode
-            except Exception as e:
-                score_error = e
+            except BaseException as e:
+                if proc is not None and proc.poll() is None:
+                    proc.terminate()
+                    try:
+                        proc.wait(timeout=5)
+                    except subprocess.TimeoutExpired:
+                        proc.kill()
+                        proc.wait()
+                if isinstance(e, Exception):
+                    score_error = e
+                else:
+                    score_interrupted = e
+                    score_returncode = proc.returncode if proc is not None else -1
             finally:
-                try:
-                    score_manifest_path.unlink()
-                except FileNotFoundError:
-                    pass
+                if score_interrupted is None:
+                    try:
+                        score_manifest_path.unlink()
+                    except FileNotFoundError:
+                        pass
 
             if score_error is not None:
                 print(f"{spec.kind_word} manifest failed to launch: {score_error}  "
@@ -328,6 +376,9 @@ def run_locked(args, manifest_path, spec):
                           f"FAIL {type(e).__name__}: {e}  (see {score_log_path})",
                           file=sys.stderr)
 
+            if score_interrupted is not None:
+                raise score_interrupted
+
     try:
         (args.out / "_prep").rmdir()
     except OSError:
@@ -343,4 +394,5 @@ def run_locked(args, manifest_path, spec):
     if n_failed:
         sys.exit(f"collection complete with {n_failed} failed row(s); "
                  f"manifest -> {manifest_path}")
+    spec.verify_execution(args)
     print(f"collection complete; manifest -> {manifest_path}", file=sys.stderr)

@@ -644,6 +644,8 @@ def prep_row(row, tok, out_dir: Path, raw_images=None) -> dict:
 
     # (4) meta.json
     meta = build_meta(row)
+    from lib.reference_dataset import reference_provenance
+    meta.update(reference_provenance(row))
     meta["image_files"] = image_files
     (out_dir / "meta.json").write_text(
         json.dumps(meta, indent=2, ensure_ascii=False), encoding="utf-8")

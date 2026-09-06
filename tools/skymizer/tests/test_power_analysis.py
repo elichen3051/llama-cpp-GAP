@@ -140,6 +140,12 @@ def _metrics_pair(tmp_path, n_items=6, drift=False):
             write_vlmk(binary, record)
             kio.convert_kld_bin_to_npz(binary, binary.with_suffix(".npz"))
             binary.unlink()
+    from fakes import completed_collection
+    from test_saved_metrics_paired_compare import BASE_META
+    import json
+    for directory in dirs:
+        completed_collection(directory, [f"{i:03d}_item{i}" for i in range(n_items)])
+        (directory / "collect_meta.json").write_text(json.dumps(BASE_META))
     return dirs
 
 

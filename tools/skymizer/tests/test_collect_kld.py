@@ -16,11 +16,12 @@ import cli.collect_kld as ck
 import lib.collect_common as ccommon
 import lib.kld_metrics_io as kio
 
-from fakes import make_records, write_vlmk
+from fakes import make_records, write_vlmk, EXECUTION_IDENTITY
 
 
 @pytest.fixture(autouse=True)
 def _skip_scorer_preflight(monkeypatch):
+    monkeypatch.setattr(ck, "build_collect_provenance", lambda *args: {"execution_identity": EXECUTION_IDENTITY})
     """main() preflights the scorer binary's --vlmk-version before anything
     else; the main() tests here point --llama-vlm-kld at placeholder files,
     so stub the gate (it has its own tests in test_collect_llm_kld.py)."""

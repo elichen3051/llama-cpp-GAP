@@ -18,10 +18,11 @@ import lib.kld_metrics_io as kio
 from compare.contracts import POOLED_LADDER
 import cli.saved_metrics_paired_compare as smpc
 
-from fakes import write_vlmk
+from fakes import write_vlmk, completed_collection, EXECUTION_IDENTITY
 
 
 BASE_META = {
+    "execution_identity": EXECUTION_IDENTITY,
     "kind": "vlm_kld_metrics",
     "ref_model": "/m/ref.gguf", "ref_mmproj": "/m/ref-mm.gguf",
     "cand_model": "/m/cand-a.gguf", "cand_mmproj": "/m/ref-mm.gguf",
@@ -59,21 +60,24 @@ def _make_item(npos=4, vocab=11, seed=0, ref_seed=100,
 
 
 def _write_metrics_dir(d: Path, items: dict, meta: dict | None = BASE_META,
-                       n_past_actual=0):
+                       n_past_actual=0, skipped=()):
     (d / "metrics").mkdir(parents=True)
     for key, rec in items.items():
+        if int(key.split("_", 1)[0]) in skipped:
+            continue
         bin_path = d / "metrics" / f"{key}.bin"
         version = kio.VLMK_VERSION if "ear" in rec.dtype.names else 1
         write_vlmk(bin_path, rec, vocab=11, n_prefill=7, version=version,
                    n_past_actual=n_past_actual)
         kio.convert_kld_bin_to_npz(bin_path, bin_path.with_suffix(".npz"))
         bin_path.unlink()
+    completed_collection(d, items, skipped)
     if meta is not None:
         (d / "collect_meta.json").write_text(json.dumps(meta))
 
 
 def _make_pair(tmp_path, n_items=3, meta_b_overrides=None, mutate_b=None,
-               npos_list=None, version=kio.VLMK_VERSION, version_b=None):
+               npos_list=None, version=kio.VLMK_VERSION, version_b=None, n_items_b=None, skipped_a=(), skipped_b=()):
     """Two metrics dirs sharing bit-identical reference columns per item.
     mutate_b(key, records) may edit candidate-b's records before writing;
     npos_list gives per-item position counts (default: uniform 4);
@@ -94,8 +98,10 @@ def _make_pair(tmp_path, n_items=3, meta_b_overrides=None, mutate_b=None,
     a_dir, b_dir = tmp_path / "a", tmp_path / "b"
     meta_b = dict(BASE_META, cand_model="/m/cand-b.gguf",
                   **(meta_b_overrides or {}))
-    _write_metrics_dir(a_dir, items_a)
-    _write_metrics_dir(b_dir, items_b, meta_b)
+    if n_items_b is not None:
+        items_b = dict(list(items_b.items())[:n_items_b])
+    _write_metrics_dir(a_dir, items_a, skipped=skipped_a)
+    _write_metrics_dir(b_dir, items_b, meta_b, skipped=skipped_b)
     return a_dir, b_dir
 
 
@@ -505,6 +511,7 @@ def test_main_distinguishes_gpu_collection_from_cpu_statistics(tmp_path):
 
 def test_main_with_llm_meta_persists_llm_metrics_source(tmp_path):
     llm_meta_a = {
+        "execution_identity": EXECUTION_IDENTITY,
         "kind": "llm_kld_metrics",
         "ref_model": "/m/ref.gguf",
         "cand_model": "/m/cand-a.gguf",
@@ -778,8 +785,7 @@ def test_rejected_artifact_aborts_without_manifest(tmp_path):
 
 
 def test_main_fails_closed_below_two_items(tmp_path):
-    a_dir, b_dir = _make_pair(tmp_path, n_items=2)
-    (b_dir / "metrics" / "001_item1.npz").unlink()
+    a_dir, b_dir = _make_pair(tmp_path, n_items=2, n_items_b=1)
     with pytest.raises(SystemExit, match=">= 2 usable items"):
         _run_main(a_dir, b_dir, tmp_path, "--allow-interaction")
 
@@ -871,30 +877,19 @@ def test_main_start_end_selects_subset(tmp_path):
         pytest.approx(np.mean(manual), abs=1e-12)
 
 
-def test_main_runs_without_any_collect_meta(tmp_path):
+def test_main_rejects_missing_execution_metadata(tmp_path):
     a_dir, b_dir = _make_pair(tmp_path)
     (a_dir / "collect_meta.json").unlink()
     (b_dir / "collect_meta.json").unlink()
-    rc, out, js = _run_main(a_dir, b_dir, tmp_path)
-    assert rc == 0
-    md = out.read_text()
-    assert "(collect_meta.json missing)" in md
-    assert "SKIPPED" in md   # the persisted downgrade warning
-    result = json.loads(js.read_text())
-    assert result["inputs"]["reference"]["model_path"] is None
-    assert result["model_a_label"] == "candidate-a"
-    assert len(result["alignment"]["warnings"]) == 2
+    with pytest.raises(SystemExit, match="executed scorer identity missing"):
+        _run_main(a_dir, b_dir, tmp_path)
 
 
-def test_main_one_missing_meta_uses_survivor_for_inputs(tmp_path):
+def test_main_rejects_one_missing_execution_metadata(tmp_path):
     a_dir, b_dir = _make_pair(tmp_path)
     (a_dir / "collect_meta.json").unlink()
-    rc, _out, js = _run_main(a_dir, b_dir, tmp_path)
-    assert rc == 0
-    result = json.loads(js.read_text())
-    assert result["inputs"]["reference"]["model_path"] == "/m/ref.gguf"
-    assert result["model_a_label"] == "candidate-a"      # fallback
-    assert result["model_b_label"] == "cand-b.gguf"      # from meta
+    with pytest.raises(SystemExit, match="executed scorer identity missing"):
+        _run_main(a_dir, b_dir, tmp_path)
 
 
 def test_main_persists_meta_warnings_in_artifacts(tmp_path):
@@ -911,8 +906,7 @@ def test_main_persists_meta_warnings_in_artifacts(tmp_path):
 
 
 def test_main_hard_fails_on_one_sided_missing_item(tmp_path, capsys):
-    a_dir, b_dir = _make_pair(tmp_path, n_items=3)
-    (b_dir / "metrics" / "002_item2.npz").unlink()
+    a_dir, b_dir = _make_pair(tmp_path, n_items=3, n_items_b=2)
 
     with pytest.raises(SystemExit, match="input item sets differ"):
         _run_main(a_dir, b_dir, tmp_path)
@@ -924,8 +918,7 @@ def test_main_hard_fails_on_one_sided_missing_item(tmp_path, capsys):
 
 
 def test_main_allow_interaction_renders_missing_items(tmp_path):
-    a_dir, b_dir = _make_pair(tmp_path, n_items=3)
-    (b_dir / "metrics" / "002_item2.npz").unlink()
+    a_dir, b_dir = _make_pair(tmp_path, n_items=3, n_items_b=2)
 
     rc, out, js = _run_main(
         a_dir, b_dir, tmp_path, "--allow-interaction")
@@ -940,12 +933,7 @@ def test_main_allow_interaction_renders_missing_items(tmp_path):
 
 
 def test_main_reports_identical_budget_skip_set(tmp_path, capsys):
-    a_dir, b_dir = _make_pair(tmp_path, n_items=3)
-    (a_dir / "metrics" / "002_item2.npz").unlink()
-    (b_dir / "metrics" / "002_item2.npz").unlink()
-    for root in (a_dir, b_dir):
-        (root / "manifest.csv").write_text(
-            "row_idx,status\n2,SKIP_OVER_BUDGET\n", encoding="utf-8")
+    a_dir, b_dir = _make_pair(tmp_path, n_items=3, skipped_a=(2,), skipped_b=(2,))
 
     rc, out, js = _run_main(a_dir, b_dir, tmp_path)
     assert rc == 0
@@ -959,11 +947,7 @@ def test_main_reports_identical_budget_skip_set(tmp_path, capsys):
 def test_main_budget_skip_mismatch_is_fatal_even_with_interaction(
     tmp_path, capsys,
 ):
-    a_dir, b_dir = _make_pair(tmp_path, n_items=3)
-    (a_dir / "manifest.csv").write_text(
-        "row_idx,status\n2,SKIP_OVER_BUDGET\n", encoding="utf-8")
-    (b_dir / "manifest.csv").write_text(
-        "row_idx,status\n2,OK\n", encoding="utf-8")
+    a_dir, b_dir = _make_pair(tmp_path, n_items=3, skipped_a=(2,))
 
     with pytest.raises(SystemExit, match="SKIP_OVER_BUDGET set mismatch"):
         _run_main(a_dir, b_dir, tmp_path, "--allow-interaction")
@@ -1020,3 +1004,71 @@ def test_main_rejects_bad_range_and_confidence(tmp_path):
     with pytest.raises(SystemExit, match="--bootstrap-iters"):
         _run_main(a_dir, b_dir, tmp_path, "--ci-method", "studentized",
                   "--bootstrap-iters", "0")
+
+
+@pytest.mark.parametrize("state", ["running", "interrupted"])
+def test_completed_prefix_cannot_hide_an_unfinished_append(tmp_path, state):
+    from lib.collection_state import CollectionAttempt
+    a, b = _make_pair(tmp_path)
+    for directory in (a, b):
+        attempt = CollectionAttempt(directory, 3, 4)
+        attempt.declare([(3, "next")])
+        if state == "interrupted":
+            attempt.stop(KeyboardInterrupt())
+    with pytest.raises(SystemExit, match=f"attempt is {state}"):
+        _run_main(a, b, tmp_path)
+    assert not (tmp_path / "report.json").exists()
+
+
+def test_comparison_refuses_active_writer_even_with_complete_old_rows(tmp_path):
+    from lib.collect_common import acquire_out_lock
+    a, b = _make_pair(tmp_path)
+    with acquire_out_lock(a):
+        with pytest.raises(SystemExit, match="collector is still active"):
+            _run_main(a, b, tmp_path)
+
+
+def test_comparison_requires_exact_binary_identity_despite_identical_reference(tmp_path):
+    a, b = _make_pair(tmp_path)
+    meta = json.loads((b / "collect_meta.json").read_text())
+    meta["execution_identity"]["binary_sha256"] = "b" * 64
+    (b / "collect_meta.json").write_text(json.dumps(meta))
+    with pytest.raises(SystemExit, match="scorer/build/backend identity differs"):
+        _run_main(a, b, tmp_path)
+
+
+def test_intersection_option_cannot_hide_a_missing_declared_metric(tmp_path):
+    a, b = _make_pair(tmp_path)
+    (b / "metrics/002_item2.npz").unlink()
+    with pytest.raises(SystemExit, match="metric artifacts differ"):
+        _run_main(a, b, tmp_path, "--allow-interaction")
+
+
+def test_comparison_rejects_rename_before_terminal_record(tmp_path):
+    from lib.collection_state import CollectionAttempt
+    a, b = _make_pair(tmp_path)
+    for directory in (a, b):
+        attempt = CollectionAttempt(directory, 3, 4)
+        attempt.declare([(3, "new")])
+        (directory / "metrics/003_new.npz").write_bytes((directory / "metrics/000_item0.npz").read_bytes())
+    with pytest.raises(SystemExit, match="attempt is running"):
+        _run_main(a, b, tmp_path)
+
+
+def test_failed_root_sync_cannot_publish_completed_attempt(tmp_path, monkeypatch):
+    import lib.collection_state as state
+    root = tmp_path / "collection"
+    root.mkdir()
+    attempt = state.CollectionAttempt(root, 0, 1)
+    attempt.declare([(0, "item")])
+    attempt.record({"row_idx": 0, "item_id": "item", "status": "OK"})
+    original = state.fsync_directory
+    def fail_root(path):
+        if Path(path) == root:
+            raise OSError("simulated directory sync failure")
+        original(path)
+    monkeypatch.setattr(state, "fsync_directory", fail_root)
+    with pytest.raises(OSError, match="directory sync failure"):
+        attempt.finish()
+    with pytest.raises(ValueError, match="attempt is running"):
+        state.require_completed_attempts(root)

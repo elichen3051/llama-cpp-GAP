@@ -365,7 +365,7 @@ have; on such a dir the `kld` and `dp` ladders are still emitted.
 
 **Soft warnings** (printed to stderr, run continues):
 
-- Either dir missing `collect_meta.json` (identity unverified).
+- Same-model candidates remain a warning. Missing collection or execution metadata is now a hard failure.
 - `candidate-a` and `candidate-b` are the same model.
 - Either candidate equals the reference (should only differ in quant).
 
@@ -431,3 +431,16 @@ zero-width bootstrap CI that would report spurious "significant" verdicts).
 - The main verdict lands in a `## Results` table.
   `entropy (nats)` is candidate self entropy: it is reported per
   candidate only, not as a paired reference-vs-candidate distance.
+
+
+### Collection and executable verification
+
+Saved-metrics comparisons require completed attempt records and a known, equal
+`execution_identity` on both sides. That identity fingerprints the executed
+scorer and loaded libraries; matching checkout HEAD values are insufficient.
+The reader holds shared collection locks until all files are consumed and the
+report is written. Missing rows from declared work, interrupted attempts, active
+writers, and different executable/backend identities abort before statistics.
+Legacy directories missing these records must be re-collected. `--allow-ref-drift`
+does not bypass executable identity or completion checks. MTP provenance describes
+the reference generator and does not enable MTP in the KLD scorer.

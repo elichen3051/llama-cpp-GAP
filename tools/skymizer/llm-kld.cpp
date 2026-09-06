@@ -118,6 +118,7 @@
 //
 // Build registered in tools/skymizer/CMakeLists.txt.
 
+#include "skymizer-identity.h"
 #include "common.h"
 #include "llama.h"
 #include "llama-cpp.h"
@@ -330,6 +331,7 @@ static bool write_vlmk_file(
 // ---------------------------------------------------------------------------
 
 struct manifest_entry {
+    nlohmann::ordered_json reference_vocabulary;
     bool ok = false;
     std::string error;
     std::string tokens_in_path;
@@ -365,6 +367,7 @@ static bool read_manifest(const std::string & path, std::vector<manifest_entry> 
                 throw std::runtime_error("missing or invalid output_metrics");
             }
 
+            entry.reference_vocabulary = j.value("reference_vocabulary", nlohmann::ordered_json());
             entry.tokens_in_path       = j.at("tokens_in").get<std::string>();
             entry.n_prefill            = j.at("n_prefill").get<int>();
             entry.output_metrics_path  = j.at("output_metrics").get<std::string>();
@@ -526,6 +529,8 @@ static bool score_one(
 // ---------------------------------------------------------------------------
 
 int main(int argc, char ** argv) {
+    const int identity_command = skymizer_identity::command(argc, argv);
+    if (identity_command >= 0) { return identity_command; }
     vlm_kld_args args;
     if (!parse_args(argc, argv, args)) {
         return 1;
@@ -540,6 +545,20 @@ int main(int argc, char ** argv) {
 
     std::vector<manifest_entry> manifest_entries;
     if (!args.manifest_path.empty() && !read_manifest(args.manifest_path, manifest_entries)) {
+        return 1;
+    }
+
+    try {
+        std::vector<skymizer_identity::json> expected;
+        for (const auto & entry : manifest_entries) {
+            if (entry.ok && !entry.reference_vocabulary.is_null()) {
+                expected.push_back(entry.reference_vocabulary);
+            }
+        }
+        skymizer_identity::check_manifest(expected, args.ref_model_path, args.cand_model_path,
+                                          args.allow_vocab_attr_mismatch);
+    } catch (const std::exception & error) {
+        fprintf(stderr, "%s\n", error.what());
         return 1;
     }
 

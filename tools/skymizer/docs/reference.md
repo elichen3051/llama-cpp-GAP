@@ -92,7 +92,7 @@ The output directory must be new:
 - `inputs/`: original encoded images; `reference.arrow`: intermediate Arrow stream.
 - `complete.json`: written only after all rows validate and the dataset is saved.
 
-The schema version is `skymizer-reference-v1`; its implementation and validation
+The schema version is `skymizer-reference-v2`; its implementation and validation
 live in `lib/reference_dataset.py` and `lib/reference_contract.py`.
 `input_ids` contains the complete GGUF prompt and generated trajectory.
 `n_prefill_tokens` separates the prompt from the answer, and `labels` masks
@@ -108,7 +108,7 @@ stops set `finish_reason=stop`; hitting the cap sets `length` and
 `truncated_by_cap=true`. There is no silent prompt truncation or context shift:
 prompt plus generation cap must fit the context. Errors fail the run and leave
 partial artifacts for diagnosis; there is no automatic resume or overwrite.
-Backend sampling, reasoning budgets, and custom reverse prompts are rejected.
+Backend sampling, reasoning budgets, custom reverse prompts, and MTP/speculative flags are rejected by the current producer. Its MTP driver has not been implemented.
 
 ## Collect KLD
 
@@ -135,6 +135,35 @@ The VLM collector reuses the saved prompt and original image bytes, adopts the
 recorded image budget, and rejects prefix/position drift by default. The LLM
 collector takes the recorded token IDs directly and rejects image rows. Both
 validate the native schema before writing scorer inputs. No HF tokenizer is
-loaded. Reference and candidate GGUF vocabularies must still agree with each
-other; choosing llama.cpp for both sides does not remove that requirement.
+loaded. The producer records a versioned SHA-256 of the target vocabulary type,
+size, and ordered ID-to-token text mapping, plus a separate attribute digest.
+Both scorers check native manifests against the reference and candidate GGUF
+vocabularies before loading model weights. Equal sizes alone do not pass.
+The candidate's existing attribute-only override does not relax token mapping
+or the generator-to-reference attribute check. Old native v1 rows must be regenerated.
 Legacy HF/vLLM VLM datasets remain supported with `uv sync --extra hf-tokenizer`.
+
+
+Native v2 requires one finite, non-positive raw target logprob for each generated
+token. Missing, null, partial, or positive logprob vectors are rejected.
+
+## MTP reference provenance
+
+MTP belongs only to reference generation. KLD remains ordinary teacher forcing
+through the main reference/candidate models and does not load an MTP assistant.
+Native v2 keeps `generation_metadata.vocabulary` tied to the target model.
+`decoding.token_source` must be `target_accepted`, and `logprob_source` must be
+`target_raw_logits`. Draft proposals or draft-head probabilities are not valid
+reference targets/probabilities.
+
+The current producer emits `decoding.method=autoregressive`. A producer that
+implements MTP must emit `method=mtp`, `mtp.head_source` (`embedded` or
+`sidecar`), and `mtp.settings`. Embedded heads are covered by the complete
+`model_files` hashes; sidecars require complete `mtp.head_files` hashes. This
+contract support is not an MTP runtime implementation or an equivalence claim.
+
+Collectors preserve generator metadata and row sampling/logprob records under
+`.attempts/<id>/generators/` and `references.jsonl`, even without `--keep-prep`.
+The dataset fingerprint includes generation metadata and sampling/request fields.
+The consumer verifies target vocabulary identity; it does not require the
+reference generator's executable or MTP head to match the KLD executable.

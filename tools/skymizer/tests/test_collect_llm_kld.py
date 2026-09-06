@@ -17,11 +17,12 @@ import cli.prep_llm_score_from_hf as prep_lib
 
 import lib.collect_common as common
 from test_collect_kld import _make_row
-from fakes import make_records, write_vlmk
+from fakes import make_records, write_vlmk, EXECUTION_IDENTITY
 
 
 @pytest.fixture(autouse=True)
 def _skip_scorer_preflight(monkeypatch):
+    monkeypatch.setattr(ck, "build_collect_provenance", lambda *args: {"execution_identity": EXECUTION_IDENTITY})
     """main() preflights the scorer binary's --vlmk-version before anything
     else; most main() tests use fake scorers that do not implement the flag,
     so stub the gate by default. The preflight's own tests below call
@@ -464,7 +465,8 @@ def test_main_over_budget_then_collision_then_disjoint_v2_shard(
         ck.main()
     assert "row 0: manifest.csv status=SKIP_OVER_BUDGET" in str(excinfo.value)
     assert not scorer_marker.exists() and prep_calls == []
-    assert {p: p.read_bytes() for p in out.rglob("*") if p.is_file()} == snapshot
+    assert all(p.read_bytes() == content for p, content in snapshot.items())
+    assert any(json.loads(p.read_text())["state"] == "aborted" for p in (out / ".attempts").glob("*/state.json"))
 
     monkeypatch.setattr("sys.argv", argv(1, 2))
     ck.main()
@@ -574,3 +576,77 @@ def test_main_refuses_meta_less_root_that_already_holds_rows(tmp_path, monkeypat
         ck.main()
     assert "no collect_meta.json" in str(excinfo.value)
     assert not (out / "collect_meta.json").exists()
+
+
+
+def test_sigterm_append_preserves_finished_metrics_and_records_interruption(tmp_path):
+    import os
+    import signal
+    import subprocess
+    import sys
+    import time
+    skymizer = Path(__file__).resolve().parents[1]
+    scorer = tmp_path / "fake-scorer.py"
+    scorer.write_text("#!/usr/bin/env python3\n" + r"""
+import json, os, pathlib, sys, time
+manifest = pathlib.Path(sys.argv[sys.argv.index('--manifest') + 1])
+for entry in map(json.loads, manifest.read_text().splitlines()):
+    output = pathlib.Path(entry['output_metrics'])
+    data = pathlib.Path(__file__).with_name('fixture.bin').read_bytes()
+    output.write_bytes(data)
+    if output.name.startswith('003_'):
+        pathlib.Path(__file__).with_name('child.pid').write_text(str(os.getpid()))
+        pathlib.Path(__file__).with_name('ready').write_text('ready')
+        time.sleep(60)
+""")
+    scorer.chmod(0o755)
+    records = make_records(npos=2, vocab=11)
+    records['target'] = [2, 3]
+    write_vlmk(tmp_path / 'fixture.bin', records, n_prefill=2)
+    (tmp_path / 'ref.gguf').write_bytes(b'ref')
+    (tmp_path / 'cand.gguf').write_bytes(b'cand')
+    worker = tmp_path / 'worker.py'
+    worker.write_text(f"import sys\nsys.path[:0] = {[str(skymizer), str(skymizer / 'tests')]!r}\n" + r"""
+from pathlib import Path
+from test_collect_llm_kld import _FakeDataset, _fake_row, _fake_prep_row
+from fakes import EXECUTION_IDENTITY
+import cli.collect_llm_kld as collector
+import cli.prep_llm_score_from_hf as prep
+base = Path(__file__).parent
+prep.load_dataset_sorted = lambda *args: _FakeDataset([_fake_row(str(i), [0, 1, 2, 3]) for i in range(5)])
+prep.prep_row = _fake_prep_row
+collector.preflight_scorer_vlmk_version = lambda *args: 4
+collector.build_collect_provenance = lambda *args: {'execution_identity': EXECUTION_IDENTITY}
+start, end = sys.argv[1:]
+sys.argv = ['collector', '--ref-model', str(base/'ref.gguf'), '--cand-model', str(base/'cand.gguf'),
+            '--llama-llm-kld', str(base/'fake-scorer.py'), '--out', str(base/'out'),
+            '--start', start, '--end', end, '--num-eval-tokens', '2']
+collector.main()
+""")
+    subprocess.run([sys.executable, str(worker), '0', '3'], capture_output=True, text=True, check=True, timeout=20)
+    before = {p.name: p.read_bytes() for p in (tmp_path/'out/metrics').glob('*.npz')}
+    proc = subprocess.Popen([sys.executable, str(worker), '3', '5'], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    try:
+        deadline = time.monotonic() + 20
+        while not (tmp_path/'ready').exists() and proc.poll() is None and time.monotonic() < deadline:
+            time.sleep(0.02)
+        assert (tmp_path/'ready').exists(), proc.communicate(timeout=2)
+        os.kill(proc.pid, signal.SIGTERM)
+        _out, err = proc.communicate(timeout=12)
+        assert proc.returncode != 0, err
+        child_pid = int((tmp_path/'child.pid').read_text())
+        with pytest.raises(ProcessLookupError):
+            os.kill(child_pid, 0)
+    finally:
+        if proc.poll() is None:
+            proc.kill()
+            proc.communicate()
+    metrics = tmp_path/'out/metrics'
+    assert all((metrics/name).read_bytes() == content for name, content in before.items())
+    assert (metrics/'003_3.npz').exists()
+    assert not (metrics/'004_4.npz').exists()
+    states = [json.loads(p.read_text())['state'] for p in (tmp_path/'out/.attempts').glob('*/state.json')]
+    assert sorted(states) == ['completed', 'interrupted']
+    from lib.collection_state import require_completed_attempts
+    with pytest.raises(ValueError, match='interrupted'):
+        require_completed_attempts(tmp_path/'out')

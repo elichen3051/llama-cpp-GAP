@@ -158,6 +158,14 @@ def _check_dirs(args):
 
 
 def load_cap_panel(args, caps):
+    try:
+        with smpc.comparison_locks((args.candidate_a, args.candidate_b)):
+            return _load_cap_panel_locked(args, caps)
+    except ValueError as error:
+        sys.exit(str(error))
+
+
+def _load_cap_panel_locked(args, caps):
     """Validated aligned candidate-minus-baseline scores for every cap."""
     _check_dirs(args)
     try:
@@ -165,6 +173,7 @@ def load_cap_panel(args, caps):
         smpc.require_collection_success(args.candidate_b, "candidate-b")
         meta_a = smpc.load_kld_collect_meta(args.candidate_a)
         meta_b = smpc.load_kld_collect_meta(args.candidate_b)
+        smpc.require_execution_alignment(meta_a, meta_b)
         warnings = smpc.check_kld_meta_alignment(meta_a, meta_b)
     except (AlignmentError, ValueError) as exc:
         sys.exit(str(exc))

@@ -118,3 +118,64 @@ def test_kld_tools_reject_multiple_flash_attention_modes(tool, flags):
                        capture_output=True, text=True)
     assert r.returncode == 1
     assert "flash-attention mode specified more than once" in r.stderr
+
+
+@pytest.fixture(scope="module")
+def vocabulary_probe(tmp_path_factory):
+    if shutil.which("gcc") is None:
+        pytest.skip("gcc not available")
+    directory = tmp_path_factory.mktemp("vocabulary-probe")
+    source = directory / "probe.c"
+    source.write_text(r"""
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include "llama.h"
+struct llama_model * llama_model_load_from_file(const char * path, struct llama_model_params p) {
+    if (!p.vocab_only) { fprintf(stderr, "WEIGHTS_LOADED\n"); }
+    return (struct llama_model *) (strstr(path, "permuted") ? 2 : strstr(path, "larger") ? 3 : 1);
+}
+void llama_model_free(struct llama_model * m) { (void) m; }
+const struct llama_vocab * llama_model_get_vocab(const struct llama_model * m) { return (const struct llama_vocab *) m; }
+int32_t llama_vocab_n_tokens(const struct llama_vocab * v) { return (size_t)v == 3 ? 3 : 2; }
+enum llama_vocab_type llama_vocab_type(const struct llama_vocab * v) { (void)v; return LLAMA_VOCAB_TYPE_BPE; }
+const char * llama_vocab_get_text(const struct llama_vocab * v, llama_token id) {
+    const char * texts[] = {"a", "b", "c"};
+    return texts[(size_t)v == 2 ? 1 - id : id];
+}
+enum llama_token_attr llama_vocab_get_attr(const struct llama_vocab * v, llama_token id) { (void)v; (void)id; return LLAMA_TOKEN_ATTR_NORMAL; }
+struct llama_context * llama_init_from_model(struct llama_model * m, struct llama_context_params p) {
+    (void)m; (void)p; fprintf(stderr, "INFERENCE_REACHED\n"); exit(42);
+}
+""")
+    so = directory / "probe.so"
+    subprocess.run(["gcc", "-shared", "-fPIC", str(source), "-o", str(so),
+                    "-I", str(REPO / "include"), "-I", str(REPO / "ggml/include")], check=True)
+    return so
+
+
+@pytest.mark.parametrize("tool", TOOLS)
+@pytest.mark.parametrize("candidate,expected", [("quantized.gguf", 42), ("permuted.gguf", 1), ("larger.gguf", 1)])
+def test_native_vocabulary_is_checked_before_loading_weights(tool, candidate, expected, vocabulary_probe, tmp_path):
+    import json
+    env = {**os.environ, "LD_PRELOAD": str(vocabulary_probe)}
+    binary = _binary(tool)
+    vocab = subprocess.run([str(binary), "--vocab-identity", "reference.gguf"],
+                           capture_output=True, text=True, env=env, check=True)
+    entry = {"tokens_in": "unused.tokens", "n_prefill": 1, "output_metrics": "unused.bin",
+             "reference_vocabulary": json.loads(vocab.stdout)}
+    if tool == "llama-vlm-kld":
+        entry.update(images=[], formatted_chat="unused.txt")
+    manifest = tmp_path / "manifest.jsonl"
+    manifest.write_text(json.dumps(entry) + "\n")
+    args = [str(binary), "--ref-model", "reference.gguf", "--cand-model", candidate,
+            "--manifest", str(manifest)]
+    if tool == "llama-vlm-kld":
+        args += ["--ref-mmproj", "unused.mmproj", "--cand-mmproj", "unused.mmproj"]
+    result = subprocess.run(args, env=env, capture_output=True, text=True)
+    assert result.returncode == expected, result.stderr
+    if expected == 1:
+        assert "vocabulary mismatch" in result.stderr
+        assert "WEIGHTS_LOADED" not in result.stderr
+    else:
+        assert "INFERENCE_REACHED" in result.stderr

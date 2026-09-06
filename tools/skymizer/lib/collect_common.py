@@ -273,8 +273,8 @@ def ensure_collect_meta(out_dir: Path, current: dict, identity_fields,
     if not meta_path.exists():
         record = dict(current)
         record["created"] = datetime.datetime.now().astimezone().isoformat(timespec="seconds")
-        meta_path.write_text(json.dumps(record, indent=2, ensure_ascii=False),
-                             encoding="utf-8")
+        from lib.collection_state import atomic_json
+        atomic_json(meta_path, record)
         return True
     try:
         stored = json.loads(meta_path.read_text())

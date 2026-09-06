@@ -32,7 +32,7 @@ Two gates, never confused:
 | 4 | Bootstrap RNG recipe: `default_rng(seed)`, ONE `rng.integers(0, n, size=n)` per iteration, yielded in order. Every bootstrap CI in every report consumes this stream | `compare/inference.py` `_bootstrap_item_indices` | shared-index test in `test_paired_compare.py`; engine golden |
 | 5 | Studentized endpoints are CROSSED: `[θ − t*_(1−α/2)·SE, θ − t*_(α/2)·SE]`; the "obvious" order yields a reflected interval. The (default) t interval is `θ ± t_{n−1,1−α/2}·SE` with `p = I_{ν/(ν+T²)}(ν/2, ½)` (two-sided tail taken directly, no `1 − F` cancellation) on the SAME analytic SE (`_statistic_and_se`: `s/√n` item-weighted, ratio linearization token-weighted) | `compare/inference.py` `_student_t_delta`; `compare/student_t.py` | `test_ci_methods.py`; `test_student_t.py`; engine golden |
 | 6 | Pooled-ladder ranking uses `np.argsort(pooled, kind="stable")` — witness determinism | `compare/tokens.py` `_pooled_ladder` | ladder witness/tie tests in `test_ear_and_kld_tails.py`; engine golden |
-| 7 | `dataset_fingerprint` hash-input order (`ds-v2`): baked into every stored `collect_meta.json`; reordering invalidates every `dataset_content_hash` | `lib/dataset_fingerprint.py` | `test_dataset_fingerprint.py`; `test_gap_sample_prep.py` (real rows) |
+| 7 | `dataset_fingerprint` hash-input order (`ds-v3`, including native generation provenance): baked into every stored `collect_meta.json`; reordering invalidates every `dataset_content_hash` | `lib/dataset_fingerprint.py` | `test_dataset_fingerprint.py`; `test_gap_sample_prep.py` (real rows) |
 | 8 | VLMK metric columns stored `<f4`, indices `<i4` (v1 40-byte / v2 44-byte / v3 56-byte / v4 68-byte records); float32 storage is the dominant error term — widening upstream accumulators changes bytes for no gain | `lib/kld_metrics_io.py` | `test_kld_metrics_io.py` layout + dtype-strict tests |
 | 9 | Float dtype ladder: float32 stored metric columns in, float64 accumulators for per-item means (`kld_metrics_io.item_means`, `_side_scores`) and every engine aggregation, float32 per-token report columns. No reduction axis or order change | `lib/kld_metrics_io.py`; `cli/saved_metrics_paired_compare.py`; `compare/engine.py` | `test_kld_metrics_io.py` (`item_means`); engine golden |
 | 10 | Paired-statistics frame: the ITEM is the inference unit (the t test's n, the bootstrap's resampling unit); item- and token-weighted are different estimands, both always reported; primary = kld × item (pre-registered, `knowledge/quantization-eval-sop.md`); default CI = paired Student-t (`--ci-method t`, no bootstrap, seed-free), the three bootstrap constructions optional; Holm over the exploratory family; p-values obtained by inverting the interval actually built | `compare/inference.py`, `compare/contracts.py` | `test_multiplicity.py`; `test_ci_methods.py`; engine golden |
@@ -60,3 +60,20 @@ Two gates, never confused:
    independent naive reference, no models needed).
 5. Collector artifacts: `sha256sum` of `metrics/`, `collect_meta.json`,
    `manifest.csv` (no timestamps inside).
+
+
+## 3. Collection identity and completion
+
+The native-reference v2 integration changes identity/status contracts, not metric
+formulas or VLMK record bytes. `ds-v3` adds native generation metadata and
+request/sampling fields. `gguf-shards-sampled-v1` fingerprints every ordered
+model shard. Native manifests bind the producer's target vocabulary to both
+scorer vocabularies before weight loading. MTP heads belong to generation
+provenance; KLD is main-model teacher forcing.
+
+A formal saved-metrics comparison requires equal known execution identities
+(actual binary, loaded libraries, and environment) and completed declared work.
+An unfinished append, including a surviving valid NPZ with no terminal status,
+is not a complete collection. Shared reader locks exclude concurrent writers.
+Old directories without the new provenance and attempt records are not formal
+comparison inputs and must be re-collected.

@@ -36,6 +36,7 @@ from lib.collect_common import (
     scan_output_collisions,
 )
 from lib.collect_meta_provenance import build_collect_provenance
+from lib.collection_state import fsync_directory
 import lib.collect_core as collect_core
 from lib.dataset_fingerprint import (
     dataset_content_hash,
@@ -73,7 +74,7 @@ IDENTITY_FIELDS = ["kind", "vlmk_version", "ref_model", "cand_model", "dataset",
                    "split", "sort_by", "sort_desc", "num_eval_tokens",
                    "max_total_tokens", "tf_chunk", "n_ctx", "n_batch", "n_ubatch",
                    "n_gpu_layers", "n_threads", "metric_threads", "flash_attn",
-                   "swa_full"]
+                   "swa_full", "execution_identity"]
 
 
 def dump_stem(idx: int, item_id: str) -> str:
@@ -83,9 +84,10 @@ def dump_stem(idx: int, item_id: str) -> str:
 
 
 def build_kld_manifest_entry(prep_dir: Path, metrics_path: Path,
-                             n_prefill: int) -> dict:
+                             n_prefill: int, reference_vocabulary=None) -> dict:
     """One JSONL entry consumed by llama-llm-kld --manifest."""
     return {
+        **({"reference_vocabulary": reference_vocabulary} if reference_vocabulary else {}),
         "tokens_in": str(prep_dir / "tokens.bin"),
         "n_prefill": n_prefill,
         "output_metrics": str(metrics_path),
@@ -128,6 +130,11 @@ def postprocess_kld_result(row: dict, num_eval_tokens: int, elapsed_s: float):
         # changed under us mid-run.
         header = assert_kld_current_version(
             assert_kld_file_complete(metrics_path), metrics_path)
+        expected_vocab = row.get("reference_vocabulary")
+        if expected_vocab is None and (prep_dir / "meta.json").is_file():
+            expected_vocab = json.loads((prep_dir / "meta.json").read_text()).get("reference_vocabulary")
+        if expected_vocab and header["vocab"] != expected_vocab["size"]:
+            raise ValueError("scorer vocab size differs from reference dataset vocabulary")
         npos = header["npos"]
         expected_npos = (min(num_eval_tokens, row["n_answer"])
                          if num_eval_tokens > 0 else row["n_answer"])
@@ -185,6 +192,7 @@ def postprocess_kld_result(row: dict, num_eval_tokens: int, elapsed_s: float):
     npz_path = metrics_path.with_suffix(".npz")
     convert_kld_bin_to_npz(metrics_path, npz_path)
     metrics_path.unlink()
+    fsync_directory(metrics_path.parent)
 
     return [
         row["idx"], row["item_id"], row["n_prefill"],
@@ -241,7 +249,7 @@ def build_collect_meta(args, dataset_content_hash: str | None = None, *,
         meta["ref_model_fingerprint"] = ref_model_fingerprint
     if cand_model_fingerprint is not None:
         meta["cand_model_fingerprint"] = cand_model_fingerprint
-    meta.update(build_collect_provenance())
+    meta.update(build_collect_provenance(getattr(args, "llama_llm_kld", None)))
     return meta
 
 
@@ -414,9 +422,16 @@ def _load_dataset(args):
 def _stamp_meta(args, ds_hash):
     ref_fp = logged_file_fingerprint("ref_model_fingerprint", args.ref_model)
     cand_fp = logged_file_fingerprint("cand_model_fingerprint", args.cand_model)
-    ensure_collect_meta(args.out, build_collect_meta(
-        args, ds_hash,
-        ref_model_fingerprint=ref_fp, cand_model_fingerprint=cand_fp))
+    meta = build_collect_meta(args, ds_hash,
+        ref_model_fingerprint=ref_fp, cand_model_fingerprint=cand_fp)
+    ensure_collect_meta(args.out, meta)
+    args._recorded_execution_identity = meta["execution_identity"]
+
+
+def _verify_execution(args):
+    current = build_collect_provenance(args.llama_llm_kld)["execution_identity"]
+    if current != args._recorded_execution_identity:
+        raise ValueError("scorer execution identity changed during collection")
 
 
 def _header_lines(args):
@@ -446,7 +461,8 @@ def _header_lines(args):
 def _prep(args, row, prep_dir, state):
     import cli.prep_llm_score_from_hf as prep_lib
     meta = prep_lib.prep_row(row, prep_dir)
-    return {"n_prefill": meta["n_prefill"], "n_answer": meta["n_answer"]}
+    return {"n_prefill": meta["n_prefill"], "n_answer": meta["n_answer"],
+            "reference_vocabulary": meta.get("reference_vocabulary") }
 
 
 def _scorer_argv(args, kld_manifest_path):
@@ -481,6 +497,7 @@ def _spec():
         item_ids=lambda ds: [str(x) for x in ds["id"]],
         dataset_hash=lambda ds: dataset_content_hash(ds),
         stamp_meta=_stamp_meta,
+        verify_execution=_verify_execution,
         resolve_dataset_end=resolve_dataset_end,
         manifest_columns=MANIFEST_COLUMNS,
         artifact_subdirs=("metrics",),
@@ -496,7 +513,7 @@ def _spec():
         kind_word="kld",
         write_manifest=write_kld_manifest,
         manifest_entry=lambda row: build_kld_manifest_entry(
-            row["prep_dir"], row["metrics_path"], row["n_prefill"]),
+            row["prep_dir"], row["metrics_path"], row["n_prefill"], row.get("reference_vocabulary")),
         scorer_argv=_scorer_argv,
         scorer_cmd=lambda args: args.llama_llm_kld,
         parse_done=parse_kld_done_line,

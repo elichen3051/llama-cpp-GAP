@@ -299,27 +299,44 @@ against shard 1's record: the whole-dataset content hash (it pins the HF
 dataset/subset/split by content and does not depend on which
 `--start/--end` window a shard collects) and the model-file fingerprints —
 so a model file replaced IN PLACE at the same path, or a dataset
-regenerated under the same name, refuses the shard. A meta that predates
-those fields warns and proceeds (legacy dirs). An empty requested window
-(`--start` past the end, or `--start >= --end`) is refused rather than
-reported as a completed run. A crashed run leaves its partial rows as
-collisions: clear that row's files and manifest line by hand, or use a
-fresh `--out`. A `FAIL_*` row that left no artifact (a transient prep
-failure: a truncated image in the HF cache, an OOM) is the one retryable
-case — re-running its window re-collects it, appending a second record that
-the last-wins readers resolve; a `FAIL_*` row that did leave files (e.g. a
-rejected KLD dump kept as evidence) still collides until an operator clears
-it.
+regenerated under the same name, refuses the shard. Model fingerprints use
+`gguf-shards-sampled-v1`: all ordered GGUF shards, including an embedded MTP
+head in a later shard, contribute size and sampled content hashes. Missing
+shards and entry points other than the first shard are rejected. Snapshot symlink
+names are retained when locating siblings, so HF cache blobs cannot hide later shards. The sampling
+coverage within each file is unchanged; this is not a full-file integrity hash.
+
+`execution_identity` also belongs to append identity. It records the actual
+scorer binary SHA-256, libraries reported by that executable after loading its
+backends, all reported GPUs, and backend/loader environment settings (including
+GGML precision/fusion controls, CUDA, BLAS, OpenMP, and preload order). The
+`skymizer-execution-sha256-v2` scheme rejects earlier identities that omitted
+these settings. The source checkout commit is
+informational. Identity is checked again before inference and before completion.
+Legacy output directories without execution identity cannot be extended.
+
+Each invocation records a durable request under `.attempts/<id>/`, declares
+its exact row indices/IDs before prep, and journals terminal statuses after
+flushing and syncing the CSV. Collection metadata is written atomically and
+synced; root directory entries are synced before publishing completion. Normal states are `completed` or `failed`;
+handled interrupts record `interrupted`, and SIGKILL leaves `running`.
+Requests rejected before declaring work are `aborted`. SIGINT/SIGTERM stop and
+wait for the scorer, preserve/validate completed dumps, and keep unfinished
+work visible. A previous running/interrupted attempt requires a fresh output
+directory; its existing evidence is preserved.
+
+Formal comparison holds shared locks for the entire read, rejects an active
+writer, and checks every declared attempt against terminal statuses, CSV rows,
+and metric artifacts. A completed subset or disjoint append is valid;
+`--keep-prep` is valid. An incomplete append cannot be hidden by an old common
+prefix or by `--allow-interaction`.
 
 Two consequences worth knowing, both by design:
 
-- **A lost manifest line is not repaired.** The artifact is committed
-  (atomic rename) before its manifest row is appended, so a kill in that
-  window leaves a valid dump with no manifest record: the glob-driven
-  comparator (`saved_metrics_paired_compare.py`) still sees the item, while
-  its manifest-driven budget-skip check does not. Re-collecting that row is
-  refused, so fix it by hand (remove the row's artifacts and its manifest
-  line, then re-collect the single-row window) or use a fresh `--out`.
+- **A lost manifest line is not repaired.** If interruption occurs after an
+  NPZ rename but before its terminal record, the metric is preserved and the
+  attempt remains incomplete. Formal comparison refuses it; use a fresh output
+  directory rather than editing completion records by hand.
 - **A rejected KLD dump is renamed, not deleted.** Validation failures leave
   `metrics/<stem>.bin.rejected`, which no `*.bin`/`*.npz` glob picks up, so a
   rejected dump can never be consumed as data or promoted to an

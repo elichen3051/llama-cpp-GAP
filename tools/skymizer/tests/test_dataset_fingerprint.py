@@ -95,7 +95,7 @@ def test_hf_fast_path_matches_generic_fallback():
 def test_hash_is_scheme_tagged():
     # ds-v2 added the boundary/generation-model fields; the prefix lets any
     # future field-set change coexist instead of silently colliding.
-    assert dataset_content_hash(_FakeDataset([_row("x", [1, 2])])).startswith("ds-v2:")
+    assert dataset_content_hash(_FakeDataset([_row("x", [1, 2])])).startswith("ds-v3:")
 
 
 def test_hash_sensitive_to_prompt_boundary():
@@ -182,7 +182,7 @@ def test_maybe_file_fingerprint_none_for_missing_path(tmp_path):
     assert maybe_file_fingerprint(tmp_path / "nope.gguf") is None
     f = tmp_path / "yes.gguf"
     f.write_bytes(b"w")
-    assert maybe_file_fingerprint(f).startswith("gguf-sampled-v1:")
+    assert maybe_file_fingerprint(f).startswith("gguf-shards-sampled-v1:")
 
 
 # --------------------------------------------------------------------------- #
@@ -227,3 +227,62 @@ def test_model_guard_refuses_on_mismatch():
         check_model_fingerprints({"model_fingerprint": "gguf-sampled-v1:x"},
                                  {"model_fingerprint": "gguf-sampled-v1:y"},
                                  ("model_fingerprint",))
+
+
+@pytest.mark.parametrize("changed_index", [0, 1])
+def test_model_fingerprint_covers_every_shard(tmp_path, changed_index):
+    from lib.dataset_fingerprint import model_content_fingerprint
+    files = [tmp_path / f"weights-{i:05d}-of-00002.gguf" for i in (1, 2)]
+    for i, file in enumerate(files):
+        file.write_bytes(bytes([i]) * 128)
+    before = model_content_fingerprint(files[0])
+    assert before == model_content_fingerprint(files[0])
+    files[changed_index].write_bytes(b"changed" * 18)
+    assert model_content_fingerprint(files[0]) != before
+    files[1].unlink()
+    with pytest.raises(ValueError, match="missing GGUF"):
+        model_content_fingerprint(files[0])
+
+
+def test_model_fingerprint_rejects_wrong_first_shard_and_detects_swaps(tmp_path):
+    from lib.dataset_fingerprint import model_content_fingerprint
+    files = [tmp_path / f"weights-{i:05d}-of-00002.gguf" for i in (1, 2)]
+    files[0].write_bytes(b"a")
+    files[1].write_bytes(b"b")
+    before = model_content_fingerprint(files[0])
+    with pytest.raises(ValueError, match="start at shard 00001"):
+        model_content_fingerprint(files[1])
+    files[0].write_bytes(b"b")
+    files[1].write_bytes(b"a")
+    assert model_content_fingerprint(files[0]) != before
+
+
+def test_dataset_hash_keeps_mtp_provenance_even_when_tokens_match():
+    a = _row("same", [1, 2, 3])
+    b = dict(a)
+    a["generation_metadata"] = '{"decoding":{"method":"autoregressive"}}'
+    b["generation_metadata"] = '{"decoding":{"method":"mtp"}}'
+    assert dataset_content_hash(_FakeDataset([a])) != dataset_content_hash(_FakeDataset([b]))
+
+
+def test_snapshot_symlinks_keep_all_shards_in_model_identity(tmp_path):
+    from lib.dataset_fingerprint import model_content_fingerprint
+    from lib.model_files import model_files
+    snapshot = tmp_path / "snapshots" / "revision"
+    snapshot.mkdir(parents=True)
+    blobs = tmp_path / "blobs"
+    blobs.mkdir()
+    files = [snapshot / f"weights-{i:05d}-of-00002.gguf" for i in (1, 2)]
+    targets = [blobs / (c * 64) for c in ("a", "b")]
+    for link, target in zip(files, targets):
+        target.write_bytes(target.name.encode())
+        link.symlink_to(target)
+    assert model_files(files[0]) == files
+    before = model_content_fingerprint(files[0])
+    targets[1].write_bytes(b"changed second shard")
+    assert model_content_fingerprint(files[0]) != before
+    with pytest.raises(ValueError, match="start at shard 00001"):
+        model_files(files[1])
+    files[1].unlink()
+    with pytest.raises(ValueError, match="missing GGUF"):
+        model_content_fingerprint(files[0])

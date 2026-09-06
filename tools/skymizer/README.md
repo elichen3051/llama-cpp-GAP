@@ -44,7 +44,7 @@ tools/skymizer/
 │   ├── collect_common.py         lock / manifest / collision / identity guards
 │   ├── collect_vision.py         vision-token budget reporter
 │   ├── collect_meta_provenance.py  build/GPU provenance block
-│   ├── dataset_fingerprint.py    ds-v2 content hash + model fingerprints
+│   ├── dataset_fingerprint.py    ds-v3 content hash + model fingerprints
 │   └── kld_metrics_io.py         VLMK reader/writer (.bin/.npz)
 ├── compare/                the statistics/report engine
 │   (contracts, student_t, inference, tokens, engine, render, cli_common)

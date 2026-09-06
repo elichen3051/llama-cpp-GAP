@@ -2,11 +2,14 @@
 
 import hashlib
 import json
+import math
+from numbers import Real
 from pathlib import Path
 
 from lib.reference_contract import GTContractError, validate_gt_row
+from lib.model_files import model_files
 
-SCHEMA_VERSION = "skymizer-reference-v1"
+SCHEMA_VERSION = "skymizer-reference-v2"
 
 
 def canonical_json(value):
@@ -19,17 +22,6 @@ def sha256_file(path):
         for block in iter(lambda: handle.read(8 * 1024 * 1024), b""):
             digest.update(block)
     return digest.hexdigest()
-
-
-def model_files(path):
-    """Include every GGUF shard in provenance, not just the first file."""
-    import re
-    path = Path(path).resolve()
-    match = re.fullmatch(r"(.+)-00001-of-(\d{5})\.gguf", path.name)
-    if not match:
-        return [path]
-    total = int(match[2])
-    return [path.with_name(f"{match[1]}-{i:05d}-of-{total:05d}.gguf") for i in range(1, total + 1)]
 
 
 def raw_images(row, column="images"):
@@ -105,12 +97,48 @@ def build_row(source, request, result, metadata, images):
     return row
 
 
+def reference_provenance(row):
+    if not row.get("generation_schema_version"):
+        return {}
+    if row["generation_schema_version"] != SCHEMA_VERSION:
+        raise ValueError("native reference schema predates vocabulary identity; regenerate the reference")
+    metadata = json.loads(row["generation_metadata"])
+    vocabulary = metadata.get("vocabulary", {})
+    import re
+    if (vocabulary.get("scheme") != "llama-vocabulary-sha256-v1"
+            or vocabulary.get("size") != metadata.get("vocab_size")
+            or not isinstance(vocabulary.get("type"), int)
+            or any(not re.fullmatch(r"[0-9a-f]{64}", str(vocabulary.get(k, "")))
+                   for k in ("mapping", "attributes"))):
+        raise ValueError("native reference has no valid target vocabulary identity")
+    decoding = metadata.get("decoding", {})
+    if (decoding.get("method") not in ("autoregressive", "mtp")
+            or decoding.get("logprob_source") != "target_raw_logits"
+            or decoding.get("token_source") != "target_accepted"):
+        raise ValueError("reference must store accepted target tokens and raw target logprobs")
+    if decoding["method"] == "mtp":
+        mtp = decoding.get("mtp", {})
+        files = metadata.get("model_files") if mtp.get("head_source") == "embedded" else mtp.get("head_files")
+        if (mtp.get("head_source") not in ("embedded", "sidecar") or not files
+                or any(not re.fullmatch(r"[0-9a-f]{64}", str(f.get("sha256", ""))) for f in files)
+                or not isinstance(mtp.get("settings"), dict)):
+            raise ValueError("MTP reference requires complete head provenance and generation settings")
+    return {"reference_vocabulary": vocabulary, "reference_generation": metadata}
+
+
 def validate_reference_row(row):
     violations = validate_gt_row(row)
     if row.get("generation_schema_version") != SCHEMA_VERSION:
         violations.append("unsupported native reference schema")
+    logprobs = row.get("generation_token_logprobs")
+    if (not isinstance(logprobs, (list, tuple))
+            or len(logprobs) != row.get("generated_tokens_len")
+            or any(not isinstance(value, Real) or isinstance(value, bool)
+                   or not math.isfinite(value) or value > 0 for value in logprobs)):
+        violations.append("native generation_token_logprobs must contain one finite non-positive number per generated token")
     if violations:
         raise GTContractError("native reference contract: " + "; ".join(violations))
+    reference_provenance(row)
     layout = json.loads(row["llamacpp_prompt_layout"])
     if sum(c["n_pos"] for c in layout["chunks"]) != layout["n_pos"]:
         violations.append("layout position spans do not sum to n_past_prefill")

@@ -132,6 +132,7 @@ from lib.collect_common import (
 )
 from lib.collect_vision import VisionBudgetReporter
 from lib.collect_meta_provenance import build_collect_provenance
+from lib.collection_state import fsync_directory
 from lib.kld_metrics_io import (
     KLD_RECORD_DT,
     VLMK_VERSION,
@@ -171,7 +172,7 @@ IDENTITY_FIELDS = ["kind", "vlmk_version", "ref_model", "ref_mmproj", "cand_mode
                    "image_min_tokens", "image_max_tokens",
                    "tf_chunk", "n_ctx", "n_batch", "n_ubatch",
                    "n_gpu_layers", "n_threads", "metric_threads", "flash_attn",
-                   "swa_full", "media_wrapper"]
+                   "swa_full", "media_wrapper", "execution_identity"]
 
 
 def dump_stem(idx: int, item_id: str) -> str:
@@ -182,7 +183,7 @@ def dump_stem(idx: int, item_id: str) -> str:
 
 def build_kld_manifest_entry(prep_dir: Path, metrics_path: Path,
                              n_images: int, n_prefill: int,
-                             image_files=None, add_special: bool = False) -> dict:
+                             image_files=None, add_special: bool = False, reference_vocabulary=None) -> dict:
     """One JSONL entry consumed by llama-vlm-kld --manifest. `image_files`
     (from prep's meta) names the files prep actually wrote; without it the
     historical img_{i}.png layout is assumed. `add_special` (llama-server
@@ -196,6 +197,8 @@ def build_kld_manifest_entry(prep_dir: Path, metrics_path: Path,
         "n_prefill": n_prefill,
         "output_metrics": str(metrics_path),
     }
+    if reference_vocabulary:
+        entry["reference_vocabulary"] = reference_vocabulary
     if add_special:
         entry["add_special"] = True
     return entry
@@ -265,6 +268,11 @@ def postprocess_kld_result(row: dict, num_eval_tokens: int, elapsed_s: float,
         # changed under us mid-run.
         header = assert_kld_current_version(
             assert_kld_file_complete(metrics_path), metrics_path)
+        expected_vocab = row.get("reference_vocabulary")
+        if expected_vocab is None and (prep_dir / "meta.json").is_file():
+            expected_vocab = json.loads((prep_dir / "meta.json").read_text()).get("reference_vocabulary")
+        if expected_vocab and header["vocab"] != expected_vocab["size"]:
+            raise ValueError("scorer vocab size differs from reference dataset vocabulary")
         npos = header["npos"]
         expected_npos = (min(num_eval_tokens, row["n_answer"])
                          if num_eval_tokens > 0 else row["n_answer"])
@@ -323,6 +331,7 @@ def postprocess_kld_result(row: dict, num_eval_tokens: int, elapsed_s: float,
     npz_path = metrics_path.with_suffix(".npz")
     convert_kld_bin_to_npz(metrics_path, npz_path)
     metrics_path.unlink()
+    fsync_directory(metrics_path.parent)
 
     return [
         row["idx"], row["item_id"], row["n_images"], row["n_prefill"],
@@ -401,7 +410,7 @@ def build_collect_meta(args, dataset_content_hash: str | None = None, *,
                          ("cand_mmproj_fingerprint", cand_mmproj_fingerprint)):
         if value is not None:
             meta[field] = value
-    meta.update(build_collect_provenance())
+    meta.update(build_collect_provenance(getattr(args, "llama_vlm_kld", None)))
     return meta
 
 
@@ -652,7 +661,15 @@ def _stamp_meta(args, ds_hash):
         ("cand_model_fingerprint", args.cand_model),
         ("ref_mmproj_fingerprint", args.ref_mmproj),
         ("cand_mmproj_fingerprint", args.cand_mmproj))}
-    ensure_collect_meta(args.out, build_collect_meta(args, ds_hash, **fps))
+    meta = build_collect_meta(args, ds_hash, **fps)
+    ensure_collect_meta(args.out, meta)
+    args._recorded_execution_identity = meta["execution_identity"]
+
+
+def _verify_execution(args):
+    current = build_collect_provenance(args.llama_vlm_kld)["execution_identity"]
+    if current != args._recorded_execution_identity:
+        raise ValueError("scorer execution identity changed during collection")
 
 
 def _header_lines(args):
@@ -716,7 +733,8 @@ def _prep(args, row, prep_dir, state):
     else:
         meta = prep_lib.prep_row(row, tok, prep_dir, raw_images=raw_images)
     state.vision_budget.check(meta)
-    return {"n_images": meta["num_images"],
+    return {"reference_vocabulary": meta.get("reference_vocabulary"),
+            "n_images": meta["num_images"],
             "n_prefill": meta["n_prefill"],
             "n_answer": meta["n_answer"],
             "image_files": meta.get("image_files"),
@@ -764,6 +782,7 @@ def _spec():
         item_ids=lambda ds: ds["item_id"],
         dataset_hash=lambda ds: dataset_content_hash(ds),
         stamp_meta=_stamp_meta,
+        verify_execution=_verify_execution,
         resolve_dataset_end=resolve_dataset_end,
         manifest_columns=MANIFEST_COLUMNS,
         artifact_subdirs=("metrics",),
@@ -780,7 +799,8 @@ def _spec():
         write_manifest=write_kld_manifest,
         manifest_entry=lambda row: build_kld_manifest_entry(
             row["prep_dir"], row["metrics_path"], row["n_images"], row["n_prefill"],
-            image_files=row.get("image_files"), add_special=row.get("add_special", False)),
+            image_files=row.get("image_files"), add_special=row.get("add_special", False),
+            reference_vocabulary=row.get("reference_vocabulary")),
         scorer_argv=_scorer_argv,
         scorer_cmd=lambda args: args.llama_vlm_kld,
         parse_done=parse_kld_done_line,

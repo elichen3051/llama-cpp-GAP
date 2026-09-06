@@ -144,6 +144,8 @@ def prep_row(row, out_dir: Path) -> dict:
     np.asarray(row["input_ids"], dtype=np.int32).tofile(out_dir / "tokens.bin")
 
     meta = build_meta(row)
+    from lib.reference_dataset import reference_provenance
+    meta.update(reference_provenance(row))
     (out_dir / "meta.json").write_text(
         json.dumps(meta, indent=2, ensure_ascii=False), encoding="utf-8")
     return meta
