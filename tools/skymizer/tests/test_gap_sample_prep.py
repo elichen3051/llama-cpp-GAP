@@ -787,3 +787,39 @@ def test_reference_model_restore_keeps_verified_nested_paths(tmp_path, monkeypat
                 assert (root / name).read_bytes() == data
             restore.main()
             assert len(calls) == 3
+
+
+@pytest.mark.parametrize("mode,cap", [("instruct", 2048), ("thinking", 4096)])
+@pytest.mark.parametrize("model,ubatch", [("qwen3.5-4b", 512), ("qwen3.6-35b-a3b", 512),
+    ("gemma-4-e4b-it", 512), ("glm-4.6v-flash", 512), ("gemma-4-26b-a4b-it", 2048), ("gemma-4-31b-it", 2048)])
+def test_kld_launcher_uses_matching_runtime_without_generation_or_analysis(tmp_path, model, ubatch, mode, cap):
+    from cli import collect_model_kld as launch
+    from lib.reference_study import study_overview
+    profiles = json.loads((Path(__file__).resolve().parents[1] / "scripts/reference_model_profiles.json").read_text())
+    plan = {"stage": "kld", "models": [model], "sources": ["mmmu-pro-vision"], "modes": [mode],
+            "hardware": "pro6000", "size": 100, "num_samples": None, "models_dir": str(tmp_path / "models")}
+    args = launch.parse_args(["--study", str(tmp_path / "study"), "--model", model, "--mode", mode,
+        "--source", "mmmu-pro-vision", "--candidate", "Q4_K_M", "--cand-model", str(tmp_path / "candidate.gguf"),
+        "--llama-vlm-kld", str(tmp_path / "llama-vlm-kld"), "--gpu", "0", "--dry-run"])
+    command, out = launch.build_command(args, plan, profiles, tmp_path / "archived")
+    flag = lambda key: command[command.index(key) + 1]
+    assert flag("--n-ctx") == "32768" and flag("--n-batch") == "2048"
+    assert flag("--n-ubatch") == str(ubatch) and flag("--tf-chunk") == "2048"
+    assert flag("--n-gpu-layers") == "-2" and flag("--num-eval-tokens") == str(cap)
+    assert flag("--ref-mmproj") == flag("--cand-mmproj")
+    assert "--image-max-tokens" not in command and "--max-total-tokens" not in command
+    assert "--spec-type" not in command and "--model-draft" not in command
+    assert command[1] == str(tmp_path / "archived/cli/collect_kld.py")
+    subset = "mmmu-pro-vision-subsample-100-" + ("ins" if mode == "instruct" else "think")
+    assert flag("--subset") == subset and flag("--dataset") == f"elichen-skymizer/{model}-pivot"
+    assert out == tmp_path / "study/artifacts" / model / subset / "kld/Q4_K_M"
+    overview = study_overview(profiles, plan)
+    assert overview["models"][model]["kld_runtime"][mode]["n_ubatch"] == ubatch
+    assert overview["models"][model]["reference_runtime"][mode]["ubatch"] == ubatch
+    assert "trial" not in json.dumps(overview)
+    args.dataset = tmp_path / "local-dataset"
+    command, _ = launch.build_command(args, plan, profiles, tmp_path / "archived")
+    assert command[command.index("--subset") + 1] == ""
+    args.source = "not-in-study"
+    with pytest.raises(ValueError, match="not in the study"):
+        launch.build_command(args, plan, profiles, tmp_path / "archived")

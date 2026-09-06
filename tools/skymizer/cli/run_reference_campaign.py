@@ -30,6 +30,7 @@ sys.path.insert(0, str(SKYMIZER))
 from lib.collect_meta_provenance import execution_identity
 from lib.reference_dataset import sha256_file
 from lib.reference_run import atomic_json, read_records
+from lib.reference_study import study_overview
 
 
 @contextmanager
@@ -276,6 +277,7 @@ def run_owned_campaign(args, out, stopped):
     if plan_file.exists() and json.loads(plan_file.read_text()) != settings:
         raise ValueError("resume arguments or executable/backend identity differ from the frozen campaign plan")
     atomic_json(plan_file, settings)
+    atomic_json(out / "study.json", study_overview(profiles, settings))
     priority = ["gemma-4-31b-it", "qwen3.6-35b-a3b", "gemma-4-26b-a4b-it", "glm-4.6v-flash", "gemma-4-e4b-it", "qwen3.5-4b"]
     jobs = [(model, f"{source}-subsample-{args.size}-" + ("ins" if mode == "instruct" else "think"), source, mode)
             for model in sorted(models, key=lambda x: (priority.index(x) if x in priority else len(priority), x))
@@ -301,12 +303,13 @@ def run_owned_campaign(args, out, stopped):
             print(json.dumps(value), flush=True)
 
     def record(directory, state):
-        with result_lock:
-            results[str(directory.relative_to(out))] = state
         try:
             atomic_json(directory / "job.json", state)
         except OSError as error:
             state["status"], state["persistence_error"] = "failed", str(error)
+        with result_lock:
+            results[str(directory.relative_to(out))] = state
+            atomic_json(out / "status.json", {"status": "running", "total_jobs": len(jobs), "jobs": results})
         event({"job": str(directory.relative_to(out)), **state})
 
     def verify_generation(directory, run, model, source, mode, gpu, saved=None):

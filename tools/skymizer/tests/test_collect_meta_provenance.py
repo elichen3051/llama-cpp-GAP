@@ -265,6 +265,12 @@ def campaign_fixture(tmp_path, monkeypatch):
     profiles = {"models": {"qwen3.5-4b": {"model": "model.gguf"}}, "sources": [f"s{i}" for i in range(12)],
                 "dataset": {"repo": "test/prepared", "revision": "a" * 40}, "fake_identity": identity(binary)[0],
                 "events": str(tmp_path / "process-events.jsonl"), "barrier": 0}
+    profiles.update(seed=1234, generation_caps={"instruct": 8192, "thinking": 16384},
+                    kld_eval_tokens={"instruct": 2048, "thinking": 4096}, image_token_budget="native defaults")
+    model = profiles["models"]["qwen3.5-4b"]
+    model.update(mmproj="mmproj.gguf", sampling_args={"instruct": [], "thinking": []},
+                 runtime={"pro6000": {mode: {"ctx": 32768, "batch": 2048, "ubatch": 512,
+                          "threads": 8, "threads_batch": 8, "draft_max": 0} for mode in ("instruct", "thinking")}})
     profile_path = tmp_path / "profiles.json"
     profile_path.write_text(json.dumps(profiles))
     generator = r'''
@@ -677,3 +683,78 @@ def test_campaign_nonempty_generation_requires_native_attempt_audit(campaign_fix
     (run / "native-attempts.json").unlink()
     with pytest.raises(ValueError, match="missing native-attempts.json"):
         campaign.artifact_hashes(run)
+
+
+def test_campaign_writes_a_readable_runtime_overview(campaign_fixture):
+    campaign, args, _configure, _events, _ = campaign_fixture
+    args.dry_run = True
+    assert campaign.run_campaign(args) == 0
+    overview = json.loads((args.out / "study.json").read_text())
+    assert overview["generation_jobs"] == 2
+    assert overview["generation_caps"] == {"instruct": 8192}
+    runtime = overview["models"]["qwen3.5-4b"]["kld_runtime"]["instruct"]
+    assert runtime["n_ubatch"] == 512 and runtime["num_eval_tokens"] == 2048
+    assert overview["settings_source"] == "scripts/skymizer/scripts/reference_model_profiles.json"
+
+
+def test_kld_status_retains_failed_and_interrupted_jobs(tmp_path):
+    from cli import collect_model_kld as launch
+    root = tmp_path / "study"
+    first, second = root / "artifacts/one", root / "artifacts/two"
+    launch.record_status(root, first, "running", gpu="0")
+    launch.record_status(root, second, "failed", error="OOM")
+    state = json.loads((root / "status.json").read_text())
+    assert state["status"] == "running" and state["collections"]["artifacts/two"]["error"] == "OOM"
+    launch.record_status(root, first, "interrupted", exit_code=130)
+    state = json.loads((root / "status.json").read_text())
+    assert state["status"] == "idle"
+    assert state["collections"]["artifacts/one"]["status"] == "interrupted"
+    assert state["collections"]["artifacts/two"]["status"] == "failed"
+
+
+def test_kld_status_waits_for_concurrent_metadata_writer(tmp_path):
+    from concurrent.futures import ThreadPoolExecutor
+    import threading
+    from cli import collect_model_kld as launch
+    root = tmp_path / "study"
+    started = threading.Event()
+    def write():
+        started.set()
+        launch.record_status(root, root / "artifacts/two", "complete")
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        with launch.study_lock(root):
+            future = pool.submit(write)
+            assert started.wait(2)
+            assert not future.done()
+        launch.record_status(root, root / "artifacts/one", "interrupted")
+        future.result(timeout=5)
+    state = json.loads((root / "status.json").read_text())
+    assert state["status"] == "idle"
+    assert state["collections"]["artifacts/one"]["status"] == "interrupted"
+    assert state["collections"]["artifacts/two"]["status"] == "complete"
+
+
+def test_kld_dispatch_checks_hashes_without_interpreting_live_plan(tmp_path, monkeypatch):
+    from cli import collect_model_kld as launch
+    root = tmp_path / "study"
+    archive = root / "scripts"
+    entry = archive / "skymizer/cli/collect_model_kld.py"
+    entry.parent.mkdir(parents=True)
+    entry.write_text("# frozen launcher\n")
+    (root / "plan.json").write_text("unreadable by a newer plan parser")
+    (archive / "manifest.json").write_text(json.dumps(launch.tree_hashes(archive)))
+    calls = []
+    class Dispatched(Exception):
+        pass
+    def execute(executable, argv):
+        calls.append(argv)
+        raise Dispatched
+    monkeypatch.setattr(launch.os, "execv", execute)
+    with pytest.raises(Dispatched):
+        launch.archived_dispatch(root)
+    assert calls[0][1] == str(entry)
+    assert (root / "plan.json").read_text() == "unreadable by a newer plan parser"
+    entry.write_text("# modified launcher\n")
+    with pytest.raises(ValueError, match="archived scripts changed"):
+        launch.archived_dispatch(root)
+    assert len(calls) == 1

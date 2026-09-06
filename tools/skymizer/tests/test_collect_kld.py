@@ -610,3 +610,19 @@ def test_resolve_image_token_budget_distinguishes_omitted_from_explicit_minus_on
     args = types.SimpleNamespace(image_min_tokens=None, image_max_tokens=None)
     ck.resolve_image_token_budget(args, [])
     assert (args.image_min_tokens, args.image_max_tokens) == (-1, -1)
+
+
+@pytest.mark.parametrize("kind", ["llm", "vlm"])
+@pytest.mark.parametrize("layers", [-3, -2, -1, 0, 99])
+def test_collectors_accept_only_the_explicit_all_layers_sentinel(tmp_path, monkeypatch, kind, layers):
+    from cli import collect_llm_kld
+    module = ck if kind == "vlm" else collect_llm_kld
+    argv = ["collect", "--ref-model", str(tmp_path / "missing-ref"),
+            "--cand-model", str(tmp_path / "missing-candidate"), "--out", str(tmp_path / "out"),
+            "--n-gpu-layers", str(layers)]
+    if kind == "vlm":
+        argv += ["--dataset", "fixture", "--ref-mmproj", "missing-rp", "--cand-mmproj", "missing-cp"]
+    monkeypatch.setattr("sys.argv", argv)
+    message = "n-gpu-layers must be" if layers in (-3, -1) else "missing required path"
+    with pytest.raises(SystemExit, match=message):
+        module.main()

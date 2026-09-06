@@ -303,7 +303,7 @@ def parse_args():
     p.add_argument("--n-ctx", type=int, default=32768,
                    help="Scorer context size (-c), per model.")
     p.add_argument("--n-gpu-layers", type=int, default=99,
-                   help="Scorer GPU layer count (-ngl). Default 99.")
+                   help="Scorer GPU layer count (-ngl); -2 means all layers. Default 99.")
     p.add_argument("--n-threads", type=int, default=-1,
                    help="Scorer CPU generation/batch threads (-t); -1 = llama.cpp default.")
     p.add_argument("--metric-threads", type=int, default=-1,
@@ -368,8 +368,8 @@ def main():
         sys.exit(f"--tf-chunk must be -1 (follow --n-ubatch) or >= 1, got {args.tf_chunk}")
     if args.n_ctx < 1:
         sys.exit(f"--n-ctx must be >= 1, got {args.n_ctx}")
-    if args.n_gpu_layers < 0:
-        sys.exit(f"--n-gpu-layers must be >= 0, got {args.n_gpu_layers}")
+    if args.n_gpu_layers < 0 and args.n_gpu_layers != -2:
+        sys.exit(f"--n-gpu-layers must be -2 (all) or >= 0, got {args.n_gpu_layers}")
     if args.n_threads != -1 and args.n_threads < 1:
         sys.exit(f"--n-threads must be -1 (default) or >= 1, got {args.n_threads}")
     if args.dataset_limit is not None and args.dataset_limit != -1 and args.dataset_limit < 1:
