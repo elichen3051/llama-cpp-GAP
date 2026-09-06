@@ -290,3 +290,211 @@ def test_native_reference_requires_complete_nonpositive_logprobs(tmp_path, corru
         validate_reference_row(row)
     with pytest.raises(llm_prep.PrepError, match="generation_token_logprobs"):
         llm_prep.prep_row(row, tmp_path / "prep")
+
+
+def test_native_decoding_statistics_survive_dataset_storage(tmp_path):
+    from datasets import Dataset, load_from_disk
+    from lib.reference_dataset import reference_features, validate_reference_row
+    row = native_row(False)
+    stats = {"drafted_tokens": 0, "accepted_draft_tokens": 0, "verification_batches": 0, "rollback_batches": 0, "checkpoint_replays": 0}
+    row["generation_decoding_stats"] = json.dumps(stats)
+    ds = Dataset.from_list([row], features=reference_features())
+    ds.save_to_disk(str(tmp_path / "dataset"))
+    restored = load_from_disk(str(tmp_path / "dataset"))[0]
+    validate_reference_row(restored)
+    assert json.loads(restored["generation_decoding_stats"]) == stats
+
+
+@pytest.mark.parametrize("with_image", [False, True])
+def test_native_generator_accepts_empty_question_only_with_images(tmp_path, monkeypatch, with_image):
+    from datasets import Dataset
+    from cli import generate_reference as gen
+    binary = tmp_path / "llama-reference"
+    binary.write_bytes(b"unused")
+    images = native_row(True)["images"] if with_image else []
+    ds = Dataset.from_list([{"item_id": "image-only", "question": "", "images": images}])
+    monkeypatch.setattr(gen, "load_source", lambda args: ds)
+    def at_native_launch(path):
+        raise RuntimeError("native launch reached")
+    monkeypatch.setattr(gen, "execution_identity", at_native_launch)
+    args = gen.parse_args(["--dataset", "unused", "--out", str(tmp_path / "out"),
+                           "--llama-reference", str(binary), "--", "-m", "unused.gguf"])
+    if with_image:
+        with pytest.raises(RuntimeError, match="native launch reached"):
+            gen.generate(args)
+        request = json.loads((args.out / "requests.jsonl").read_text())
+        assert request["question"] == ""
+        assert len(request["images"]) == 1
+        assert Path(request["images"][0]).read_bytes() == images[0]["bytes"]
+    else:
+        gen.generate(args)
+        completion = json.loads((args.out / "complete.json").read_text())
+        assert completion["status"] == "complete_with_failures"
+        assert completion["cohort"]["failed_ids"] == ["image-only"]
+        assert completion["rows"] == 0
+
+
+
+def test_native_generator_pins_hub_dataset_revision(monkeypatch):
+    from datasets import Dataset
+    import datasets
+    from cli import generate_reference as gen
+    calls = []
+    def load(repo, subset, **kwargs):
+        calls.append((repo, subset, kwargs))
+        return Dataset.from_list([{"question": "one"}, {"question": "two"}])
+    monkeypatch.setattr(datasets, "load_dataset", load)
+    args = gen.parse_args(["--dataset", "org/source", "--subset", "cohort", "--revision", "pinned-sha",
+                           "--num-samples", "1", "--out", "unused", "--", "-m", "unused.gguf"])
+    assert len(gen.load_source(args)) == 1
+    assert calls == [("org/source", "cohort", {"split": "train", "revision": "pinned-sha"})]
+
+
+def test_model_reference_launcher_keeps_gpu_source_and_mode_explicit(tmp_path):
+    from cli import generate_model_reference as launch
+    args = launch.parse_args(["--model", "qwen", "--mode", "thinking", "--source", "image-only",
+                              "--gpu", "GPU-example", "--out", str(tmp_path / "out"), "--dry-run"])
+    runtime = {"ctx": 32768, "batch": 2048, "ubatch": 512, "threads": 8, "threads_batch": 8, "draft_max": 3}
+    profiles = {"sources": ["image-only"], "dataset": {"repo": "org/data", "revision": "pinned-sha"},
+                "seed": 1234, "generation_caps": {"thinking": 16384}, "models": {"qwen": {
+                    "model": "qwen/bf16.gguf", "mmproj": "qwen/mmproj.gguf", "mtp": "embedded",
+                    "runtime": {"pro6000": {"thinking": runtime}},
+                    "sampling_args": {"thinking": ["--temp", "1.0", "--min-p", "0"]}}}}
+    command = launch.build_command(args, profiles)
+    assert command[command.index("--subset") + 1] == "image-only-subsample-100"
+    assert command[command.index("--revision") + 1] == "pinned-sha"
+    assert "--enable-thinking" in command
+    assert command[command.index("-n") + 1] == "16384"
+    assert command[command.index("--spec-type") + 1] == "draft-mtp"
+    assert command[command.index("-ngl") + 1] == "all"
+    assert "--image-max-tokens" not in command
+    args.mtp = "off"
+    assert "--spec-type" not in launch.build_command(args, profiles)
+    args.mtp = "3"
+    profiles["models"]["qwen"]["mtp"] = None
+    with pytest.raises(ValueError, match="no supported local MTP head"):
+        launch.build_command(args, profiles)
+    args.max_new_tokens = 32768
+    with pytest.raises(ValueError, match="generation cap"):
+        launch.build_command(args, profiles)
+
+
+@pytest.mark.parametrize("scenario", ["crash", "crash_always", "timeout", "result_before_exit", "data_error", "startup_partial", "startup_always"])
+def test_native_reference_supervisor_preserves_rows_and_bounds_retries(tmp_path, scenario):
+    from lib.reference_run import run_native
+    binary = tmp_path / "fake-native"
+    binary.write_text('''#!/usr/bin/env python3
+import argparse, json, os, time
+from pathlib import Path
+p=argparse.ArgumentParser()
+p.add_argument('--requests');p.add_argument('--out-dir');p.add_argument('--continue-on-error',action='store_true');p.add_argument('--scenario')
+a=p.parse_args();d=Path(a.out_dir);d.mkdir()
+state=d.parents[2]/'fake-state'
+if a.scenario=='startup_always' or (a.scenario=='startup_partial' and not state.exists()):
+ state.write_text('once');(d/'metadata.json').write_text('{');os._exit(7)
+(d/'metadata.json').write_text(json.dumps({'model':'fixed','seed':1234}))
+e=(d/'events.jsonl').open('w');o=(d/'generations.jsonl').open('w')
+def event(x): e.write(json.dumps(x)+'\\n');e.flush()
+for r in map(json.loads,Path(a.requests).read_text().splitlines()):
+ i=r['id'];event({'event':'row_started','id':i})
+ if i=='first' and a.scenario=='data_error':
+  event({'event':'row_failed','id':i,'error':'bad image','retryable':False});continue
+ if i=='first' and a.scenario=='timeout':time.sleep(30)
+ if i=='first' and (a.scenario=='crash_always' or (a.scenario=='crash' and not state.exists())):
+  state.write_text('once');o.write('{');o.flush();os._exit(8)
+ o.write(json.dumps({'id':i,'valid':True})+'\\n');o.flush()
+ if i=='first' and a.scenario=='result_before_exit':os._exit(9)
+ event({'event':'row_succeeded','id':i})
+''')
+    binary.chmod(0o755)
+    out = tmp_path / "run"
+    out.mkdir()
+    rows = [{"id": "first"}, {"id": "second"}]
+    results, failures, metadata = run_native(binary, ["--scenario", scenario], rows, out, row_timeout=0.1 if scenario == "timeout" else 1800)
+    if scenario == "startup_always":
+        assert not results and metadata is None
+        assert all(f["status"] == "unattempted_startup_failure" and f["attempts"] == 0 for f in failures.values())
+        assert len(json.loads((out / "native-attempts.json").read_text())) == 2
+        return
+    assert "second" in results
+    assert set(results) | set(failures) == {"first", "second"}
+    assert bool(failures) is (scenario in ("data_error", "crash_always", "timeout"))
+    if scenario in ("crash_always", "timeout"):
+        assert failures["first"]["attempts"] == 2
+    assert metadata == {"model": "fixed", "seed": 1234}
+    attempts = json.loads((out / "native-attempts.json").read_text())
+    assert len(attempts) == (1 if scenario == "data_error" else 2)
+    if scenario == "result_before_exit":
+        assert attempts[1]["requested_ids"] == ["second"]
+    if scenario == "crash":
+        assert attempts[1]["requested_ids"] == ["second", "first"]
+
+
+def test_native_reference_supervisor_rejects_corrupt_terminal_journal(tmp_path):
+    from lib.reference_run import run_native
+    binary = tmp_path / "fake-native"
+    binary.write_text('''#!/usr/bin/env python3
+import json,sys
+from pathlib import Path
+a=sys.argv;d=Path(a[a.index('--out-dir')+1]);d.mkdir()
+(d/'metadata.json').write_text('{}')
+(d/'events.jsonl').write_text(json.dumps({'event':'row_failed','id':'a','error':'bad','retryable':False})+'\\n')
+''')
+    binary.chmod(0o755)
+    with pytest.raises(ValueError, match="terminal event"):
+        run_native(binary, [], [{"id": "a"}], tmp_path / "run")
+
+
+@pytest.mark.parametrize("flags", [[], ["--seed", "-1"], ["-s", "-1"], ["--seed=-1"], ["--seed=4294967295"]])
+def test_reference_driver_resolves_one_seed_before_any_retry(flags):
+    from cli import generate_reference as gen
+    args = gen.parse_args(["--dataset", "x", "--out", "y", "--", "-m", "model.gguf", *flags])
+    resolved = next((flag.split("=", 1)[1] for flag in args.llama_args if flag.startswith("--seed=")), None)
+    if resolved is None:
+        index = next(i for i, flag in enumerate(args.llama_args) if flag in ("--seed", "-s"))
+        resolved = args.llama_args[index + 1]
+    assert 0 <= int(resolved) < 4294967295
+
+
+def test_reference_driver_filters_and_reconciles_out_of_order_results(tmp_path, monkeypatch):
+    from datasets import Dataset, load_from_disk
+    from cli import generate_reference as gen
+    from lib.reference_dataset import canonical_json
+    import hashlib
+    fixture = native_row(False)
+    metadata = json.loads(fixture["generation_metadata"])
+    model = tmp_path / "model.gguf"
+    model.write_bytes(b"fixture")
+    metadata.update(model_path=str(model), mmproj_path="", schema_version="skymizer-reference-v2")
+    ds = Dataset.from_list([{"item_id": i, "question": "What color?"} for i in ("first", "repeat", "bad", "last")])
+    monkeypatch.setattr(gen, "load_source", lambda args: ds)
+    monkeypatch.setattr(gen, "execution_identity", lambda path: ({"binary_sha256": "f" * 64}, []))
+    def native(binary, native_args, requests, out, **kwargs):
+        results = {}
+        for row_id in ("last", "repeat", "first"):
+            n = 96 if row_id == "repeat" else 2
+            result = {"id": row_id, "input_ids": [1, 2] + [3] * n, "n_prefill_tokens": 2, "n_past_prefill": 2,
+                      "prompt_layout": json.loads(fixture["llamacpp_prompt_layout"]), "content": "red", "finish_reason": "stop",
+                      "sampling": {"seed": 1234}, "chat_template_kwargs": {}, "enable_thinking": False,
+                      "token_logprobs": [-0.5] * n, "prompt": "What color?", "add_special": True,
+                      "stripped_leading_bos": False, "stop_type": "eos", "stopping_word": ""}
+            if row_id == "repeat":
+                result["repetition"] = {"start": 0, "unit_len": 1, "repeats": 96, "repeated_len": 96}
+            results[row_id] = result
+        (out / "native").mkdir()
+        (out / "native/generations.jsonl").write_text("".join(canonical_json(r) + "\n" for r in results.values()))
+        return results, {"bad": {"id": "bad", "status": "failed", "error": "poison row"}}, metadata
+    monkeypatch.setattr(gen, "run_native", native)
+    args = gen.parse_args(["--dataset", "unused", "--out", str(tmp_path / "out"), "--llama-reference", str(model), "--", "-m", str(model)])
+    gen.generate(args)
+    completion = json.loads((args.out / "complete.json").read_text())
+    cohort = completion["cohort"]
+    assert completion["status"] == "complete_with_failures"
+    assert cohort["requested"] == 4 and cohort["generated"] == 3
+    assert cohort["eligible_ids"] == ["first", "last"]
+    assert cohort["excluded_ids"] == ["repeat"] and cohort["failed_ids"] == ["bad"]
+    assert list(load_from_disk(str(args.out / "dataset"))["id"]) == ["first", "last"]
+    assert len((args.out / "native/generations.jsonl").read_text().splitlines()) == 3
+    assert cohort["eligible_ids_sha256"] == hashlib.sha256(canonical_json(["first", "last"]).encode()).hexdigest()
+    assert json.loads((args.out / "excluded.jsonl").read_text())["id"] == "repeat"
+    assert json.loads((args.out / "failures.jsonl").read_text())["id"] == "bad"

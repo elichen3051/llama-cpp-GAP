@@ -179,3 +179,58 @@ def test_native_vocabulary_is_checked_before_loading_weights(tool, candidate, ex
         assert "WEIGHTS_LOADED" not in result.stderr
     else:
         assert "INFERENCE_REACHED" in result.stderr
+
+
+@pytest.mark.parametrize("flags,message", [
+    (["--spec-type", "draft-mtp", "--spec-draft-n-max", "0"], "invalid MTP draft bounds"),
+    (["--spec-type", "draft-mtp", "--spec-draft-n-max", "2", "--spec-draft-n-min", "3"], "invalid MTP draft bounds"),
+    (["--spec-type", "draft-mtp", "-b", "2", "-ub", "2"], "MTP draft maximum"),
+    (["--spec-type", "ngram-simple"], "supports only autoregressive"),
+    (["--spec-type", "draft-mtp", "--spec-synth-len", "2"], "synthetic acceptance"),
+    (["--spec-type", "draft-mtp", "--model-draft", "/missing/mtp.gguf"], "MTP sidecar does not exist"),
+])
+def test_reference_rejects_invalid_mtp_setup_before_loading_weights(tmp_path, flags, message):
+    model = tmp_path / "target.gguf"
+    model.write_bytes(b"not a model; validation must run before loading")
+    result = subprocess.run([str(_binary("llama-reference")), "-m", str(model), "--describe", *flags],
+                            capture_output=True, text=True)
+    assert result.returncode == 1, result.stderr
+    assert message in result.stderr
+
+
+def test_reference_repetition_stops_only_long_generated_loops(tmp_path):
+    if shutil.which("g++") is None:
+        pytest.skip("g++ unavailable")
+    source = tmp_path / "repeat.cpp"
+    source.write_text(r'''
+#include "skymizer-repetition.h"
+#include <cassert>
+#include <vector>
+using namespace skymizer_repetition;
+int main() {
+    std::vector<int32_t> x = {1, 1, 1, 4, 5, 4, 5, 4, 5};
+    assert(!tail(x.data(), x.size()));
+    assert(!full(x.data(), x.size()));
+    x.clear();
+    for (int i = 0; i < 500; ++i) { x.push_back(i); }
+    assert(!full(x.data(), x.size()));
+    for (int i = 0; i < 96; ++i) { x.push_back(1000 + i % 4); }
+    auto m = tail(x.data(), x.size());
+    assert(m && m.start == 500 && m.unit_len == 4 && m.repeated_len == 96);
+    x.push_back(9000); x.push_back(9001);
+    assert(!tail(x.data(), x.size()));
+    m = full(x.data(), x.size());
+    assert(m && m.start == 500 && m.repeated_len == 96);
+    x.clear();
+    for (int k = 0; k < 3; ++k) {
+        for (int i = 0; i < 800; ++i) { x.push_back(2000 + i); }
+    }
+    assert(!tail(x.data(), x.size()));
+    assert(full(x.data(), x.size()).unit_len == 800);
+    // Prompt repetition is not part of the generated suffix passed to the detector.
+    assert(!full(x.data() + x.size() - 10, 10));
+}
+''')
+    exe = tmp_path / "repeat"
+    subprocess.run(["g++", "-std=c++17", "-O2", "-I", str(SKYMIZER), str(source), "-o", str(exe)], check=True)
+    subprocess.run([str(exe)], check=True)

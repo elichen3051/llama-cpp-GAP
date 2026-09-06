@@ -199,7 +199,7 @@ def _run_attempt(args, manifest_path, spec, attempt):
                     attempt.reference(idx, item_id, json.loads(row["generation_metadata"]), {
                         key: row.get(key) for key in ("generation_request", "generation_sampling_params",
                             "generation_enable_thinking", "generation_chat_template_kwargs",
-                            "generation_token_logprobs", "finish_reason")})
+                            "generation_token_logprobs", "generation_decoding_stats", "finish_reason")})
 
                 prep_wall_s = time.time() - prep_start_t
                 pending.append({

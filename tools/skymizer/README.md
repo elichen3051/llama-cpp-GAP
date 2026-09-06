@@ -4,7 +4,7 @@ Generate reference datasets and evaluate quantization fidelity with llama.cpp.
 `llama-reference` renders GGUF chat templates, tokenizes with the GGUF vocabulary,
 and generates text/image trajectories directly with llama.cpp and mtmd.
 [Native reference generation](docs/reference.md) needs neither llama-server nor an HF tokenizer.
-The existing collectors consume the resulting local dataset or a legacy Hub dataset.
+Reference generation supports autoregressive decoding and upstream MTP heads (`--spec-type draft-mtp`, with `--model-draft` for a sidecar). KLD collectors use ordinary teacher forcing and consume the resulting local dataset or a legacy Hub dataset.
 
 > [!NOTE]
 > **What this measures, precisely: text-token fidelity CONDITIONED on an

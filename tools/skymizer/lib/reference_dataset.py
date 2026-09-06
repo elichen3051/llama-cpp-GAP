@@ -76,6 +76,7 @@ def build_row(source, request, result, metadata, images):
         "generation_metadata": canonical_json(metadata),
         "generation_request": canonical_json({k: v for k, v in request.items() if k != "images"}),
         "generation_sampling_params": canonical_json(result["sampling"]),
+        "generation_decoding_stats": canonical_json(result.get("decoding_stats", {})),
         "generation_chat_template_kwargs": canonical_json(result["chat_template_kwargs"]),
         "generation_enable_thinking": result["enable_thinking"],
         "generation_token_logprobs": result["token_logprobs"],
@@ -170,7 +171,7 @@ def validate_reference_row(row):
 
 def reference_features():
     from datasets import Features, Image, Sequence, Value
-    text = "id item_id source category question generated_texts finish_reason generation_engine generation_backend generation_schema_version generation_model_name_or_path generation_llama_cpp_build generation_metadata generation_request generation_sampling_params generation_chat_template_kwargs image_processor_config image_processor_config_hash llamacpp_prompt_string llamacpp_media_marker llamacpp_prompt_layout llamacpp_stop_type llamacpp_stopping_word llamacpp_content source_metadata"
+    text = "id item_id source category question generated_texts finish_reason generation_engine generation_backend generation_schema_version generation_model_name_or_path generation_llama_cpp_build generation_metadata generation_request generation_sampling_params generation_decoding_stats generation_chat_template_kwargs image_processor_config image_processor_config_hash llamacpp_prompt_string llamacpp_media_marker llamacpp_prompt_layout llamacpp_stop_type llamacpp_stopping_word llamacpp_content source_metadata"
     ints = "seed input_tokens_len n_prefill_tokens generated_tokens_len num_images sum_vision_tokens max_vision_tokens llamacpp_n_past_prefill llamacpp_tokens_evaluated"
     flags = "truncated_by_cap generation_enable_thinking llamacpp_add_special llamacpp_stripped_leading_bos"
     features = {key: Value("string") for key in text.split()}

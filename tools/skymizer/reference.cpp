@@ -9,6 +9,8 @@
 #include "mtmd.h"
 #include "mtmd-helper.h"
 #include "sampling.h"
+#include "skymizer-repetition.h"
+#include "speculative.h"
 
 #include <algorithm>
 #include <cmath>
@@ -62,14 +64,45 @@ using sampler_ptr = std::unique_ptr<common_sampler, decltype(&common_sampler_fre
 struct reference_context {
     common_params params;
     common_init_result_ptr loaded;
+    common_speculative_init_result_ptr draft_loaded;
+    bool repetition_stop = true;
+    bool checkpoint_target = false;
+    bool checkpoint_draft = false;
     mtmd::context_ptr vision;
     common_chat_templates_ptr templates;
     json metadata;
 
-    explicit reference_context(common_params p) : params(std::move(p)), loaded(common_init_from_params(params)) {
+    explicit reference_context(common_params p, bool stop_repetition) : params(std::move(p)), loaded(common_init_from_params(params)), repetition_stop(stop_repetition) {
         require(loaded && loaded->model() && loaded->context(), "failed to load model/context");
         require(!params.sampling.backend_sampling, "backend sampling is unsupported: raw logits must be available");
         require(params.sampling.reasoning_budget_tokens == -1, "reasoning budgets are unsupported; use a generation token cap");
+        if (params.speculative.types == std::vector<common_speculative_type>{COMMON_SPECULATIVE_TYPE_DRAFT_MTP}) {
+            if (!params.speculative.has_dft()) {
+                require(llama_model_n_layer_nextn(loaded->model()) > 0, "target GGUF has no embedded MTP head; supply a matching local --model-draft");
+            }
+            if (params.speculative.has_dft()) {
+                auto header_params = llama_model_default_params();
+                header_params.vocab_only = true;
+                llama_model_ptr head(llama_model_load_from_file(params.speculative.draft.mparams.path.c_str(), header_params));
+                require(bool(head), "cannot read MTP sidecar metadata");
+                skymizer_identity::check(skymizer_identity::vocabulary(llama_model_get_vocab(loaded->model())),
+                                        skymizer_identity::vocabulary(llama_model_get_vocab(head.get())), true);
+            }
+            auto target_rm = common_context_can_seq_rm(loaded->context());
+            require(target_rm != COMMON_CONTEXT_SEQ_RM_TYPE_NO, "target context does not support MTP state management");
+            checkpoint_target = target_rm != COMMON_CONTEXT_SEQ_RM_TYPE_PART;
+            auto draft_params = common_base_params_to_speculative(params);
+            draft_loaded = common_speculative_init_from_params(draft_params, loaded->model(), loaded->context());
+            require(draft_loaded && draft_loaded->context(), "failed to initialize MTP head/context");
+            auto * draft_model = llama_get_model(draft_loaded->context());
+            require(llama_model_n_layer_nextn(draft_model) > 0, "draft GGUF has no MTP layers");
+            require(llama_model_n_embd_out(draft_model) == llama_model_n_embd_out(loaded->model()), "MTP head hidden width differs from target");
+            params.speculative.draft.ctx_tgt = loaded->context();
+            params.speculative.draft.ctx_dft = draft_loaded->context();
+            if (llama_get_memory(draft_loaded->context())) {
+                checkpoint_draft = common_context_can_seq_rm(draft_loaded->context()) == COMMON_CONTEXT_SEQ_RM_TYPE_FULL;
+            }
+        }
         templates = common_chat_templates_init(loaded->model(), params.chat_template);
         require(llama_model_chat_template(loaded->model(), nullptr) || !params.chat_template.empty(),
                 "model has no chat template; supply --chat-template or --chat-template-file");
@@ -136,12 +169,30 @@ struct reference_context {
             {"sampling", sampling_json(params.sampling, sampler.get())},
             {"model_metadata", model_metadata},
         };
+        if (draft_loaded) {
+            const auto & d = params.speculative.draft;
+            metadata["decoding"] = {
+                {"method", "mtp"}, {"logprob_source", "target_raw_logits"}, {"token_source", "target_accepted"},
+                {"mtp", {{"head_source", params.speculative.has_dft() ? "sidecar" : "embedded"},
+                         {"head_path", params.speculative.has_dft() ? fs::absolute(d.mparams.path).string() : metadata["model_path"].get<std::string>()},
+                         {"settings", {{"n_max", d.n_max}, {"n_min", d.n_min}, {"p_min", d.p_min},
+                                       {"backend_sampling", d.backend_sampling}, {"n_gpu_layers", d.n_gpu_layers},
+                                       {"cache_type_k", ggml_type_name(d.cache_type_k)}, {"cache_type_v", ggml_type_name(d.cache_type_v)},
+                                       {"n_ctx", llama_n_ctx(draft_loaded->context())}, {"acceptance", "target_sample_match"}}}}},
+            };
+        }
     }
 
     json generate(const json & request) {
         auto * ctx = loaded->context();
         auto * vocab = llama_model_get_vocab(loaded->model());
         llama_memory_clear(llama_get_memory(ctx), true);
+        common_speculative_ptr spec;
+        if (draft_loaded) {
+            llama_memory_clear(llama_get_memory(draft_loaded->context()), true);
+            spec.reset(common_speculative_init(params.speculative, 1));
+            require(bool(spec), "failed to initialize MTP driver");
+        }
         const std::string question = request.at("question").get<std::string>();
         const auto images = request.value("images", std::vector<std::string>{});
         const std::string marker = mtmd_default_marker();
@@ -239,7 +290,42 @@ struct reference_context {
         require(std::max(size_t(n_pos), tokens.size()) + params.n_predict <= llama_n_ctx_seq(ctx),
                 "prompt plus generation cap exceeds context; no truncation or context shift is allowed");
         llama_pos evaluated = 0;
-        if (vision) {
+        auto prefill_text = [&](const llama_token * ids, size_t count) {
+            const int capacity = std::min(llama_n_batch(ctx), llama_n_ubatch(ctx));
+            llama_batch part = llama_batch_init(capacity, 0, 1);
+            try {
+                for (size_t start = 0; start < count; start += capacity) {
+                    common_batch_clear(part);
+                    const size_t n = std::min(size_t(capacity), count - start);
+                    for (size_t i = 0; i < n; ++i) {
+                        common_batch_add(part, ids[start + i], evaluated + i, {0}, i + 1 == n);
+                    }
+                    require(llama_decode(ctx, part) == 0, "MTP text prefill failed");
+                    require(common_speculative_process(spec.get(), part), "MTP prompt processing failed");
+                    evaluated += n;
+                }
+            } catch (...) {
+                llama_batch_free(part);
+                throw;
+            }
+            llama_batch_free(part);
+        };
+        if (spec && vision) {
+            require(layout_chunks.back()["type"] == "text", "MTP requires a text suffix after the final image");
+            for (size_t i = 0; i < mtmd_input_chunks_size(chunks.ptr.get()); ++i) {
+                const auto * chunk = mtmd_input_chunks_get(chunks.ptr.get(), i);
+                if (mtmd_input_chunk_get_type(chunk) == MTMD_INPUT_CHUNK_TYPE_TEXT) {
+                    size_t n;
+                    const auto * ids = mtmd_input_chunk_get_tokens_text(chunk, &n);
+                    prefill_text(ids, n);
+                } else {
+                    require(mtmd_helper_eval_chunk_single(vision.get(), ctx, chunk, evaluated, 0, llama_n_batch(ctx), false, &evaluated) == 0,
+                            "MTP image prefill failed");
+                }
+            }
+        } else if (spec) {
+            prefill_text(tokens.data(), tokens.size());
+        } else if (vision) {
             require(mtmd_helper_eval_chunks(vision.get(), ctx, chunks.ptr.get(), 0, 0, llama_n_batch(ctx), true, &evaluated) == 0,
                     "mtmd prefill failed");
         } else {
@@ -271,58 +357,148 @@ struct reference_context {
         std::string finish = "length";
         std::string stop_type = "limit";
         std::string stopping_word;
-        llama_batch batch = llama_batch_init(1, 0, 1);
-        try {
-            for (int i = 0; i < params.n_predict; ++i) {
-                const float * logits = llama_get_logits_ith(ctx, -1);
-                const int n_vocab = llama_vocab_n_tokens(vocab);
-                std::vector<float> raw(logits, logits + n_vocab);
-                double max_logit = *std::max_element(raw.begin(), raw.end());
-                double sum = 0;
-                for (float value : raw) {
-                    sum += std::exp(double(value) - max_logit);
-                }
-                require(std::isfinite(max_logit) && sum > 0 && std::isfinite(sum), "non-finite model logits");
-                llama_token token = common_sampler_sample(sampler.get(), ctx, -1);
-                require(token >= 0 && token < n_vocab, "sampler returned an invalid token");
-                double logprob = double(raw[token]) - max_logit - std::log(sum);
-                require(std::isfinite(logprob), "non-finite sampled-token logprob");
-                tokens.push_back(token);
-                logprobs.push_back(logprob);
-                common_sampler_accept(sampler.get(), token, true);
-                if (llama_vocab_is_eog(vocab, token) && !sampling.ignore_eos) {
+        llama_tokens processed_tokens;
+        for (auto token : tokens) {
+            if (token != LLAMA_TOKEN_NULL) {
+                processed_tokens.push_back(token);
+            }
+        }
+        if (spec) {
+            common_speculative_begin(spec.get(), 0, processed_tokens);
+        }
+        json repetition = nullptr;
+        auto record_repetition = [&](skymizer_repetition::match m, const char * stage) {
+            if (m) {
+                repetition = {{"start", m.start}, {"unit_len", m.unit_len}, {"repeats", m.repeats},
+                              {"repeated_len", m.repeated_len}, {"detected_at_generated_token", logprobs.size()}, {"stage", stage}};
+            }
+        };
+        json stats = {{"drafted_tokens", 0}, {"accepted_draft_tokens", 0}, {"verification_batches", 0},
+                      {"rollback_batches", 0}, {"checkpoint_replays", 0}};
+        auto sample = [&](int index) {
+            const float * logits = llama_get_logits_ith(ctx, index);
+            const int n_vocab = llama_vocab_n_tokens(vocab);
+            require(logits != nullptr, "target logits are missing");
+            std::vector<float> raw(logits, logits + n_vocab);
+            double max_logit = *std::max_element(raw.begin(), raw.end());
+            double sum = 0;
+            for (float value : raw) {
+                sum += std::exp(double(value) - max_logit);
+            }
+            require(std::isfinite(max_logit) && sum > 0 && std::isfinite(sum), "non-finite model logits");
+            llama_token token = common_sampler_sample(sampler.get(), ctx, index);
+            require(token >= 0 && token < n_vocab, "sampler returned an invalid token");
+            double logprob = double(raw[token]) - max_logit - std::log(sum);
+            require(std::isfinite(logprob), "non-finite sampled-token logprob");
+            return std::make_pair(token, logprob);
+        };
+        auto emit = [&](llama_token token, double logprob) {
+            tokens.push_back(token);
+            logprobs.push_back(logprob);
+            common_sampler_accept(sampler.get(), token, true);
+            if (llama_vocab_is_eog(vocab, token) && !sampling.ignore_eos) {
+                finish = "stop";
+                stop_type = "eos";
+                return;
+            }
+            content += common_token_to_piece(ctx, token, true);
+            for (const auto & stop : chat.additional_stops) {
+                if (!stop.empty() && content.size() >= stop.size() && content.compare(content.size() - stop.size(), stop.size(), stop) == 0) {
+                    stopping_word = stop;
+                    content.resize(content.size() - stop.size());
                     finish = "stop";
-                    stop_type = "eos";
+                    stop_type = "word";
                     break;
                 }
-                content += common_token_to_piece(ctx, token, true);
-                for (const auto & stop : chat.additional_stops) {
-                    if (!stop.empty() && content.size() >= stop.size() && content.compare(content.size() - stop.size(), stop.size(), stop) == 0) {
-                        stopping_word = stop;
-                        content.resize(content.size() - stop.size());
-                        finish = "stop";
-                        stop_type = "word";
+            }
+            if (repetition_stop && logprobs.size() % skymizer_repetition::interval == 0) {
+                record_repetition(skymizer_repetition::tail(tokens.data() + n_prefill, logprobs.size()), "online");
+                if (!repetition.is_null()) {
+                    finish = "stop";
+                    stop_type = "repetition";
+                }
+            }
+        };
+        llama_batch batch = llama_batch_init(spec ? std::min(llama_n_batch(ctx), llama_n_ubatch(ctx)) : 1, 0, 1);
+        try {
+            auto first = sample(-1);
+            emit(first.first, first.second);
+            while (finish != "stop" && logprobs.size() < size_t(params.n_predict)) {
+                const llama_pos start = evaluated;
+                llama_tokens draft;
+                common_prompt_checkpoint checkpoint;
+                if (spec) {
+                    const int limit = std::min({params.speculative.draft.n_max,
+                            int(params.n_predict - logprobs.size()) - 1,
+                            int(std::min(llama_n_batch(ctx), llama_n_ubatch(ctx))) - 1});
+                    if (limit > 0) {
+                        if (checkpoint_draft) {
+                            checkpoint.update_dft(draft_loaded->context(), 0, LLAMA_STATE_SEQ_FLAGS_PARTIAL_ONLY);
+                        }
+                        common_speculative_get_draft_params(spec.get(), 0) = {true, limit, start, tokens.back(), &processed_tokens, &draft};
+                        common_speculative_draft(spec.get());
+                        if (checkpoint_draft) {
+                            checkpoint.load_dft(draft_loaded->context(), 0, LLAMA_STATE_SEQ_FLAGS_PARTIAL_ONLY);
+                        }
+                        require(llama_memory_seq_rm(llama_get_memory(draft_loaded->context()), 0, start, -1), "cannot restore draft prefix");
+                    }
+                    if (checkpoint_target && !draft.empty()) {
+                        checkpoint.update_tgt(ctx, 0, LLAMA_STATE_SEQ_FLAGS_PARTIAL_ONLY);
+                    }
+                    stats["drafted_tokens"] = stats["drafted_tokens"].get<int>() + draft.size();
+                }
+                common_batch_clear(batch);
+                common_batch_add(batch, tokens.back(), start, {0}, true);
+                for (size_t i = 0; i < draft.size(); ++i) {
+                    common_batch_add(batch, draft[i], start + 1 + i, {0}, true);
+                }
+                require(llama_decode(ctx, batch) == 0, "generation verification decode failed");
+                int accepted = 0;
+                for (size_t i = 0; i <= draft.size(); ++i) {
+                    auto next = sample(i);
+                    emit(next.first, next.second);
+                    ++accepted;
+                    if (finish == "stop" || logprobs.size() == size_t(params.n_predict) || i == draft.size() || next.first != draft[i]) {
                         break;
                     }
                 }
-                if (finish == "stop" || i + 1 == params.n_predict) {
-                    break;
+                if (spec) {
+                    stats["verification_batches"] = stats["verification_batches"].get<int>() + 1;
+                    stats["accepted_draft_tokens"] = stats["accepted_draft_tokens"].get<int>() + accepted - 1;
+                    const bool rollback = accepted < batch.n_tokens;
+                    if (rollback) {
+                        stats["rollback_batches"] = stats["rollback_batches"].get<int>() + 1;
+                        if (!llama_memory_seq_rm(llama_get_memory(ctx), 0, start + accepted, -1)) {
+                            require(checkpoint_target, "target cannot remove rejected draft tokens");
+                            checkpoint.load_tgt(ctx, 0, LLAMA_STATE_SEQ_FLAGS_PARTIAL_ONLY);
+                            require(llama_memory_seq_rm(llama_get_memory(ctx), 0, start, -1), "cannot restore target checkpoint");
+                            batch.n_tokens = accepted;
+                            require(llama_decode(ctx, batch) == 0, "accepted prefix replay failed");
+                            stats["checkpoint_replays"] = stats["checkpoint_replays"].get<int>() + 1;
+                        }
+                    }
+                    // Process only the committed prefix; rejected rows never update the MTP carry state.
+                    batch.n_tokens = accepted;
+                    require(common_speculative_process(spec.get(), batch), "MTP accepted-prefix processing failed");
+                    common_speculative_accept(spec.get(), 0, accepted - 1);
+                    processed_tokens.insert(processed_tokens.end(), batch.token, batch.token + accepted);
                 }
-                common_batch_clear(batch);
-                common_batch_add(batch, token, evaluated++, {0}, true);
-                require(llama_decode(ctx, batch) == 0, "generation decode failed");
+                evaluated += accepted;
             }
         } catch (...) {
             llama_batch_free(batch);
             throw;
         }
         llama_batch_free(batch);
+        if (repetition_stop && repetition.is_null()) {
+            record_repetition(skymizer_repetition::full(tokens.data() + n_prefill, logprobs.size()), "final");
+        }
         return {
             {"id", request.at("id")}, {"prompt", prompt}, {"input_ids", tokens},
             {"n_prefill_tokens", n_prefill}, {"n_past_prefill", n_pos},
             {"prompt_layout", {{"n_tokens", n_prefill}, {"n_pos", n_pos}, {"chunks", layout_chunks}}},
             {"content", content}, {"finish_reason", finish}, {"stop_type", stop_type}, {"stopping_word", stopping_word},
-            {"token_logprobs", logprobs}, {"sampling", row_sampling}, {"add_special", true},
+            {"repetition", repetition}, {"token_logprobs", logprobs}, {"decoding_stats", stats}, {"sampling", row_sampling}, {"add_special", true},
             {"stripped_leading_bos", stripped_bos}, {"enable_thinking", input.enable_thinking},
             {"chat_template_kwargs", input.chat_template_kwargs},
         };
@@ -347,6 +523,8 @@ int main(int argc, char ** argv) {
         std::string requests_path;
         std::string out_dir;
         bool describe = false;
+        bool repetition_stop = true;
+        bool continue_on_error = false;
         std::vector<char *> common_args{argv[0]};
         json command = json::array();
         for (int i = 0; i < argc; ++i) {
@@ -359,6 +537,10 @@ int main(int argc, char ** argv) {
                 (key == "--requests" ? requests_path : out_dir) = argv[++i];
             } else if (key == "--describe") {
                 describe = true;
+            } else if (key == "--repetition-stop" || key == "--no-repetition-stop") {
+                repetition_stop = key == "--repetition-stop";
+            } else if (key == "--continue-on-error") {
+                continue_on_error = true;
             } else {
                 common_args.push_back(argv[i]);
             }
@@ -368,10 +550,25 @@ int main(int argc, char ** argv) {
         require(!params.model.path.empty() && fs::is_regular_file(params.model.path), "provide an existing local GGUF with -m");
         require(params.model.hf_repo.empty() && params.model.url.empty() && params.mmproj.hf_repo.empty() && params.mmproj.url.empty(),
                 "reference generation requires local GGUF files");
-        require(std::all_of(params.speculative.types.begin(), params.speculative.types.end(),
-                            [](auto type) { return type == COMMON_SPECULATIVE_TYPE_NONE; }) &&
-                !params.speculative.has_dft() && !params.speculative.has_synth(),
-                "llama-reference has no MTP/speculative driver yet; these options cannot be silently ignored");
+        const bool mtp = std::find(params.speculative.types.begin(), params.speculative.types.end(), COMMON_SPECULATIVE_TYPE_DRAFT_MTP) != params.speculative.types.end();
+        require(std::all_of(params.speculative.types.begin(), params.speculative.types.end(), [](auto type) {
+                    return type == COMMON_SPECULATIVE_TYPE_NONE || type == COMMON_SPECULATIVE_TYPE_DRAFT_MTP;
+                }) && (mtp || !params.speculative.has_dft()),
+                "reference generation supports only autoregressive or --spec-type draft-mtp");
+        params.speculative.types = {mtp ? COMMON_SPECULATIVE_TYPE_DRAFT_MTP : COMMON_SPECULATIVE_TYPE_NONE};
+        require(!params.speculative.has_synth(), "synthetic acceptance is not valid for reference generation");
+        require(params.lora_adapters.empty(), "LoRA is not supported for native reference generation");
+        if (mtp) {
+            const auto & d = params.speculative.draft;
+            require(d.n_max > 0 && d.n_max < UINT16_MAX && d.n_min >= 0 && d.n_min <= d.n_max, "invalid MTP draft bounds");
+            require(std::isfinite(d.p_min) && d.p_min >= 0 && d.p_min <= 1, "invalid MTP confidence threshold");
+            require(d.mparams.hf_repo.empty() && d.mparams.url.empty(), "MTP requires local head files");
+            require(!params.speculative.has_dft() || fs::is_regular_file(d.mparams.path), "MTP sidecar does not exist");
+            require(d.n_max < std::min(params.n_batch, params.n_ubatch), "MTP draft maximum must be smaller than both batch and ubatch sizes");
+            const auto limits = common_speculative_get_output_limits(params.n_batch, 1, d.n_max);
+            params.n_outputs_max = limits.total;
+            params.n_outputs_max_per_seq = limits.per_seq;
+        }
         require(params.n_parallel == 1, "reference generation requires one sequence");
         require(params.n_predict > 0, "-n must be positive");
         require(params.prompt.empty() && params.image.empty(), "use --requests for prompts and images");
@@ -386,7 +583,13 @@ int main(int argc, char ** argv) {
         }
         ggml_backend_load_all();
         mtmd_helper_log_set(common_log_default_callback, nullptr);
-        reference_context context(std::move(params));
+        reference_context context(std::move(params), repetition_stop);
+        context.metadata["repetition_detector"] = {{"enabled", repetition_stop}, {"version", "exact-token-repeat-v1"},
+            {"source_commit", "d4163fc1c328fe39310465680647b465cf96c4af"},
+            {"source_sha256", "8c0ede4aa476d7ceea39e57ac4bd3e462569d45683c5672746fee1d65940bda9"},
+            {"min_repeated_tokens", skymizer_repetition::min_span}, {"min_repeats", skymizer_repetition::min_repeats},
+            {"online_window", skymizer_repetition::window}, {"check_interval", skymizer_repetition::interval},
+            {"input", "generated_target_accepted_token_ids"}, {"final_scan", "exact_consecutive_blocks_anywhere"}};
         context.metadata["command"] = command;
         if (describe) {
             std::cout << context.metadata.dump(2) << '\n';
@@ -395,8 +598,16 @@ int main(int argc, char ** argv) {
         fs::create_directories(out_dir);
         std::ofstream metadata(fs::path(out_dir) / "metadata.json");
         metadata << context.metadata.dump(2) << '\n';
+        metadata.flush();
         require(bool(metadata), "failed to write metadata");
+        metadata.close();
         std::ofstream output(fs::path(out_dir) / "generations.jsonl");
+        std::ofstream events(fs::path(out_dir) / "events.jsonl");
+        auto event = [&](json value) {
+            events << value.dump(-1, ' ', false, json::error_handler_t::replace) << '\n';
+            events.flush();
+            require(bool(events), "failed to write row journal");
+        };
         std::set<std::string> seen;
         std::string line;
         size_t count = 0;
@@ -408,11 +619,26 @@ int main(int argc, char ** argv) {
             auto id = request.at("id").get<std::string>();
             require(!id.empty(), "request id must not be empty");
             require(seen.insert(id).second, "duplicate request id: " + id);
-            auto result = context.generate(request);
+            ++count;
+            event({{"event", "row_started"}, {"id", id}, {"index", count - 1}});
+            json result;
+            try {
+                result = context.generate(request);
+            } catch (const std::exception & error) {
+                const std::string message = error.what();
+                const bool data_error = message.find("exceeds context") != std::string::npos ||
+                    message.find("cannot read image") != std::string::npos || message.find("template") != std::string::npos ||
+                    message.find("question") != std::string::npos;
+                event({{"event", "row_failed"}, {"id", id}, {"index", count - 1}, {"error", message}, {"retryable", !data_error}});
+                std::cerr << "[reference] failed id=" << id << " error=" << message << '\n';
+                if (!continue_on_error || !data_error) { return 2; }
+                continue;
+            }
             output << result.dump(-1, ' ', false, json::error_handler_t::replace) << '\n';
             output.flush();
             require(bool(output), "failed to write generation");
-            std::cerr << "[reference] row " << ++count << " id=" << id << " tokens=" << result["token_logprobs"].size() << '\n';
+            event({{"event", "row_succeeded"}, {"id", id}, {"index", count - 1}});
+            std::cerr << "[reference] row " << count << " id=" << id << " tokens=" << result["token_logprobs"].size() << '\n';
         }
         require(count > 0, "requests file is empty");
         return 0;

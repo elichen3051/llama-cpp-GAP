@@ -28,9 +28,9 @@ single-image, and multi-image rows. All native options follow `--`; use
 `build/bin/llama-reference --help` for llama.cpp flags. The tool uses a context
 of 8192 and a generation cap of 128 unless overridden. It requires one sequence.
 
-Source input can be a Hub dataset (`--subset`, `--split`) or a local
+Source input can be a Hub dataset (`--subset`, `--split`, `--revision`) or a local
 `Dataset.save_to_disk` / `DatasetDict.save_to_disk` directory. It needs a
-nonempty `question` string and optionally a list of encoded `images`.
+`question` string and optionally a list of encoded `images`. Image-only rows may use an empty question; rows with neither text nor images are rejected.
 `--question-column`, `--images-column`, and `--id-column` select other columns.
 IDs default to `item_id`, then `id`, then a generated row index; IDs must be
 unique and filesystem-safe. `--num-samples` selects the first N rows.
@@ -75,22 +75,23 @@ token and position counts.
 
 Every generation run writes this metadata. The Python driver additionally
 records SHA-256 for its binary, all model shards, the projector, and each image,
-plus source dataset fingerprint and invocation. Hashing large files on EBS
+plus source dataset fingerprint and invocation. `execution_identity` records the producer executable, loaded backend libraries, and numerical runtime environment; it is checked again after generation. Hashing large files on EBS
 can take time after generation completes. Per-row sampling metadata records
-the actual seed and sampler chain, including model-derived defaults. A run
-chooses one seed and resets the sampler for each row; direct JSONL requests can
+the actual seed and sampler chain, including model-derived defaults. The Python driver resolves a random seed once when none is specified, records it before the first attempt, and preserves it across retries. A run resets the sampler for each row; direct JSONL requests can
 provide a per-row seed override.
 
 ## Outputs and replay contract
 
 The output directory must be new:
 
-- `dataset/`: validated reference rows, loadable with `datasets.load_from_disk`.
+- `dataset/`: eligible validated reference rows in source order, loadable with `datasets.load_from_disk`; absent when no rows are eligible.
 - `metadata.json`: effective settings and provenance, also embedded in rows.
-- `requests.jsonl`, `command.json`, `native.log`: exact inputs, command, and logs.
+- `requests.jsonl`: exact prepared requests; `attempts/NNNN/` preserves each native command, request subset, log, exit status, row journal, and raw results.
 - `native/metadata.json`, `native/generations.jsonl`: direct C++ output; each row is flushed.
-- `inputs/`: original encoded images; `reference.arrow`: intermediate Arrow stream.
-- `complete.json`: written only after all rows validate and the dataset is saved.
+- `inputs/`: original encoded images; `scripts/`: copies of the Python/native producer sources and profiles used.
+- `run_start.json`, `run_state.json`, `progress.json`: source/execution identity, lifecycle status, and remaining IDs.
+- `excluded.jsonl`, `failures.jsonl`: repetition evidence and classified row failures.
+- `complete.json`: written atomically after every requested ID has an eligible, excluded, or failed outcome; `complete_with_failures` does not mean every row generated successfully.
 
 The schema version is `skymizer-reference-v2`; its implementation and validation
 live in `lib/reference_dataset.py` and `lib/reference_contract.py`.
@@ -106,9 +107,8 @@ before sampling filters or penalties, suitable for checking teacher-forced
 replay. EOG tokens are included in the trajectory and log-probs. Model/template
 stops set `finish_reason=stop`; hitting the cap sets `length` and
 `truncated_by_cap=true`. There is no silent prompt truncation or context shift:
-prompt plus generation cap must fit the context. Errors fail the run and leave
-partial artifacts for diagnosis; there is no automatic resume or overwrite.
-Backend sampling, reasoning budgets, custom reverse prompts, and MTP/speculative flags are rejected by the current producer. Its MTP driver has not been implemented.
+prompt plus generation cap must fit the context. A context-budget or invalid-image error is recorded for that row and processing continues. Backend failures restart the native process with pending IDs; completed rows are retained. There is no overwrite of existing output directories.
+Target backend sampling, reasoning budgets, custom reverse prompts, LoRA, and speculative methods other than MTP are rejected. See below for the MTP driver.
 
 ## Collect KLD
 
@@ -147,7 +147,7 @@ Legacy HF/vLLM VLM datasets remain supported with `uv sync --extra hf-tokenizer`
 Native v2 requires one finite, non-positive raw target logprob for each generated
 token. Missing, null, partial, or positive logprob vectors are rejected.
 
-## MTP reference provenance
+## Generate with MTP
 
 MTP belongs only to reference generation. KLD remains ordinary teacher forcing
 through the main reference/candidate models and does not load an MTP assistant.
@@ -156,14 +156,43 @@ Native v2 keeps `generation_metadata.vocabulary` tied to the target model.
 `target_raw_logits`. Draft proposals or draft-head probabilities are not valid
 reference targets/probabilities.
 
-The current producer emits `decoding.method=autoregressive`. A producer that
-implements MTP must emit `method=mtp`, `mtp.head_source` (`embedded` or
-`sidecar`), and `mtp.settings`. Embedded heads are covered by the complete
-`model_files` hashes; sidecars require complete `mtp.head_files` hashes. This
-contract support is not an MTP runtime implementation or an equivalence claim.
+Autoregressive generation remains the default. To enable an embedded MTP head (for example, Qwen3.5 or Qwen3.6 GGUFs with next-N layers), add these native options after `--`:
 
-Collectors preserve generator metadata and row sampling/logprob records under
+```bash
+--spec-type draft-mtp
+```
+
+For a separate MTP assistant GGUF (for example, Gemma 4 26B-A4B or 31B), also supply the matching sidecar:
+
+```bash
+--spec-type draft-mtp --model-draft /models/mtp-model-Q8_0.gguf -ngld 99
+```
+
+`--spec-draft-n-max`, `--spec-draft-n-min`, and `--spec-draft-p-min` use upstream defaults unless overridden. The maximum must be positive and smaller than both `-b` and `-ub`; the driver shortens each proposal to fit the remaining generation cap. Only local target/head files are accepted. Sidecars must have MTP layers and match the target's hidden width and ordered token mapping. Synthetic acceptance is forbidden.
+
+The driver uses upstream `common/speculative` for proposals. It samples sequentially from the target, accepts matching proposals, and discards the rest at the first mismatch. Only the committed prefix updates the MTP carry state. Each row resets target/draft memory and samplers. Images are evaluated by mtmd in the target context; as in the upstream MTP implementation, the draft head processes the text batches and requires a text suffix after the final image.
+
+MTP runs emit `decoding.method=mtp`, `mtp.head_source` (`embedded` or `sidecar`), and effective `mtp.settings`. Embedded heads are covered by all `model_files` hashes; sidecars have complete `mtp.head_files` hashes. `generation_decoding_stats` preserves each row's drafted tokens, accepted draft tokens, verification batches, rollback batches, and checkpoint replays. `accepted_draft_tokens` counts draft inputs retained in the verified context prefix; the last emitted token stays pending, including at a stop. `verification_batches + accepted_draft_tokens` equals generated length minus one: the first token comes directly from target prefill.
+
+MTP verification changes target batch sizes. GPU floating-point results can therefore differ from autoregressive generation or teacher forcing with `--tf-chunk 1`, even with the same target weights. Saved logprobs are the raw target logits used at generation time, before target sampling filters; they are not recomputed to force agreement with a later collector. A controlled Qwen3.5 BF16 probe reproduced the observed MTP/AR discrepancy with ordinary teacher forcing at chunk sizes 1 versus 4 (maximum absolute logprob difference about 0.0126). This is not a claim of bitwise trajectory or logprob equivalence. Keep the same teacher-forcing settings for both KLD candidates; KLD never loads or runs MTP.
+
+Collectors preserve generator metadata and row sampling/logprob/decoding-stat records under
 `.attempts/<id>/generators/` and `references.jsonl`, even without `--keep-prep`.
 The dataset fingerprint includes generation metadata and sampling/request fields.
 The consumer verifies target vocabulary identity; it does not require the
 reference generator's executable or MTP head to match the KLD executable.
+
+
+## Repetition and recovery
+
+Repetition handling lives entirely in `tools/skymizer`; no external detector checkout is needed at runtime. The native implementation ports the reversed-KMP tail detector and exact consecutive-block logic from `repetition_curse_detector` commit `d4163fc1c328fe39310465680647b465cf96c4af`. It requires at least 3 consecutive repetitions and a repeated span of at least 96 generated tokens. Prompt tokens, image placeholders, and unaccepted MTP proposals are excluded from detection.
+
+Every 32 committed output tokens, the online detector examines the last 2048 tokens. A hit stops generation with `finish_reason=stop` and `stop_type=repetition`. A final exact scan checks the entire generated sequence, including repetitions before closing tokens or inside the answer. The online window bounds the periods it can catch before completion; the final scan also covers longer repeated blocks. Ordinary short punctuation, equations, or small repeated phrases do not meet the 96-token gate. This conservative exact detector is not a semantic/fuzzy repetition classifier; retain a later review pass for near-duplicates and legitimate repeated material.
+
+Native results keep repetition offsets, unit length, repeat count, repeated span, detection position, and stage. Python retains all completed native results but excludes flagged rows from `dataset/`, preserving their text and evidence in `excluded.jsonl`. IDs never change after filtering. `metadata.cohort` records the ordered requested/eligible/excluded/failed IDs, their digests, and counts. `generated` counts validated eligible plus excluded records; `native_generated` also includes any raw result that failed validation. Both KLD candidates must consume the same saved eligible dataset. Do not regenerate/filter separately and intersect their successful rows.
+
+`--row-retries` defaults to 1 retry for a crashed/backend-failed row. Invalid input/context-budget rows are terminal failures. `--startup-retries` defaults to 1; persistent model startup failure leaves the remaining IDs explicitly unattempted. Pending untouched rows run before the crashed row is retried. A flushed `row_started` journal entry identifies the current row; durable output wins if a crash occurred before the success journal entry. A model startup crash is never attributed to the first unstarted row.
+
+`--row-timeout` defaults to 1800 seconds without a row-journal update, including model startup. The supervisor kills and waits for a timed-out native process before restarting. `--native-timeout` optionally limits total time per native process. Intentional SIGINT/SIGTERM records interruption and stops the child; it does not trigger infinite retries. Every attempt and partial trailing record remains available for diagnosis. Interior journal corruption, changed execution/settings, or irreconcilable IDs fail the job rather than silently accepting uncertain data.
+
+Native `--no-repetition-stop` disables both online and final repetition checks for controlled diagnostics. Production profiles use the default enabled policy. Native `--continue-on-error` enables recoverable row continuation; the Python driver supplies it automatically. The standalone binary's `--help` also lists ordinary llama.cpp options.
