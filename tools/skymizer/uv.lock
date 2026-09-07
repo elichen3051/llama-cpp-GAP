@@ -769,6 +769,7 @@ dependencies = [
     { name = "numpy" },
     { name = "pillow" },
     { name = "pyarrow" },
+    { name = "scipy" },
 ]
 
 [package.optional-dependencies]
@@ -782,7 +783,6 @@ hf-tokenizer = [
 dev = [
     { name = "pytest" },
     { name = "pytest-timeout" },
-    { name = "scipy" },
 ]
 
 [package.metadata]
@@ -793,6 +793,7 @@ requires-dist = [
     { name = "numpy", specifier = "==2.5.2" },
     { name = "pillow", specifier = "==12.3.0" },
     { name = "pyarrow", specifier = "==25.0.1" },
+    { name = "scipy", specifier = "==1.18.1" },
     { name = "tiktoken", marker = "extra == 'hf-tokenizer'", specifier = ">=0.14.0" },
     { name = "transformers", marker = "extra == 'hf-tokenizer'", specifier = ">=5.5.1" },
 ]
@@ -802,7 +803,6 @@ provides-extras = ["hf-tokenizer"]
 dev = [
     { name = "pytest", specifier = "==9.1.1" },
     { name = "pytest-timeout", specifier = "==2.4.0" },
-    { name = "scipy", specifier = "==1.18.1" },
 ]
 
 [[package]]

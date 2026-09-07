@@ -52,7 +52,9 @@ cmake --build "$SKYMIZER_WORK/build" --target \
   llama-reference llama-vlm-kld llama-llm-kld llama-perplexity llama-tokenize -j8
 ```
 
-The validated Python environment uses Python 3.12.3, NumPy 2.5.2, datasets 5.0.1, Pillow 12.3.0, huggingface-hub 1.30.0 and PyArrow 25.0.1. Development checks use pytest 9.1.1, pytest-timeout 2.4.0 and SciPy 1.18.1. Direct dependencies are pinned in `pyproject.toml`; `uv.lock` pins transitive dependencies. `--locked` refuses a lockfile that no longer matches the project rather than silently changing its resolution ([uv documentation](https://docs.astral.sh/uv/concepts/projects/sync/)).
+The validated Python environment uses Python 3.12.3, NumPy 2.5.2, datasets 5.0.1, Pillow 12.3.0, huggingface-hub 1.30.0 and PyArrow 25.0.1. SciPy 1.18.1 is a runtime dependency for statistics. Development checks use pytest 9.1.1 and pytest-timeout 2.4.0. Direct dependencies are pinned in `pyproject.toml`; `uv.lock` pins transitive dependencies. `--locked` refuses a lockfile that no longer matches the project rather than silently changing its resolution ([uv documentation](https://docs.astral.sh/uv/concepts/projects/sync/)).
+
+For local CPU statistics and tests, run `uv sync --python 3.12 --locked --group dev` from `tools/skymizer`. With `UV_PROJECT_ENVIRONMENT` unset, this creates `.venv`; use `.venv/bin/python` or activate it with `source .venv/bin/activate`.
 
 The KLD acceptance environment used CUDA 13.2.51 and an RTX PRO 6000 Blackwell Server Edition. Python pins do not pin CUDA, compiler flags, model files or GPU behavior: retain native binary/backend hashes and runtime metadata with every study. The optional `hf-tokenizer` extra is for legacy HF/vLLM references and was not used by the native reference/KLD run; its lockfile entries are not evidence of native-run validation. `scripts/setup.sh` automates setup and checks; inspect its options before running it.
 
