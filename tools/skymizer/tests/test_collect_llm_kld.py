@@ -149,6 +149,28 @@ def test_parse_args_documents_sort_direction(tmp_path, monkeypatch, capsys):
     assert "--sort-desc" in out
 
 
+@pytest.mark.parametrize("allow_attributes", [False, True])
+def test_vocab_attr_mismatch_is_opt_in_and_preserves_legacy_meta(tmp_path, monkeypatch, allow_attributes):
+    argv = ["collect_llm_kld.py", "--ref-model", "ref.gguf", "--cand-model", "cand.gguf", "--out", str(tmp_path)]
+    if allow_attributes:
+        argv.append("--allow-vocab-attr-mismatch")
+    monkeypatch.setattr("sys.argv", argv)
+
+    args = ck.parse_args()
+    command = ck._scorer_argv(args, tmp_path / "manifest.jsonl")
+    meta = ck.build_collect_meta(args)
+    assert args.allow_vocab_attr_mismatch is allow_attributes
+    assert ("--allow-vocab-attr-mismatch" in command) is allow_attributes
+    assert meta["allow_vocab_attr_mismatch"] is allow_attributes
+
+    legacy = dict(meta)
+    legacy.pop("allow_vocab_attr_mismatch")
+    assert ck.ensure_collect_meta(tmp_path, legacy) is True
+    stored = (tmp_path / "collect_meta.json").read_bytes()
+    assert ck.ensure_collect_meta(tmp_path, meta) is False
+    assert (tmp_path / "collect_meta.json").read_bytes() == stored
+
+
 def test_sort_desc_is_guarded_and_recorded(tmp_path, monkeypatch):
     monkeypatch.setattr(
         "sys.argv",

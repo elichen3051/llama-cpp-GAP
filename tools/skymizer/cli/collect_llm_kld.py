@@ -115,6 +115,8 @@ def build_collect_meta(args, dataset_content_hash: str | None = None, *,
         "metric_threads": args.metric_threads,
         "flash_attn": args.flash_attn,
         "swa_full": bool(args.swa_full),
+        # Keep this outside IDENTITY_FIELDS for legacy collections; native logs record accepted mismatches.
+        "allow_vocab_attr_mismatch": bool(getattr(args, "allow_vocab_attr_mismatch", False)),
         "perplexity_window": bool(getattr(args, "perplexity_window", False)),
         "corpus_protocol": None,
         "corpus_windows_sha256": None,
@@ -162,6 +164,8 @@ def parse_args():
                         "effective eval tokens exceeds this cap, recording "
                         "SKIP_OVER_BUDGET before scorer prep.")
     add_collector_runtime_args(p)
+    p.add_argument("--allow-vocab-attr-mismatch", action="store_true",
+                   help="Forwarded to the scorer: accept per-token attribute differences; token texts must still match id by id.")
     p.add_argument("--llama-llm-kld",
                    default=str(REPO_ROOT / "build/bin/llama-llm-kld"))
     p.add_argument("--perplexity-window", action="store_true",
@@ -288,6 +292,8 @@ def _scorer_argv(args, kld_manifest_path):
         *(["--flash-attn"] if args.flash_attn == "enabled" else
           ["--no-flash-attn"] if args.flash_attn == "disabled" else []),
         *(["--swa-full"] if args.swa_full else []),
+        *(["--allow-vocab-attr-mismatch"]
+          if getattr(args, "allow_vocab_attr_mismatch", False) else []),
         *(["--perplexity-window"] if getattr(args, "perplexity_window", False) else []),
     ]
 
