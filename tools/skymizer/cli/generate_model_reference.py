@@ -16,7 +16,7 @@ from lib.reference_study import reference_template, validate_reference_cohort
 
 def parse_args(argv=None):
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument("--profiles", type=Path, default=SKYMIZER / "scripts/reference_model_profiles.json")
+    p.add_argument("--profiles", type=Path, required=True, help="explicit pilot100 or collect500 profile JSON from profiles/")
     p.add_argument("--model", required=True, help="model directory name under --models-dir")
     p.add_argument("--mode", required=True, choices=["instruct", "thinking"])
     p.add_argument("--source", required=True, help="prepared dataset source, for example mmmu-pro-vision")

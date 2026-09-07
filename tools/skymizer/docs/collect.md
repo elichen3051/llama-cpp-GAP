@@ -2,7 +2,7 @@
 
 `collect_kld.py` prepares VLM rows and runs `llama-vlm-kld`; `collect_llm_kld.py` prepares text rows and runs `llama-llm-kld`. Each invocation evaluates one reference/candidate pair. The shared collector owns locking, output identity, row preparation, one native manifest process, validation and completion records. Each lane keeps its own input and prefill contract.
 
-Use the [AWS VLM handover](kld-aws-handover.md) for model/runtime choices and the [text handover](perplexity-llm-kld-aws-handover.md) for classic PPL windows. This page describes the common mechanics.
+Use the [VLM workflow](vlm-kld.md) for model/runtime choices and the [text bridge](text-bridge.md) for classic PPL windows. This page describes the common mechanics.
 
 ## Inputs
 
@@ -53,7 +53,7 @@ The direct VLM form is:
   --num-eval-tokens "$SCORING_CAP" --out "$SKYMIZER_WORK/collection-a"
 ```
 
-These capacity values are an example, not a universal model setting. The handover specifies Gemma 31B's larger microbatch and the measured candidate capacity. For ordinary text trajectories, use `collect_llm_kld.py`, omit projectors and select `--llama-llm-kld`; classic PPL requires the text handover's full-window command instead.
+These capacity values are an example, not a universal model setting. The VLM guide specifies Gemma 31B's larger microbatch and the measured candidate capacity. For ordinary text trajectories, use `collect_llm_kld.py`, omit projectors and select `--llama-llm-kld`; classic PPL requires the text bridge guide's full-window command instead.
 
 | Option | Selection rule |
 | --- | --- |
@@ -77,4 +77,4 @@ Normal attempt states are `completed` or `failed`; handled interrupts record `in
 
 For numerical comparisons, collect A and B against the same reference, then run [saved-metrics comparison](compare.md). For failures and verification commands, see [troubleshooting.md](troubleshooting.md).
 
-The high-level `collect_model_kld.py` reads the optional checkpoint profile boolean `allow_vocab_attr_mismatch` (default false) and forwards the native compatibility flag uniformly. Freeze this only after auditing the complete vocabulary mapping and metadata; see the [VLM handover](kld-aws-handover.md#vocabulary-compatibility). The direct collector flag alone does not prove compatibility.
+The high-level `collect_model_kld.py` reads the optional checkpoint profile boolean `allow_vocab_attr_mismatch` (default false) and forwards the native compatibility flag uniformly. Freeze this only after auditing the complete vocabulary mapping and metadata; see the [VLM guide](vlm-kld.md#vocabulary-compatibility-and-completion). The direct collector flag alone does not prove compatibility.

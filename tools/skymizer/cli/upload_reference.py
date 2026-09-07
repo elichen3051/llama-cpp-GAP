@@ -276,7 +276,7 @@ def main():
     p.add_argument("--run", type=Path, required=True)
     p.add_argument("--model", required=True)
     p.add_argument("--mode", choices=["instruct", "thinking"], required=True)
-    p.add_argument("--profiles", type=Path, default=SKYMIZER / "scripts/reference_model_profiles.json")
+    p.add_argument("--profiles", type=Path, required=True, help="profile used to generate this reference cohort")
     p.add_argument("--private", action="store_true", default=True, help="require a private dataset (default); existing public destinations are made private before upload")
     p.add_argument("--dry-run", action="store_true", help="validate and export locally without Hub writes")
     args = p.parse_args()

@@ -18,7 +18,7 @@ from pathlib import Path
 
 import pytest
 
-from compare.engine import compare_items
+from stats.engine import compare_items
 
 
 DATA_DIR = Path(__file__).resolve().parent / "data"

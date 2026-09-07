@@ -26,7 +26,7 @@ def parse_args(argv=None):
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--study", required=True, type=Path)
     p.add_argument("--size", type=int, choices=[100, 500], default=100)
-    p.add_argument("--profiles", type=Path, default=SKYMIZER / "scripts/reference_model_profiles.json")
+    p.add_argument("--profiles", type=Path, required=True, help="explicit pilot100 or collect500 profile JSON from profiles/")
     p.add_argument("--model", required=True)
     p.add_argument("--source", required=True)
     p.add_argument("--mode", required=True, choices=["instruct", "thinking"])
@@ -101,7 +101,7 @@ def prepare_study(args):
         if existing.is_file() and existing.resolve() != Path(__file__).resolve():
             return study, existing.parents[1], None, None
         scripts = snapshot(study, args.profiles)
-        profiles = json.loads((scripts / "scripts/reference_model_profiles.json").read_text())
+        profiles = json.loads((scripts / "profiles/reference_model_profiles.json").read_text())
         validate_reference_cohort(profiles, args.size)
         plan = {"stage": "kld", "hardware": "pro6000", "size": args.size, "num_samples": None,
                 "models_dir": str(model_root), "models": list(profiles["models"]),

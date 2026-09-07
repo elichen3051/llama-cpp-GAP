@@ -1,6 +1,0 @@
-huggingface-hub>=0.34
-pyarrow>=20
-Pillow>=12.2
-numpy>=1.26.4
-scipy>=1.13
-ImageHash==4.3.2

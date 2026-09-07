@@ -2,7 +2,7 @@
 
 版本：2026-08-29
 
-定位：說明 `cli/power_analysis.py` 的 estimand、抽樣單位、模擬方法、
+定位：說明 `stats/cli/power_analysis.py` 的 estimand、抽樣單位、模擬方法、
 限制與使用方式。這份文件取代「把 `--num-eval-tokens` 當作 IID repeats，
 所以 variance 按 1/K 收斂」的規劃方法。
 
@@ -243,7 +243,7 @@ simulation MC error 的原則見
 ### 7.1 SESOI-driven prospective power
 
 ```bash
-python3 cli/power_analysis.py \
+python3 stats/cli/power_analysis.py \
     --candidate-a outputs/vlm-kld-ref-vs-a \
     --candidate-b outputs/vlm-kld-ref-vs-b \
     --metric kld \
@@ -266,7 +266,7 @@ python3 cli/power_analysis.py \
 ### 7.2 Coherent pilot-profile sensitivity
 
 ```bash
-python3 cli/power_analysis.py \
+python3 stats/cli/power_analysis.py \
     --candidate-a A --candidate-b B \
     --token-caps 32 64 128 256 512 \
     --sample-sizes 50 100 200 400 \
@@ -279,7 +279,7 @@ python3 cli/power_analysis.py \
 ### 7.3 No SESOI: precision/MDE only
 
 ```bash
-python3 cli/power_analysis.py \
+python3 stats/cli/power_analysis.py \
     --candidate-a A --candidate-b B \
     --token-caps 32 64 128 256 \
     --sample-sizes 50 100 200 400 \
@@ -291,10 +291,10 @@ python3 cli/power_analysis.py \
 ```bash
 # Prospective power
 SESOI=-0.0001 TOKEN_CAPS="32 64 128 256 512" \
-    ./scripts/04_power_analysis.sh vlm
+    ./scripts/06_power_analysis.sh vlm
 
 # Precision/MDE only
-./scripts/04_power_analysis.sh vlm
+./scripts/06_power_analysis.sh vlm
 ```
 
 ---
@@ -378,11 +378,11 @@ simulator直接呼叫同一 inference primitive，並分開控制 future-dataset
 
 ## 11. Implementation map
 
-- `compare/power.py`：paired-t parity、whole-item simulation、Wilson interval、
+- `stats/power.py`：paired-t parity、whole-item simulation、Wilson interval、
   outer nuisance bootstrap、precision/MDE surface。
-- `cli/power_analysis.py`：正式 artifact guards、cap panel、CLI validation、
+- `stats/cli/power_analysis.py`：正式 artifact guards、cap panel、CLI validation、
   Markdown/JSON reporting。
-- `scripts/04_power_analysis.sh`：有 `SESOI` 跑 prospective power；無
+- `scripts/06_power_analysis.sh`：有 `SESOI` 跑 prospective power；無
   `SESOI` 跑 precision/MDE；其他舊工具只作 diagnostics。
 - `tests/test_power_analysis.py`：production parity、non-monotone caps、
   null calibration、effect profiles、guard parity 與 end-to-end artifacts。

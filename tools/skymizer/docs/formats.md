@@ -1,7 +1,7 @@
 # On-disk formats
 
 The VLMK (per-token metrics) layout and its lossless `.npz` form. Reader:
-`kld_metrics_io.py`; writer: the C++ scorers (`skymizer-vlmk-kernel.h`).
+`lib/kld_metrics_io.py`; writer: the C++ scorers (`core/skymizer-vlmk-kernel.h`).
 
 ### Metric dump format (VLMK)
 
@@ -25,7 +25,7 @@ offset  size  type    field        notes
 ```
 
 Each record (v5, field order = the packed `kld_record` struct in
-`skymizer-vlmk-kernel.h`):
+`core/skymizer-vlmk-kernel.h`):
 
 ```text
 float32  kld, reversed_kld, js_kld, nll_ref, nll_cand,
@@ -46,7 +46,7 @@ by `ear_20_normalized, ear_10_normalized, ear_5_normalized` (both rows
 renormalized on those K slots first) after `ear` (68 bytes). **v5** (current) appends `ear_64` and
 `ear_64_normalized` after the integer IDs, preserving the complete 68-byte
 v4 prefix; each record is now 76 bytes. The definitions match the earlier
-EAR_K family with K=64; see `docs/compare.md`. Readers (`kld_metrics_io`, the comparator) accept every
+EAR_K family with K=64; see [metric definitions](compare.md). Readers (`kld_metrics_io`, the comparator) accept every
 version; an older dir simply lacks the newer metrics
 (`saved_metrics_paired_compare` drops them from the default report with a
 persisted warning, or hard-fails if `--metrics ear_64` etc. was explicit). The
@@ -57,21 +57,9 @@ window that includes it is refused as a collision (nothing is deleted), so a
 dir never mixes record versions unless an operator clears the old rows by
 hand.
 
-> [!IMPORTANT]
-> `n_prefill` and `n_past_actual` are **not the same number** and are not
-> expected to match. `n_prefill` is the HF ground-truth *sequential* prefill
-> length (one entry per image-pad token) echoed from the manifest;
-> `n_past_actual` is llama.cpp's own position count after prefill, which under
-> M-RoPE counts one position per merged patch group and is much smaller.
->
-> The distinction matters: **only `n_past_actual` moves when the vision-token
-> budget changes.** Collect one dir at `--image-max-tokens 1024` and another
-> at the `-1` default and `n_prefill` is identical on both sides while the
-> images really did become different numbers of embeddings. The comparator
-> hard-fails on an `n_past_actual` mismatch, which is the content-level
-> backstop behind the `collect_meta.json` image-bounds guard. `0` means
-> *not recorded* — every dump written before the field existed — and is
-> skipped rather than compared against a real count.
+`n_prefill` is the first scored target's index in the frozen sequential token stream. Native rows use the saved GGUF layout, while legacy HF rows use their prepared compatibility layout. `n_past_actual` is the native position count after multimodal prefill; it can differ under multimodal RoPE. In classic PPL window mode, the complete 512-token window has already been decoded, so `n_prefill=257` and `n_past_actual=512`.
+
+Neither field alone proves identical conditioning. Collection identity also guards image bounds and runtime, and native rows validate the saved image/prompt layout. The comparator checks recorded native positions; a legacy zero means the count was not recorded. Do not change a native dataset's image budget to hide a layout mismatch.
 
 ### `.npz` form
 

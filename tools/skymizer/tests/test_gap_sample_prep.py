@@ -404,7 +404,7 @@ def test_native_generator_pins_hub_dataset_revision(monkeypatch):
 
 def test_model_reference_launcher_keeps_gpu_source_and_mode_explicit(tmp_path):
     from cli import generate_model_reference as launch
-    args = launch.parse_args(["--model", "qwen", "--mode", "thinking", "--source", "image-only",
+    args = launch.parse_args(["--profiles", str(tmp_path / "profiles.json"), "--model", "qwen", "--mode", "thinking", "--source", "image-only",
                               "--gpu", "GPU-example", "--out", str(tmp_path / "out"), "--dry-run"])
     runtime = {"ctx": 32768, "batch": 2048, "ubatch": 512, "threads": 8, "threads_batch": 8, "draft_max": 3}
     profiles = {"sources": ["image-only"], "dataset": {"repo": "org/data", "revision": "pinned-sha"},
@@ -478,7 +478,7 @@ def test_model_reference_launcher_keeps_gpu_source_and_mode_explicit(tmp_path):
     runtime["parallel"] = 1
     for invalid in ("0", "-1", "1.5"):
         with pytest.raises(SystemExit):
-            launch.parse_args(["--model", "qwen", "--mode", "thinking", "--source", "image-only",
+            launch.parse_args(["--profiles", str(tmp_path / "profiles.json"), "--model", "qwen", "--mode", "thinking", "--source", "image-only",
                                "--gpu", "0", "--out", str(tmp_path / "out"), "--parallel", invalid])
     args.mtp = "3"
     profiles["models"]["qwen"]["mtp"] = None
@@ -982,16 +982,18 @@ def test_reference_model_restore_keeps_verified_nested_paths(tmp_path, monkeypat
             assert len(calls) == len(names)
 
 
-@pytest.mark.parametrize("mode,cap", [("instruct", 2048), ("thinking", 4096)])
+@pytest.mark.parametrize("mode,cap", [("instruct", 2048), ("thinking", 8192)])
 @pytest.mark.parametrize("model,ubatch", [("qwen3.5-4b", 512), ("qwen3.6-35b-a3b", 512),
-    ("gemma-4-e4b-it", 512), ("glm-4.6v-flash", 512), ("gemma-4-26b-a4b-it", 2048), ("gemma-4-31b-it", 2048)])
+    ("gemma-4-e4b-it", 512), ("glm-4.6v-flash", 512), ("internvl3.5-30b-a3b", 512), ("gemma-4-31b-it", 2048)])
 def test_kld_launcher_uses_matching_runtime_without_generation_or_analysis(tmp_path, model, ubatch, mode, cap):
     from cli import collect_model_kld as launch
     from lib.reference_study import study_overview
-    profiles = json.loads((Path(__file__).resolve().parents[1] / "scripts/reference_model_profiles.json").read_text())
+    profiles = json.loads((Path(__file__).resolve().parents[1] / "profiles/small-pilot100.json").read_text())
+    for group in ("snr", "final"):
+        profiles["models"].update(json.loads((Path(__file__).resolve().parents[1] / f"profiles/{group}-pilot100.json").read_text())["models"])
     plan = {"stage": "kld", "models": [model], "sources": ["mmmu-pro-vision"], "modes": [mode],
             "hardware": "pro6000", "size": 100, "num_samples": None, "models_dir": str(tmp_path / "models")}
-    args = launch.parse_args(["--study", str(tmp_path / "study"), "--model", model, "--mode", mode,
+    args = launch.parse_args(["--profiles", str(tmp_path / "profiles.json"), "--study", str(tmp_path / "study"), "--model", model, "--mode", mode,
         "--source", "mmmu-pro-vision", "--candidate", "Q4_K_M", "--cand-model", str(tmp_path / "candidate.gguf"),
         "--llama-vlm-kld", str(tmp_path / "llama-vlm-kld"), "--gpu", "0", "--dry-run"])
     command, out = launch.build_command(args, plan, profiles, tmp_path / "archived")
@@ -1081,7 +1083,7 @@ def test_study_overview_uses_each_checkpoint_mode_and_sequence_count(tmp_path):
     import copy
     from cli import collect_model_kld as launch
     from lib.reference_study import study_overview
-    profiles = json.loads((Path(__file__).resolve().parents[1] / "scripts/reference_model_profiles.json").read_text())
+    profiles = json.loads((Path(__file__).resolve().parents[1] / "profiles/small-pilot100.json").read_text())
     original = profiles["models"]["qwen3.5-4b"]
     profiles["models"] = {}
     for mode, parallel in (("instruct", 4), ("thinking", 1)):
@@ -1102,7 +1104,7 @@ def test_study_overview_uses_each_checkpoint_mode_and_sequence_count(tmp_path):
         assert model["modes"] == [mode]
         assert list(model["kld_runtime"]) == [mode]
         assert model["reference_runtime"][mode]["parallel"] == parallel
-    args = launch.parse_args(["--study", str(tmp_path / "study"), "--model", "thinking-only", "--mode", "instruct",
+    args = launch.parse_args(["--profiles", str(tmp_path / "profiles.json"), "--study", str(tmp_path / "study"), "--model", "thinking-only", "--mode", "instruct",
         "--source", "mmmu-pro-vision", "--candidate", "Q4", "--cand-model", str(tmp_path / "candidate.gguf"),
         "--llama-vlm-kld", str(tmp_path / "llama-vlm-kld"), "--gpu", "0", "--dry-run"])
     with pytest.raises(ValueError, match="unsupported semantic mode"):

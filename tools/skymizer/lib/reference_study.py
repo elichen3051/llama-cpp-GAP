@@ -93,6 +93,6 @@ def study_overview(profiles, plan):
                    "reference": "artifacts/<model>/<subset>/attempt-<number>/dataset",
                    "kld": "artifacts/<model>/<subset>/kld/<candidate>/metrics/*.npz",
                    "kld_row_status": "artifacts/<model>/<subset>/kld/<candidate>/manifest.csv"},
-        "settings_source": "scripts/skymizer/scripts/reference_model_profiles.json",
+        "settings_source": "scripts/skymizer/profiles/reference_model_profiles.json",
         "note": "Derived overview; launchers use the archived profile. Change protocols only in a new study.",
     }

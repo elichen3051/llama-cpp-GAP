@@ -1,4 +1,4 @@
-"""compare/student_t.py -- the scipy-free Student-t distribution behind
+"""stats/student_t.py -- the scipy-free Student-t distribution behind
 --ci-method t. Pinned against closed forms that need no library (Cauchy,
 df = 2) and, when scipy is installed, against scipy.stats.t across the df
 and tail ranges a paired report can produce."""
@@ -7,7 +7,7 @@ import math
 
 import pytest
 
-from compare import student_t as S
+from stats import student_t as S
 
 
 # --------------------------------------------------------------------------- #

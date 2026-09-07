@@ -232,7 +232,7 @@ int main() {
 }
 ''')
     exe = tmp_path / "repeat"
-    subprocess.run(["g++", "-std=c++17", "-O2", "-I", str(SKYMIZER), str(source), "-o", str(exe)], check=True)
+    subprocess.run(["g++", "-std=c++17", "-O2", "-I", str(SKYMIZER / "core"), str(source), "-o", str(exe)], check=True)
     subprocess.run([str(exe)], check=True)
 
 
@@ -312,7 +312,7 @@ int main() {
 }
 """)
     exe = tmp_path / "prefix"
-    includes = [SKYMIZER, REPO / "include", REPO / "ggml/include", REPO / "common", REPO / "vendor", REPO / "tools/mtmd"]
+    includes = [SKYMIZER / "core", REPO / "include", REPO / "ggml/include", REPO / "common", REPO / "vendor", REPO / "tools/mtmd"]
     command = ["g++", "-std=c++17", "-O1", "-ffunction-sections", "-fdata-sections", "-Wl,--gc-sections"]
     for directory in includes:
         command += ["-I", str(directory)]
@@ -464,7 +464,7 @@ int main(int argc, char ** argv) {
 }
 """)
     exe = tmp_path / "window"
-    includes = [SKYMIZER, REPO / "include", REPO / "ggml/include", REPO / "common", REPO / "vendor"]
+    includes = [SKYMIZER / "core", REPO / "include", REPO / "ggml/include", REPO / "common", REPO / "vendor"]
     command = ["g++", "-std=c++17", "-O1", "-pthread", "-ffunction-sections", "-fdata-sections", "-Wl,--gc-sections"]
     for directory in includes:
         command += ["-I", str(directory)]

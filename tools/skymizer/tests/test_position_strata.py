@@ -11,10 +11,10 @@ stratifying it.
 import numpy as np
 import pytest
 
-from compare.engine import compare_items
-from compare.inference import holm_adjust
-from compare.render import format_comparison_table
-from compare.tokens import DEFAULT_POSITION_BUCKETS, _bucket_ranges
+from stats.engine import compare_items
+from stats.inference import holm_adjust
+from stats.render import format_comparison_table
+from stats.tokens import DEFAULT_POSITION_BUCKETS, _bucket_ranges
 
 
 def _front_loaded(n_items=20, npos=400, front=32, effect=3e-4, seed=4):

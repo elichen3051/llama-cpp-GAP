@@ -15,8 +15,9 @@ import numpy as np
 import pytest
 
 import lib.kld_metrics_io as kio
-from compare.contracts import POOLED_LADDER
-import cli.saved_metrics_paired_compare as smpc
+from stats.contracts import POOLED_LADDER
+import stats.cli.saved_metrics_paired_compare as smpc
+from stats import collection_io as paired_io
 
 from fakes import write_vlmk, completed_collection, EXECUTION_IDENTITY
 
@@ -119,7 +120,7 @@ def test_score_item_rejects_post_prefill_position_drift(tmp_path):
                        n_past_actual=640)
     with pytest.raises(smpc.AlignmentError,
                        match="post-prefill position count"):
-        smpc.score_item("000_x", a_dir, b_dir, -1)
+        paired_io.score_item("000_x", a_dir, b_dir, -1)
 
 
 def test_score_item_skips_the_position_guard_on_legacy_dumps(tmp_path):
@@ -131,7 +132,7 @@ def test_score_item_skips_the_position_guard_on_legacy_dumps(tmp_path):
     _write_metrics_dir(b_dir, {"000_x": rec}, dict(BASE_META,
                                                    cand_model="/m/b.gguf"),
                        n_past_actual=640)
-    assert smpc.score_item("000_x", a_dir, b_dir, -1)[4] == 4
+    assert paired_io.score_item("000_x", a_dir, b_dir, -1)[4] == 4
 
 
 def _run_main(a_dir, b_dir, tmp_path, *extra):
@@ -164,7 +165,7 @@ def test_side_scores_closed_form():
     rec["argmax_cand"] = [3, 6]
     rec["ear"] = [0.9, 0.7]
     m = {k: rec[k] for k in kio.KLD_METRIC_KEYS}
-    s, tok = smpc._side_scores(m, keep=2)
+    s, tok = paired_io._side_scores(m, keep=2)
     assert s["kld"] == pytest.approx(1.0)
     assert s["reversed_kld"] == pytest.approx(0.3)
     assert s["js_kld"] == pytest.approx(0.2)
@@ -192,15 +193,15 @@ def test_side_scores_respects_cap():
     rec = np.zeros(4, dtype=kio.KLD_RECORD_DT)
     rec["kld"] = [1.0, 1.0, 9.0, 9.0]
     m = {k: rec[k] for k in kio.KLD_METRIC_KEYS}
-    assert smpc._side_scores(m, keep=2)[0]["kld"] == pytest.approx(1.0)
-    assert smpc._side_scores(m, keep=4)[0]["kld"] == pytest.approx(5.0)
-    np.testing.assert_allclose(smpc._side_scores(m, keep=2)[1]["kld"], [1.0, 1.0])
+    assert paired_io._side_scores(m, keep=2)[0]["kld"] == pytest.approx(1.0)
+    assert paired_io._side_scores(m, keep=4)[0]["kld"] == pytest.approx(5.0)
+    np.testing.assert_allclose(paired_io._side_scores(m, keep=2)[1]["kld"], [1.0, 1.0])
 
 
 def test_side_scores_zero_keep_is_nonfinite():
     rec = np.zeros(0, dtype=kio.KLD_RECORD_DT)
     m = {k: rec[k] for k in kio.KLD_METRIC_KEYS}
-    s, tok = smpc._side_scores(m, keep=0)
+    s, tok = paired_io._side_scores(m, keep=0)
     assert not any(np.isfinite(v) for v in s.values())
     assert sorted(tok) == ["dp", "ear", "kld", "target"]
     assert all(col.size == 0 for col in tok.values())
@@ -213,7 +214,7 @@ def test_side_scores_zero_keep_is_nonfinite():
 def test_meta_alignment_passes_and_warns_nothing_on_clean_pair():
     a = dict(BASE_META)
     b = dict(BASE_META, cand_model="/m/cand-b.gguf")
-    assert smpc.check_kld_meta_alignment(a, b) == []
+    assert paired_io.check_kld_meta_alignment(a, b) == []
 
 
 @pytest.mark.parametrize("field,value", [
@@ -227,7 +228,7 @@ def test_meta_alignment_hard_fails_on_mismatch(field, value):
     a = dict(BASE_META)
     b = dict(BASE_META, cand_model="/m/cand-b.gguf", **{field: value})
     with pytest.raises(smpc.AlignmentError, match=field):
-        smpc.check_kld_meta_alignment(a, b)
+        paired_io.check_kld_meta_alignment(a, b)
 
 
 def test_meta_alignment_guards_sort_desc_with_legacy_default_false():
@@ -236,14 +237,14 @@ def test_meta_alignment_guards_sort_desc_with_legacy_default_false():
     a = dict(BASE_META, sort_desc=False)
     b = dict(BASE_META, cand_model="/m/cand-b.gguf", sort_desc=True)
     with pytest.raises(smpc.AlignmentError, match="sort_desc"):
-        smpc.check_kld_meta_alignment(a, b)
+        paired_io.check_kld_meta_alignment(a, b)
 
     # Legacy dirs (pre-F2.8 / all VLM dirs) lack the field entirely: missing
     # normalizes to False, so legacy-vs-explicit-ascending pairs stay clean.
     legacy = {k: v for k, v in BASE_META.items() if k != "sort_desc"}
     explicit_asc = dict(BASE_META, cand_model="/m/cand-b.gguf", sort_desc=False)
     assert "sort_desc" not in legacy
-    assert smpc.check_kld_meta_alignment(legacy, explicit_asc) == []
+    assert paired_io.check_kld_meta_alignment(legacy, explicit_asc) == []
 
 
 def test_meta_alignment_swa_full_has_no_legacy_default():
@@ -251,11 +252,11 @@ def test_meta_alignment_swa_full_has_no_legacy_default():
     cache mode, so a legacy dir pairs only with another legacy dir."""
     legacy_a = {k: v for k, v in BASE_META.items() if k != "swa_full"}
     legacy_b = dict(legacy_a, cand_model="/m/cand-b.gguf")
-    assert smpc.check_kld_meta_alignment(legacy_a, legacy_b) == []
+    assert paired_io.check_kld_meta_alignment(legacy_a, legacy_b) == []
 
     recorded = dict(BASE_META, cand_model="/m/cand-b.gguf", swa_full=False)
     with pytest.raises(smpc.AlignmentError, match="swa_full"):
-        smpc.check_kld_meta_alignment(legacy_a, recorded)
+        paired_io.check_kld_meta_alignment(legacy_a, recorded)
 
 
 def test_meta_alignment_guards_max_total_tokens_with_legacy_none():
@@ -263,33 +264,33 @@ def test_meta_alignment_guards_max_total_tokens_with_legacy_none():
     b_legacy = {k: v for k, v in BASE_META.items() if k != "max_total_tokens"}
     b_legacy["cand_model"] = "/m/cand-b.gguf"
 
-    assert "max_total_tokens" in smpc.META_MUST_MATCH
-    assert smpc.check_kld_meta_alignment(a, b_legacy) == []
+    assert "max_total_tokens" in paired_io.META_MUST_MATCH
+    assert paired_io.check_kld_meta_alignment(a, b_legacy) == []
 
     b_budgeted = dict(b_legacy, max_total_tokens=4096)
     with pytest.raises(smpc.AlignmentError, match="max_total_tokens"):
-        smpc.check_kld_meta_alignment(a, b_budgeted)
+        paired_io.check_kld_meta_alignment(a, b_budgeted)
 
 
 def test_meta_alignment_warns_on_same_candidate_and_missing_meta():
     a = dict(BASE_META)
-    warnings = smpc.check_kld_meta_alignment(a, dict(a))
+    warnings = paired_io.check_kld_meta_alignment(a, dict(a))
     assert any("SAME model" in w for w in warnings)
-    warnings = smpc.check_kld_meta_alignment(a, None)
+    warnings = paired_io.check_kld_meta_alignment(a, None)
     assert any("collect_meta.json missing" in w for w in warnings)
 
 
 def test_meta_alignment_warns_on_wrong_kind():
     a = dict(BASE_META, kind="something_else")
     b = dict(BASE_META, cand_model="/m/b.gguf", kind="something_else")
-    assert any("collect_meta kind" in w for w in smpc.check_kld_meta_alignment(a, b))
+    assert any("collect_meta kind" in w for w in paired_io.check_kld_meta_alignment(a, b))
 
 
 def test_meta_alignment_hard_fails_on_kind_mix():
     a = dict(BASE_META)
     b = dict(BASE_META, cand_model="/m/b.gguf", kind="llm_kld_metrics")
     with pytest.raises(smpc.AlignmentError, match="kind"):
-        smpc.check_kld_meta_alignment(a, b)
+        paired_io.check_kld_meta_alignment(a, b)
 
 
 def test_meta_alignment_allows_llm_without_vlm_fields_and_ignores_media_wrapper():
@@ -311,7 +312,7 @@ def test_meta_alignment_allows_llm_without_vlm_fields_and_ignores_media_wrapper(
     }
     b = dict(a, cand_model="/m/cand-b.gguf", media_wrapper="doubled")
 
-    assert smpc.check_kld_meta_alignment(a, b) == []
+    assert paired_io.check_kld_meta_alignment(a, b) == []
 
 
 @pytest.mark.parametrize("field", [
@@ -324,14 +325,14 @@ def test_meta_alignment_content_fingerprints_three_tier(field):
     hard-fails; a legacy dir missing the field warns instead."""
     a = dict(BASE_META)
     b = dict(BASE_META, cand_model="/m/cand-b.gguf")
-    assert smpc.check_kld_meta_alignment(a, b) == []
+    assert paired_io.check_kld_meta_alignment(a, b) == []
 
     b_drifted = dict(b, **{field: "other-value"})
     with pytest.raises(smpc.AlignmentError, match=field):
-        smpc.check_kld_meta_alignment(a, b_drifted)
+        paired_io.check_kld_meta_alignment(a, b_drifted)
 
     b_legacy = {k: v for k, v in b.items() if k != field}
-    warnings = smpc.check_kld_meta_alignment(a, b_legacy)
+    warnings = paired_io.check_kld_meta_alignment(a, b_legacy)
     assert any(field in w and "candidate-b" in w for w in warnings)
 
 
@@ -347,7 +348,7 @@ def test_meta_alignment_llm_kind_skips_mmproj_fingerprint():
         m.pop("media_wrapper", None)
         m.pop("ref_mmproj_fingerprint", None)
     b = dict(a, cand_model="/m/cand-b.gguf")
-    assert smpc.check_kld_meta_alignment(a, b) == []
+    assert paired_io.check_kld_meta_alignment(a, b) == []
 
 
 def test_meta_alignment_llm_same_model_warning_omits_mmproj():
@@ -366,7 +367,7 @@ def test_meta_alignment_llm_same_model_warning_omits_mmproj():
     }
     b = dict(a)
 
-    warnings = smpc.check_kld_meta_alignment(a, b)
+    warnings = paired_io.check_kld_meta_alignment(a, b)
 
     assert any("SAME model" in w for w in warnings)
     assert not any("mmproj" in w for w in warnings)
@@ -377,7 +378,7 @@ def test_meta_alignment_warns_when_candidate_equals_reference():
              cand_mmproj=BASE_META["ref_mmproj"])
     b = dict(BASE_META, cand_model="/m/cand-b.gguf")
     assert any("equals the reference" in w
-               for w in smpc.check_kld_meta_alignment(a, b))
+               for w in paired_io.check_kld_meta_alignment(a, b))
 
 
 # ---------------------------------------------------------------------------
@@ -387,7 +388,7 @@ def test_meta_alignment_warns_when_candidate_equals_reference():
 def test_find_metric_items_reports_drops(tmp_path):
     a_dir, b_dir = _make_pair(tmp_path, n_items=3)
     (b_dir / "metrics" / "002_item2.npz").unlink()
-    matched, drops = smpc.find_metric_items(a_dir, b_dir)
+    matched, drops = paired_io.find_metric_items(a_dir, b_dir)
     assert matched == ["000_item0", "001_item1"]
     assert drops == {"candidate-a": [], "candidate-b": ["002_item2"]}
 
@@ -400,7 +401,7 @@ def test_find_metric_items_numeric_stem_order(tmp_path):
         d.mkdir(parents=True)
         for key in ("998_w", "999_x", "1000_y", "1001_z"):
             (d / f"{key}.npz").touch()
-    matched, drops = smpc.find_metric_items(tmp_path / "a", tmp_path / "b")
+    matched, drops = paired_io.find_metric_items(tmp_path / "a", tmp_path / "b")
     assert matched == ["998_w", "999_x", "1000_y", "1001_z"]
     assert drops == {"candidate-a": [], "candidate-b": []}
 
@@ -411,7 +412,7 @@ def test_find_metric_items_numeric_stem_order(tmp_path):
 
 def test_score_item_consistent_pair_has_no_drift(tmp_path):
     a_dir, b_dir = _make_pair(tmp_path)
-    sa, sb, tok_a, tok_b, keep, finite, drift, versions = smpc.score_item(
+    sa, sb, tok_a, tok_b, keep, finite, drift, versions = paired_io.score_item(
         "000_item0", a_dir, b_dir, num_eval_tokens=-1)
     assert drift is None and finite and keep == 4
     assert sa != sb   # different candidates
@@ -428,7 +429,7 @@ def test_score_item_detects_drift_in_each_ref_column(tmp_path, col):
         else:
             rec[col][0] = (rec[col][0] + 1) % 11
     a_dir, b_dir = _make_pair(tmp_path, mutate_b=bump)
-    *_rest, drift, _versions = smpc.score_item(
+    *_rest, drift, _versions = paired_io.score_item(
         "000_item0", a_dir, b_dir, num_eval_tokens=-1)
     assert drift is not None and col in drift["msg"]
     if col == "argmax_ref":
@@ -444,7 +445,7 @@ def test_score_item_hard_fails_on_vocab_mismatch(tmp_path):
     write_vlmk(p.with_suffix(".bin"), rec, vocab=12, n_prefill=7)
     kio.convert_kld_bin_to_npz(p.with_suffix(".bin"), p.with_suffix(".npz"))
     with pytest.raises(smpc.AlignmentError, match="vocab"):
-        smpc.score_item("000_item0", a_dir, b_dir, num_eval_tokens=-1)
+        paired_io.score_item("000_item0", a_dir, b_dir, num_eval_tokens=-1)
 
 
 def test_score_item_hard_fails_on_target_mismatch(tmp_path):
@@ -452,7 +453,7 @@ def test_score_item_hard_fails_on_target_mismatch(tmp_path):
         rec["target"][0] = (rec["target"][0] + 1) % 11
     a_dir, b_dir = _make_pair(tmp_path, mutate_b=flip_target)
     with pytest.raises(smpc.AlignmentError, match="target"):
-        smpc.score_item("000_item0", a_dir, b_dir, num_eval_tokens=-1)
+        paired_io.score_item("000_item0", a_dir, b_dir, num_eval_tokens=-1)
 
 
 def test_score_item_hard_fails_on_npos_mismatch(tmp_path):
@@ -462,7 +463,7 @@ def test_score_item_hard_fails_on_npos_mismatch(tmp_path):
     write_vlmk(p.with_suffix(".bin"), short, vocab=11, n_prefill=7)
     kio.convert_kld_bin_to_npz(p.with_suffix(".bin"), p.with_suffix(".npz"))
     with pytest.raises(smpc.AlignmentError, match="npos"):
-        smpc.score_item("000_item0", a_dir, b_dir, num_eval_tokens=-1)
+        paired_io.score_item("000_item0", a_dir, b_dir, num_eval_tokens=-1)
 
 
 # ---------------------------------------------------------------------------
@@ -633,12 +634,12 @@ def test_side_scores_keep_zero_omits_ear_for_v1_records():
         return {k: np.ascontiguousarray(rec[k]) for k in rec.dtype.names}
     m1 = columns(_make_item(npos=2, seed=1, ref_seed=2, version=1))
     m2 = columns(_make_item(npos=2, seed=1, ref_seed=2))
-    nan1, _ = smpc._side_scores(m1, 0)
-    nan2, _ = smpc._side_scores(m2, 0)
+    nan1, _ = paired_io._side_scores(m1, 0)
+    nan2, _ = paired_io._side_scores(m2, 0)
     assert "ear" not in nan1 and "ear" in nan2
     assert not (set(kio.VERSIONED_METRIC_KEYS) & set(nan1))
     assert set(nan1) | set(kio.VERSIONED_METRIC_KEYS) == set(nan2)
-    assert set(nan2) == set(smpc._side_scores(m2, 2)[0])
+    assert set(nan2) == set(paired_io._side_scores(m2, 2)[0])
 
 
 def test_main_matches_manual_item_means(tmp_path):

@@ -363,8 +363,8 @@ receipt = {**manifest, "status": "verified", "commit": "b" * 40, "private": a.pr
         archived = out / "scripts/skymizer"
         if not archived.exists():
             (archived / "cli").mkdir(parents=True)
-            (archived / "scripts").mkdir()
-            (archived / "scripts/reference_model_profiles.json").write_text(path.read_text())
+            (archived / "profiles").mkdir()
+            (archived / "profiles/reference_model_profiles.json").write_text(path.read_text())
             (archived / "cli/generate_model_reference.py").write_text(generator)
             (archived / "cli/upload_reference.py").write_text(uploader)
         return archived
@@ -382,7 +382,7 @@ receipt = {**manifest, "status": "verified", "commit": "b" * 40, "private": a.pr
     def configure(**values):
         profiles.update(values)
         profile_path.write_text(json.dumps(profiles))
-        archived = args.out / "scripts/skymizer/scripts/reference_model_profiles.json"
+        archived = args.out / "scripts/skymizer/profiles/reference_model_profiles.json"
         if archived.exists():
             archived.write_text(json.dumps(profiles))
 
@@ -569,10 +569,10 @@ def test_campaign_snapshot_is_atomic_and_verifies_full_source_provenance(tmp_pat
     import cli.run_reference_campaign as campaign
     root = tmp_path / "repo"
     skymizer = root / "tools/skymizer"
-    for name in ("cli", "lib", "compare", "scripts"):
+    for name in ("core", "cli", "lib", "stats", "scripts", "profiles"):
         (skymizer / name).mkdir(parents=True)
         (skymizer / name / "sample.py").write_text("pass\n")
-    profiles = skymizer / "scripts/reference_model_profiles.json"
+    profiles = skymizer / "profiles/reference_model_profiles.json"
     profiles.write_text("{}")
     (root / "new.c").write_text("untracked source")
     out = tmp_path / "campaign"
@@ -699,7 +699,7 @@ def test_campaign_writes_a_readable_runtime_overview(campaign_fixture):
     assert overview["generation_caps"] == {"instruct": 8192}
     runtime = overview["models"]["qwen3.5-4b"]["kld_runtime"]["instruct"]
     assert runtime["n_ubatch"] == 512 and runtime["num_eval_tokens"] == 2048
-    assert overview["settings_source"] == "scripts/skymizer/scripts/reference_model_profiles.json"
+    assert overview["settings_source"] == "scripts/skymizer/profiles/reference_model_profiles.json"
 
 
 def test_kld_status_retains_failed_and_interrupted_jobs(tmp_path):
@@ -772,11 +772,11 @@ def test_campaign_snapshot_includes_statistics_dependencies(tmp_path, monkeypatc
     monkeypatch.setattr(campaign.subprocess, "run", lambda *a, **kw: SimpleNamespace(returncode=0))
     monkeypatch.setattr(campaign.subprocess, "check_output", lambda *a, **kw: b"")
     monkeypatch.setattr(campaign, "distributions", lambda: [])
-    profile = campaign.SKYMIZER / "scripts/reference_model_profiles.json"
+    profile = campaign.SKYMIZER / "profiles/small-pilot100.json"
     scripts = campaign.snapshot(tmp_path, profile)
-    assert (scripts / "compare/engine.py").is_file()
+    assert (scripts / "stats/engine.py").is_file()
     hashes = json.loads((tmp_path / "scripts/manifest.json").read_text())
-    assert "skymizer/compare/engine.py" in hashes
+    assert "skymizer/stats/engine.py" in hashes
     assert campaign.snapshot(tmp_path, profile) == scripts
 
 

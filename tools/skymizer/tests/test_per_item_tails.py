@@ -13,10 +13,10 @@ import re
 import numpy as np
 import pytest
 
-from compare.contracts import AlignmentError
-from compare.engine import compare_items
-from compare.inference import holm_adjust
-from compare.render import format_comparison_table
+from stats.contracts import AlignmentError
+from stats.engine import compare_items
+from stats.inference import holm_adjust
+from stats.render import format_comparison_table
 
 
 def _items(n=12, seed=5, lengths=None):

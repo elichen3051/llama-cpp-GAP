@@ -24,7 +24,7 @@ Use the [format definition](formats.md) to interpret version, vocabulary, target
 
 The comparator requires exact reference metric columns on the same target IDs. Check both model/projector fingerprints, the reference dataset, binary and loaded libraries, GPU/backend, context, batching, threads, image bounds and scoring horizon. Equal command flags do not establish equality if one of those inputs changed.
 
-To check reproducibility, collect the same pair and row range into two fresh directories with identical inputs and runtime. Compare the metric records, then run `saved_metrics_paired_compare.py` on those directories; a self-pair should produce zero deltas. `review-functionality/smoke_vlm_gemma4.sh` demonstrates this on GPU. Do not assume every backend or build is deterministic without checking it.
+To check reproducibility, collect the same pair and row range into two fresh directories with identical inputs and runtime. Compare the metric records, then run `saved_metrics_paired_compare.py` on those directories; a self-pair should produce zero deltas. `verify_and_validation_scripts/smoke_vlm_gemma4.sh` demonstrates this on GPU. Do not assume every backend or build is deterministic without checking it.
 
 `--allow-ref-drift` records an approximate comparison. It cannot override different binaries, unfinished work, wrong targets or incompatible corpus windows. Keep strict pairing for the primary result.
 
@@ -32,7 +32,7 @@ To check reproducibility, collect the same pair and row range into two fresh dir
 
 For `marker count != num_images`, inspect the prepared prompt's `<__media__>` count and ordered image paths. Native rows use their saved prompt and original images. Legacy HF rows also require the declared tokenizer and supported wrapper reconstruction. A wrong dataset/tokenizer pairing can fail before model loading.
 
-One source image can produce multiple tiles. A strict prefix check must compare the complete source-image tile span against the matching placeholder span. Do not reduce the image resolution or disable a strict check merely to hide a mismatch. Inspect the original row and native chunk log first. The InternVL adjacent-tile checker fix is described in the [final reference handover](reference-runpod-final-handover.md); it does not add an upstream model implementation.
+One source image can produce multiple tiles. A strict prefix check must compare the complete source-image tile span against the matching placeholder span. Do not reduce the image resolution or disable a strict check merely to hide a mismatch. Inspect the original row and native chunk log first. InternVL adjacent tiles must be checked as a complete image group; this is a replay check, not a new upstream model implementation.
 
 If the complete non-causal image chunk exceeds batch or microbatch capacity, use the family runtime that was validated for that projector's defaults. Any runtime change applies to all quantizations of the same checkpoint and creates a new collection identity. A single-model load does not prove reference-plus-candidate capacity.
 
@@ -52,4 +52,4 @@ Original reference PPL differs from PPL reconstructed from the clipped uint16 ba
 
 ## Build or dependency failures
 
-Use the [README build commands](../README.md#environment-and-build), including a fresh CMake configuration if a target is absent. Build directories, environments and caches can live outside the checkout. Native rows need the normal Python dependencies; only legacy HF preparation needs the `hf-tokenizer` extra. Never replace binaries or backend libraries underneath an active collection.
+Use the [README build commands](workflows.md), including a fresh CMake configuration if a target is absent. Build directories, environments and caches can live outside the checkout. Native rows need the normal Python dependencies; only legacy HF preparation needs the `hf-tokenizer` extra. Never replace binaries or backend libraries underneath an active collection.

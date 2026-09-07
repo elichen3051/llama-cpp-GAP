@@ -67,12 +67,12 @@ def snapshot(out, profiles):
     try:
         directory = staging / "skymizer"
         directory.mkdir()
-        for name in ("cli", "lib", "compare", "scripts"):
+        for name in ("core", "cli", "lib", "stats", "scripts", "profiles"):
             shutil.copytree(SKYMIZER / name, directory / name, ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
-        for pattern in ("*.cpp", "*.h", "pyproject.toml", "uv.lock", "CMakeLists.txt"):
+        for pattern in ("pyproject.toml", "uv.lock", ".python-version", "CMakeLists.txt"):
             for path in SKYMIZER.glob(pattern):
                 shutil.copyfile(path, directory / path.name)
-        shutil.copyfile(profiles, directory / "scripts/reference_model_profiles.json")
+        shutil.copyfile(profiles, directory / "profiles/reference_model_profiles.json")
         provenance = staging / "provenance"
         provenance.mkdir()
         repo = SKYMIZER.parents[1]
@@ -257,7 +257,7 @@ def run_owned_campaign(args, out, stopped):
     scripts = snapshot(out, args.profiles)
     if args.upload:
         require_current_uploader(scripts)
-    profiles_path = scripts / "scripts/reference_model_profiles.json"
+    profiles_path = scripts / "profiles/reference_model_profiles.json"
     profiles = json.loads(profiles_path.read_text())
     validate_reference_cohort(profiles, args.size)
     models = args.models or list(profiles["models"])
@@ -500,7 +500,7 @@ def main():
     p.add_argument("--modes", nargs="+", choices=["instruct", "thinking"], default=["instruct", "thinking"])
     p.add_argument("--hardware", choices=["pro6000", "h100"], default="pro6000")
     p.add_argument("--models-dir", type=Path, default=Path.home() / "models")
-    p.add_argument("--profiles", type=Path, default=SKYMIZER / "scripts/reference_model_profiles.json")
+    p.add_argument("--profiles", type=Path, required=True, help="explicit pilot100 or collect500 profile JSON from profiles/")
     p.add_argument("--llama-reference", type=Path, default=SKYMIZER.parents[1] / "build/bin/llama-reference")
     p.add_argument("--upload", action=argparse.BooleanOptionalAction, default=True)
     p.add_argument("--num-samples", type=int, help="diagnostics only; requires --no-upload")

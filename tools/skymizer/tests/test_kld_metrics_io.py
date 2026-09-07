@@ -370,7 +370,7 @@ def test_load_kld_metrics_bin_rejects_trailing_bytes(tmp_path):
 # ---------------------------------------------------------------------------
 
 def test_item_means_is_what_the_consumer_reports(tmp_path):
-    import cli.saved_metrics_paired_compare as smpc
+    import stats.collection_io as smpc
     rec = make_records(npos=9)
     m = {k: np.ascontiguousarray(rec[k]) for k in rec.dtype.names}
     for keep in (9, 4):

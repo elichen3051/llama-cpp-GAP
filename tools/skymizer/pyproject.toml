@@ -1,41 +1,31 @@
 [project]
 name = "skymizer"
-version = "0.1.2"
+version = "0.2.0"
 description = "VLM/LLM KLD metric collection and paired comparison helpers for llama.cpp"
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.12,<3.13"
 dependencies = [
-    "datasets>=4.8.5",
-    "numpy>=1.26.4",
-    "pillow>=12.2.0",
+    "datasets==5.0.1",
+    "numpy==2.5.2",
+    "pillow==12.3.0",
+    "huggingface-hub==1.30.0",
+    "pyarrow==25.0.1",
 ]
 
 [project.optional-dependencies]
 # Only legacy HF/vLLM datasets need an HF tokenizer to reconstruct prompts.
 hf-tokenizer = ["transformers>=5.5.1", "tiktoken>=0.14.0", "blobfile>=3.0.0"]
 
-# Skymizer is a repository-local collection of scripts, not an installable
-# Python library. Tell uv not to invoke setuptools' ambiguous flat-layout
-# package discovery (which would otherwise mistake compare/, knowledge/, and
-# outputs/ for three import packages).
+# Repository-local scripts; do not discover flat-layout installable packages.
 [tool.uv]
 package = false
 
-# Developer-only dependencies use a PEP 735 dependency group instead of a
-# published `dev` extra. Users get only [project].dependencies (and may opt
-# into the HF tokenizer extra); `uv sync --group dev` gives contributors the complete
-# test/oracle environment.
+# Native collection and CPU numerical validation use the same pinned environment.
 [dependency-groups]
 dev = [
-    "pytest>=8",
-    "pytest-timeout>=2",
-    "scipy>=1.13",
-    # The bit-exact goldens (tests/test_paired_compare_engine_golden.py and
-    # friends) were generated under numpy 2.x; numpy 1.x's value-based
-    # promotion computes some engine intermediates at float32 instead of
-    # float64 and trips them at ~1e-6 relative. Developers must resolve a
-    # numpy the goldens were pinned on.
-    "numpy>=2.5.2",
+    "pytest==9.1.1",
+    "pytest-timeout==2.4.0",
+    "scipy==1.18.1",
 ]
 
 [tool.pytest.ini_options]

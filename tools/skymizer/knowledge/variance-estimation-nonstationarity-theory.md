@@ -171,7 +171,7 @@ stationarity"）。
 
 | 作法 | 理論身分 | 狀態 |
 |---|---|---|
-| 逐 cap 實測 μ(K)/Var/N ladder | cluster-robust sandwich（White；Liang-Zeger） | `cli/variance_decomposition.py` 主輸出 |
+| 逐 cap 實測 μ(K)/Var/N ladder | cluster-robust sandwich（White；Liang-Zeger） | `stats/cli/variance_decomposition.py` 主輸出 |
 | 1/K 律只作 model-check | CS 特例診斷（log2_pred_over_emp，F1 指標） | 同上，附 UNDER/OVER 方向 |
 | sign-flip 診斷 + 預註冊 cap | estimand 紀律（μ(K) 非單調、4/75 變號） | 同上 + SOP |
 | N 用 iterated-t（非 z 閉式） | 保守方向（backtest F4：noncentral-t 預測偏保守是校準過的方向） | 同上 |
@@ -204,7 +204,7 @@ stationarity"）。
 
 ### 4.4 對 skymizer 的落地含意
 
-- `cli/variance_decomposition.py` 現行設計（實測 ladder 為主、1/K 律
+- `stats/cli/variance_decomposition.py` 現行設計（實測 ladder 為主、1/K 律
   只作 model-check、外插標為假設、sign-flip 警告、iterated-t N）＝
   文獻認可的做法，不需結構性更改。
 - 可選增強（未實作）：w_t 剖面 kernel 平滑輸出；G(s,t) 面估計供外插。

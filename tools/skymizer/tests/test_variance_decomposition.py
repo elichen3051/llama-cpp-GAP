@@ -14,7 +14,7 @@ import math
 import numpy as np
 import pytest
 
-import cli.variance_decomposition as vd
+import stats.cli.variance_decomposition as vd
 
 
 # --------------------------------------------------------------------------- #

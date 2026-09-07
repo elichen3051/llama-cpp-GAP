@@ -1,0 +1,410 @@
+{
+  "schema_version": 1,
+  "measured_on": "RTX PRO 6000: prior bounded native calibration; full new-revision cohorts not yet generated",
+  "dataset": {
+    "repo": "elichen-skymizer/vlm-prepared-dataset",
+    "revision": "6cb6a4d65fcb2c8d788f68aaa0aa92c5ceca408b"
+  },
+  "sources": [
+    "blink-val",
+    "mathvision-test",
+    "mmmu-pro-standard-10",
+    "mmmu-pro-vision",
+    "mmstar",
+    "ocrbench-v1",
+    "ocrbench-v2"
+  ],
+  "seed": 1234,
+  "generation_caps": {
+    "instruct": 2048,
+    "thinking": 8192
+  },
+  "kld_eval_tokens": {
+    "instruct": 2048,
+    "thinking": 8192
+  },
+  "image_token_budget": "Omit --image-min-tokens and --image-max-tokens entirely; native GGUF/mtmd defaults.",
+  "sampler_policy": "explicit card recommendations; other native/GGUF defaults retained; native sampler order",
+  "models": {
+    "qwen3.5-4b": {
+      "model": "qwen3.5-4b/bartowski/Qwen_Qwen3.5-4B-bf16.gguf",
+      "mmproj": "qwen3.5-4b/bartowski/mmproj-Qwen_Qwen3.5-4B-bf16.gguf",
+      "card": "Qwen/Qwen3.5-4B",
+      "mtp": "embedded",
+      "card_source": {
+        "repo": "Qwen/Qwen3.5-4B",
+        "revision": "851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a"
+      },
+      "sampling_args": {
+        "instruct": [
+          "--temp",
+          "0.7",
+          "--top-p",
+          "0.8",
+          "--top-k",
+          "20",
+          "--min-p",
+          "0",
+          "--presence-penalty",
+          "1.5",
+          "--repeat-penalty",
+          "1.0"
+        ],
+        "thinking": [
+          "--temp",
+          "1.0",
+          "--top-p",
+          "0.95",
+          "--top-k",
+          "20",
+          "--min-p",
+          "0",
+          "--presence-penalty",
+          "1.5",
+          "--repeat-penalty",
+          "1.0"
+        ]
+      },
+      "runtime": {
+        "pro6000": {
+          "instruct": {
+            "ctx": 32768,
+            "batch": 2048,
+            "ubatch": 512,
+            "threads": 8,
+            "threads_batch": 8,
+            "draft_max": 0,
+            "validation": "Bounded native parallel=4 generation and single-sequence strict KLD replay accepted; not a full-cohort quality claim.",
+            "parallel": 4
+          },
+          "thinking": {
+            "ctx": 32768,
+            "batch": 2048,
+            "ubatch": 512,
+            "threads": 8,
+            "threads_batch": 8,
+            "draft_max": 0,
+            "validation": "Bounded native parallel=4 generation and single-sequence strict KLD replay accepted; not a full-cohort quality claim.",
+            "parallel": 4
+          }
+        }
+      },
+      "identity": {
+        "files": [
+          {
+            "name": "Qwen_Qwen3.5-4B-bf16.gguf",
+            "size": 8665620192,
+            "sha256": "714270d4eb1d336bca9a8dcf0446982e45721be0399d810586a6b82e727dfee5",
+            "role": "llm"
+          },
+          {
+            "name": "mmproj-Qwen_Qwen3.5-4B-bf16.gguf",
+            "size": 675569216,
+            "sha256": "463f39bd1c291c1186c319a8c90ff8640aafa678b14cbee2232d695113dfbb66",
+            "role": "mmproj"
+          }
+        ],
+        "manifest": "s3://research-kld-benchmark/reference_model/qwen3.5-4b/manifest.json"
+      },
+      "effective_sampling": {
+        "instruct": {
+          "seed": 1234,
+          "temperature": 0.699999988079071,
+          "top_k": 20,
+          "top_p": 0.800000011920929,
+          "min_p": 0.0,
+          "typical_p": 1.0,
+          "min_keep": 0,
+          "n_prev": 64,
+          "samplers": [
+            "penalties",
+            "dry",
+            "top_n_sigma",
+            "top_k",
+            "typ_p",
+            "top_p",
+            "min_p",
+            "xtc",
+            "temperature"
+          ],
+          "sampler_chain": "logits -> penalties -> ?dry -> ?top-n-sigma -> top-k -> ?typical -> top-p -> ?min-p -> ?xtc -> temp-ext -> dist ",
+          "repeat_last_n": 64,
+          "repeat_penalty": 1.0,
+          "frequency_penalty": 0.0,
+          "presence_penalty": 1.5,
+          "penalize_prompt": true,
+          "dry_multiplier": 0.0,
+          "dry_base": 1.75,
+          "dry_allowed_length": 2,
+          "dry_penalty_last_n": 64,
+          "dry_sequence_breakers": [
+            "\n",
+            ":",
+            "\"",
+            "*"
+          ],
+          "xtc_probability": 0.0,
+          "xtc_threshold": 0.10000000149011612,
+          "dynatemp_range": 0.0,
+          "dynatemp_exponent": 1.0,
+          "top_n_sigma": -1.0,
+          "mirostat": 0,
+          "mirostat_tau": 5.0,
+          "mirostat_eta": 0.10000000149011612,
+          "adaptive_target": -1.0,
+          "adaptive_decay": 0.8999999761581421,
+          "ignore_eos": false,
+          "logit_bias": [],
+          "grammar": "",
+          "grammar_lazy": false,
+          "backend_sampling": false,
+          "user_sampling_config": 334
+        },
+        "thinking": {
+          "seed": 1234,
+          "temperature": 1.0,
+          "top_k": 20,
+          "top_p": 0.949999988079071,
+          "min_p": 0.0,
+          "typical_p": 1.0,
+          "min_keep": 0,
+          "n_prev": 64,
+          "samplers": [
+            "penalties",
+            "dry",
+            "top_n_sigma",
+            "top_k",
+            "typ_p",
+            "top_p",
+            "min_p",
+            "xtc",
+            "temperature"
+          ],
+          "sampler_chain": "logits -> penalties -> ?dry -> ?top-n-sigma -> top-k -> ?typical -> top-p -> ?min-p -> ?xtc -> ?temp-ext -> dist ",
+          "repeat_last_n": 64,
+          "repeat_penalty": 1.0,
+          "frequency_penalty": 0.0,
+          "presence_penalty": 1.5,
+          "penalize_prompt": true,
+          "dry_multiplier": 0.0,
+          "dry_base": 1.75,
+          "dry_allowed_length": 2,
+          "dry_penalty_last_n": 64,
+          "dry_sequence_breakers": [
+            "\n",
+            ":",
+            "\"",
+            "*"
+          ],
+          "xtc_probability": 0.0,
+          "xtc_threshold": 0.10000000149011612,
+          "dynatemp_range": 0.0,
+          "dynatemp_exponent": 1.0,
+          "top_n_sigma": -1.0,
+          "mirostat": 0,
+          "mirostat_tau": 5.0,
+          "mirostat_eta": 0.10000000149011612,
+          "adaptive_target": -1.0,
+          "adaptive_decay": 0.8999999761581421,
+          "ignore_eos": false,
+          "logit_bias": [],
+          "grammar": "",
+          "grammar_lazy": false,
+          "backend_sampling": false,
+          "user_sampling_config": 334
+        }
+      }
+    },
+    "gemma-4-e4b-it": {
+      "model": "gemma-4-e4b-it/bartowski/google_gemma-4-E4B-it-bf16.gguf",
+      "mmproj": "gemma-4-e4b-it/bartowski/mmproj-google_gemma-4-E4B-it-bf16.gguf",
+      "card": "google/gemma-4-E4B-it",
+      "mtp": null,
+      "card_source": {
+        "repo": "google/gemma-4-E4B-it",
+        "revision": "ee0ef6023621cff504d758262d4e04895a5af4a2"
+      },
+      "sampling_args": {
+        "instruct": [
+          "--temp",
+          "1.0",
+          "--top-p",
+          "0.95",
+          "--top-k",
+          "64",
+          "--min-p",
+          "0.05"
+        ],
+        "thinking": [
+          "--temp",
+          "1.0",
+          "--top-p",
+          "0.95",
+          "--top-k",
+          "64",
+          "--min-p",
+          "0.05"
+        ]
+      },
+      "runtime": {
+        "pro6000": {
+          "instruct": {
+            "ctx": 32768,
+            "batch": 2048,
+            "ubatch": 512,
+            "threads": 8,
+            "threads_batch": 8,
+            "draft_max": 0,
+            "validation": "Bounded native parallel=4 generation and single-sequence strict KLD replay accepted; not a full-cohort quality claim.",
+            "parallel": 4
+          },
+          "thinking": {
+            "ctx": 32768,
+            "batch": 2048,
+            "ubatch": 512,
+            "threads": 8,
+            "threads_batch": 8,
+            "draft_max": 0,
+            "validation": "Bounded native parallel=4 generation and single-sequence strict KLD replay accepted; not a full-cohort quality claim.",
+            "parallel": 4
+          }
+        }
+      },
+      "identity": {
+        "files": [
+          {
+            "name": "google_gemma-4-E4B-it-bf16.gguf",
+            "size": 15053097184,
+            "sha256": "af40178d97d8d083836ef3db24ee48cbb705710e7292d870d0233d91fba0b6ac",
+            "role": "llm"
+          },
+          {
+            "name": "mmproj-google_gemma-4-E4B-it-bf16.gguf",
+            "size": 991552000,
+            "sha256": "ffa64aebf7144bbadd5a1e143b77794d88e76a81cc0168d91de0770eb49e88e0",
+            "role": "mmproj"
+          }
+        ],
+        "manifest": "s3://research-kld-benchmark/reference_model/gemma-4-e4b-it/manifest.json"
+      },
+      "effective_sampling": {
+        "instruct": {
+          "seed": 1234,
+          "temperature": 1.0,
+          "top_k": 64,
+          "top_p": 0.949999988079071,
+          "min_p": 0.05000000074505806,
+          "typical_p": 1.0,
+          "min_keep": 0,
+          "n_prev": 64,
+          "samplers": [
+            "penalties",
+            "dry",
+            "top_n_sigma",
+            "top_k",
+            "typ_p",
+            "top_p",
+            "min_p",
+            "xtc",
+            "temperature"
+          ],
+          "sampler_chain": "logits -> ?penalties -> ?dry -> ?top-n-sigma -> top-k -> ?typical -> top-p -> min-p -> ?xtc -> ?temp-ext -> dist ",
+          "repeat_last_n": 64,
+          "repeat_penalty": 1.0,
+          "frequency_penalty": 0.0,
+          "presence_penalty": 0.0,
+          "penalize_prompt": true,
+          "dry_multiplier": 0.0,
+          "dry_base": 1.75,
+          "dry_allowed_length": 2,
+          "dry_penalty_last_n": 64,
+          "dry_sequence_breakers": [
+            "\n",
+            ":",
+            "\"",
+            "*"
+          ],
+          "xtc_probability": 0.0,
+          "xtc_threshold": 0.10000000149011612,
+          "dynatemp_range": 0.0,
+          "dynatemp_exponent": 1.0,
+          "top_n_sigma": -1.0,
+          "mirostat": 0,
+          "mirostat_tau": 5.0,
+          "mirostat_eta": 0.10000000149011612,
+          "adaptive_target": -1.0,
+          "adaptive_decay": 0.8999999761581421,
+          "ignore_eos": false,
+          "logit_bias": [],
+          "grammar": "",
+          "grammar_lazy": false,
+          "backend_sampling": false,
+          "user_sampling_config": 78
+        },
+        "thinking": {
+          "seed": 1234,
+          "temperature": 1.0,
+          "top_k": 64,
+          "top_p": 0.949999988079071,
+          "min_p": 0.05000000074505806,
+          "typical_p": 1.0,
+          "min_keep": 0,
+          "n_prev": 64,
+          "samplers": [
+            "penalties",
+            "dry",
+            "top_n_sigma",
+            "top_k",
+            "typ_p",
+            "top_p",
+            "min_p",
+            "xtc",
+            "temperature"
+          ],
+          "sampler_chain": "logits -> ?penalties -> ?dry -> ?top-n-sigma -> top-k -> ?typical -> top-p -> min-p -> ?xtc -> ?temp-ext -> dist ",
+          "repeat_last_n": 64,
+          "repeat_penalty": 1.0,
+          "frequency_penalty": 0.0,
+          "presence_penalty": 0.0,
+          "penalize_prompt": true,
+          "dry_multiplier": 0.0,
+          "dry_base": 1.75,
+          "dry_allowed_length": 2,
+          "dry_penalty_last_n": 64,
+          "dry_sequence_breakers": [
+            "\n",
+            ":",
+            "\"",
+            "*"
+          ],
+          "xtc_probability": 0.0,
+          "xtc_threshold": 0.10000000149011612,
+          "dynatemp_range": 0.0,
+          "dynatemp_exponent": 1.0,
+          "top_n_sigma": -1.0,
+          "mirostat": 0,
+          "mirostat_tau": 5.0,
+          "mirostat_eta": 0.10000000149011612,
+          "adaptive_target": -1.0,
+          "adaptive_decay": 0.8999999761581421,
+          "ignore_eos": false,
+          "logit_bias": [],
+          "grammar": "",
+          "grammar_lazy": false,
+          "backend_sampling": false,
+          "user_sampling_config": 78
+        }
+      }
+    }
+  },
+  "scope": "Two-checkpoint reference generation and publication only; KLD cap values are bookkeeping, not candidate or SNR approval.",
+  "protocol_status": "User-authorized budget-selected starting protocol; no native SNR plateau claim.",
+  "provenance": {
+    "source_bundle": "skymizer-small-reference-20260906",
+    "source_profile_sha256": "5928cf82ce0b13304b31e7563b9fe4af249dacb88f4c01e3d763acc241578a0e",
+    "adaptation": "Encode the accepted handover --parallel 4 override in each runtime profile; model identities, dataset pin, sampling and caps unchanged."
+  },
+  "cohort_size": 100,
+  "cohort_name": "pilot100",
+  "cohort_size_enforcement": "Launcher and uploader require the selected cohort size to match this profile."
+}

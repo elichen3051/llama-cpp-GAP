@@ -5,7 +5,7 @@
 #   llama-llm-kld    dual-model text-only on-the-fly KLD/JSD metrics
 foreach(tool IN ITEMS vlm-kld llm-kld)
     set(target llama-${tool})
-    add_executable(${target} ${tool}.cpp)
+    add_executable(${target} core/${tool}.cpp)
     set_target_properties(${target} PROPERTIES OUTPUT_NAME ${target})
     if (LLAMA_TOOLS_INSTALL)
         install(TARGETS ${target} RUNTIME)
@@ -19,7 +19,7 @@ foreach(tool IN ITEMS vlm-kld llm-kld)
 endforeach()
 
 # Batch reference generation uses GGUF templates/tokenization and native sampling.
-add_executable(llama-reference reference.cpp)
+add_executable(llama-reference core/reference.cpp)
 target_link_libraries(llama-reference PRIVATE vendor::hash llama-common mtmd Threads::Threads)
 target_compile_features(llama-reference PRIVATE cxx_std_17)
 if (LLAMA_TOOLS_INSTALL)

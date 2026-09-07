@@ -6,9 +6,9 @@ from argparse import Namespace
 import numpy as np
 import pytest
 
-import cli.power_analysis as power_cli
-from compare.engine import compare_items
-from compare.power import build_design, paired_t_interval
+import stats.cli.power_analysis as power_cli
+from stats.engine import compare_items
+from stats.power import build_design, paired_t_interval
 import lib.kld_metrics_io as kio
 from fakes import make_records, write_vlmk
 
@@ -163,7 +163,7 @@ def test_cap_panel_uses_the_production_score_item_contract(tmp_path):
         manual = []
         manual_weights = []
         for key in panel["used"]:
-            score_a, score_b, _ta, _tb, keep, *_ = power_cli.smpc.score_item(
+            score_a, score_b, _ta, _tb, keep, *_ = power_cli.paired_io.score_item(
                 key, a_dir, b_dir, cap
             )
             manual.append(score_b["kld"] - score_a["kld"])

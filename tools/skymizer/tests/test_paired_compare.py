@@ -12,8 +12,8 @@ import numpy as np
 
 import pytest
 
-from compare.cli_common import resolve_item_end
-from compare.contracts import (
+from stats.cli.common import resolve_item_end
+from stats.contracts import (
     AlignmentError,
     DEFAULT_METRICS,
     LOWER_IS_BETTER,
@@ -23,22 +23,22 @@ from compare.contracts import (
     POOLED_TOKEN_METRICS,
     SCHEMA_VERSION,
 )
-from compare.engine import compare_items
-from compare.inference import (
+from stats.engine import compare_items
+from stats.inference import (
     _build_weighting_block,
     _classify_consensus,
     _compute_decision,
     _paired_bootstrap_delta,
 )
-from compare.render import (
+from stats.render import (
     _format_execution_section,
     _sorted_prefix_warning,
     build_execution_metadata,
     build_inputs_metadata,
     format_comparison_table,
 )
-import compare.render
-import cli.saved_metrics_paired_compare as smpc
+import stats.render
+import stats.cli.saved_metrics_paired_compare as smpc
 
 
 # --------------------------------------------------------------------------- #
@@ -334,7 +334,7 @@ def test_render_inputs_missing_meta_path():
 
 
 def test_build_execution_metadata_records_cli_args_and_system(tmp_path, monkeypatch):
-    monkeypatch.setattr(compare.render, "_system_metadata", lambda: {
+    monkeypatch.setattr(stats.render, "_system_metadata", lambda: {
         "platform": "Linux-test",
         "python": "3.12.0",
         "cpu_count": 12,

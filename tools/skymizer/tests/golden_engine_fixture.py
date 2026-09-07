@@ -14,9 +14,9 @@ from pathlib import Path
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from compare.contracts import DEFAULT_CI_METHOD, DEFAULT_METRICS
-from compare.engine import compare_items
-from compare.render import format_comparison_table
+from stats.contracts import DEFAULT_CI_METHOD, DEFAULT_METRICS
+from stats.engine import compare_items
+from stats.render import format_comparison_table
 
 CI_METHODS = ("t", "studentized", "bca", "percentile")
 # The metric set the stored golden was generated with (before the EAR_K

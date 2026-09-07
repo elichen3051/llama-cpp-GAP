@@ -11,10 +11,10 @@ Holm-Bonferroni-adjusted p-values.
 import numpy as np
 import pytest
 
-from compare.contracts import DEFAULT_METRICS, DEFAULT_PRIMARY_WEIGHTING
-from compare.engine import compare_items
-from compare.inference import holm_adjust
-from compare.render import format_comparison_table
+from stats.contracts import DEFAULT_METRICS, DEFAULT_PRIMARY_WEIGHTING
+from stats.engine import compare_items
+from stats.inference import holm_adjust
+from stats.render import format_comparison_table
 
 
 def _fixture(n=24, seed=3, effect=0.0):

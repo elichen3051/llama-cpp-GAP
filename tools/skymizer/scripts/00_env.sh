@@ -32,7 +32,8 @@ case "${SKYMIZER_WORK:-}" in
     ""|/*) ;;
     *) SKYMIZER_WORK=$PWD/$SKYMIZER_WORK ;;
 esac
-if [ -z "${PYTHON:-}" ]; then
+PYTHON=${PYTHON:-${SKYMIZER_PYTHON:-}}
+if [ -z "$PYTHON" ]; then
     PYTHON=${VENV_DIR:-${UV_PROJECT_ENVIRONMENT:-${SKYMIZER_WORK:+$SKYMIZER_WORK/venv}}}
     PYTHON=${PYTHON:-$SKYMIZER_DIR/../../.venv}/bin/python
     [ -x "$PYTHON" ] || PYTHON=python3
@@ -54,30 +55,31 @@ BUILD_DIR=${BUILD_DIR:-${SKYMIZER_WORK:+$SKYMIZER_WORK/build}}
 BUILD_DIR=${BUILD_DIR:-../../build}
 VLM_KLD_BIN=${VLM_KLD_BIN:-$BUILD_DIR/bin/llama-vlm-kld}
 LLM_KLD_BIN=${LLM_KLD_BIN:-$BUILD_DIR/bin/llama-llm-kld}
+REFERENCE_BIN=${REFERENCE_BIN:-$BUILD_DIR/bin/llama-reference}
+PPL_BIN=${PPL_BIN:-$BUILD_DIR/bin/llama-perplexity}
+TOKENIZE_BIN=${TOKENIZE_BIN:-$BUILD_DIR/bin/llama-tokenize}
 
-# Default pairs vary LLM quantization and keep the reference projector.
-VLM_MODEL_DIR=${VLM_MODEL_DIR:-$HOME/models/qwen3.5-4b/bartowski}
-VLM_REF_MODEL=${VLM_REF_MODEL:-$VLM_MODEL_DIR/Qwen_Qwen3.5-4B-bf16.gguf}
-VLM_REF_MMPROJ=${VLM_REF_MMPROJ:-$VLM_MODEL_DIR/mmproj-Qwen_Qwen3.5-4B-bf16.gguf}
-VLM_CAND_A_MODEL=${VLM_CAND_A_MODEL:-$VLM_MODEL_DIR/Qwen_Qwen3.5-4B-Q4_K_M.gguf}
+# Select exact model files; keep one projector when comparing LLM quantizations.
+VLM_REF_MODEL=${VLM_REF_MODEL:-}
+VLM_REF_MMPROJ=${VLM_REF_MMPROJ:-}
+VLM_CAND_A_MODEL=${VLM_CAND_A_MODEL:-}
 VLM_CAND_A_MMPROJ=${VLM_CAND_A_MMPROJ:-$VLM_REF_MMPROJ}
-VLM_CAND_B_MODEL=${VLM_CAND_B_MODEL:-$VLM_MODEL_DIR/Qwen_Qwen3.5-4B-Q4_1.gguf}
+VLM_CAND_B_MODEL=${VLM_CAND_B_MODEL:-}
 VLM_CAND_B_MMPROJ=${VLM_CAND_B_MMPROJ:-$VLM_REF_MMPROJ}
-VLM_LABEL_A=${VLM_LABEL_A:-Q4_K_M}
-VLM_LABEL_B=${VLM_LABEL_B:-Q4_1}
+VLM_LABEL_A=${VLM_LABEL_A:-A}
+VLM_LABEL_B=${VLM_LABEL_B:-B}
 VLM_DATASET=${VLM_DATASET:-}
 VLM_SUBSET=${VLM_SUBSET:-}
 VLM_SPLIT=${VLM_SPLIT:-train}
-# Omit image bounds to let the collector use the native dataset's recorded budget.
+# Omit image bounds to preserve the native dataset's recorded budget.
 IMAGE_MIN_TOKENS=${IMAGE_MIN_TOKENS:-}
 IMAGE_MAX_TOKENS=${IMAGE_MAX_TOKENS:-}
 
-LLM_MODEL_DIR=${LLM_MODEL_DIR:-$HOME/models/qwen3.5-4b/bartowski}
-LLM_REF_MODEL=${LLM_REF_MODEL:-$LLM_MODEL_DIR/Qwen_Qwen3.5-4B-bf16.gguf}
-LLM_CAND_A_MODEL=${LLM_CAND_A_MODEL:-$LLM_MODEL_DIR/Qwen_Qwen3.5-4B-Q4_K_M.gguf}
-LLM_CAND_B_MODEL=${LLM_CAND_B_MODEL:-$LLM_MODEL_DIR/Qwen_Qwen3.5-4B-Q4_1.gguf}
-LLM_LABEL_A=${LLM_LABEL_A:-Q4_K_M}
-LLM_LABEL_B=${LLM_LABEL_B:-Q4_1}
+LLM_REF_MODEL=${LLM_REF_MODEL:-}
+LLM_CAND_A_MODEL=${LLM_CAND_A_MODEL:-}
+LLM_CAND_B_MODEL=${LLM_CAND_B_MODEL:-}
+LLM_LABEL_A=${LLM_LABEL_A:-A}
+LLM_LABEL_B=${LLM_LABEL_B:-B}
 LLM_DATASET=${LLM_DATASET:-}
 LLM_SUBSET=${LLM_SUBSET:-}
 LLM_SPLIT=${LLM_SPLIT:-train}
@@ -113,18 +115,20 @@ skymizer_collect_args() {
 
 OUT_ROOT=${OUT_ROOT:-${SKYMIZER_WORK:+$SKYMIZER_WORK/outputs}}
 OUT_ROOT=${OUT_ROOT:-outputs}
-VLM_OUT_KLD_A=$OUT_ROOT/vlm-kld-ref-vs-a
-VLM_OUT_KLD_B=$OUT_ROOT/vlm-kld-ref-vs-b
-LLM_OUT_KLD_A=$OUT_ROOT/llm-kld-ref-vs-a
-LLM_OUT_KLD_B=$OUT_ROOT/llm-kld-ref-vs-b
+VLM_OUT_KLD_A=${VLM_OUT_KLD_A:-$OUT_ROOT/vlm-kld-ref-vs-a}
+VLM_OUT_KLD_B=${VLM_OUT_KLD_B:-$OUT_ROOT/vlm-kld-ref-vs-b}
+LLM_OUT_KLD_A=${LLM_OUT_KLD_A:-$OUT_ROOT/llm-kld-ref-vs-a}
+LLM_OUT_KLD_B=${LLM_OUT_KLD_B:-$OUT_ROOT/llm-kld-ref-vs-b}
 
 pick_lane() {
     LANE=${1:-vlm}
     case "$LANE" in
         vlm) OUT_KLD_A=$VLM_OUT_KLD_A; OUT_KLD_B=$VLM_OUT_KLD_B
              LABEL_A=$VLM_LABEL_A;     LABEL_B=$VLM_LABEL_B ;;
+        text) OUT_KLD_A=${TEXT_WORK:-$OUT_ROOT/text-bridge}/llm-a; OUT_KLD_B=${TEXT_WORK:-$OUT_ROOT/text-bridge}/llm-b
+              LABEL_A=$LLM_LABEL_A; LABEL_B=$LLM_LABEL_B ;;
         llm) OUT_KLD_A=$LLM_OUT_KLD_A; OUT_KLD_B=$LLM_OUT_KLD_B
              LABEL_A=$LLM_LABEL_A;     LABEL_B=$LLM_LABEL_B ;;
-        *)   echo "error: unknown lane '$LANE' (vlm|llm)" >&2; exit 1 ;;
+        *)   echo "error: unknown lane '$LANE' (vlm|text|llm)" >&2; exit 1 ;;
     esac
 }

@@ -9,7 +9,7 @@ Transformers, an HF processor/tokenizer, or the parent reference-generator repo.
 
 ## Build and generate
 
-Use the [README environment and build commands](../README.md#environment-and-build), then run from the repository root. This short example illustrates the low-level interface; use a validated cohort profile for formal generation.
+Use the [README environment and build commands](workflows.md), then run from the repository root. This short example illustrates the low-level interface; use a validated cohort profile for formal generation.
 
 ```bash
 "$SKYMIZER_PYTHON" tools/skymizer/cli/generate_reference.py \
@@ -89,7 +89,7 @@ The output directory must be new:
 - `metadata.json`: effective settings and provenance, also embedded in rows.
 - `requests.jsonl`: exact prepared requests; `attempts/NNNN/` preserves each native command, request subset, log, exit status, row journal, and raw results.
 - `native/metadata.json`, `native/generations.jsonl`: direct C++ output; each row is flushed.
-- `inputs/`: original encoded images; `scripts/`: copies of the Python/native producer sources and the built-in profile. Preserve any externally selected profile and its checksum separately.
+- `inputs/`: original encoded images; `scripts/`: copies of the Python/native producer sources. Preserve the selected profile and its checksum with the run; a campaign also archives its selected profile.
 - `run_start.json`, `run_state.json`, `progress.json`: source/execution identity, lifecycle status, and remaining IDs.
 - `excluded.jsonl`, `failures.jsonl`: repetition evidence and classified row failures.
 - `complete.json`: written atomically after every requested ID has an eligible, excluded, or failed outcome; `complete_with_failures` does not mean every row generated successfully.
@@ -200,11 +200,11 @@ Native `--no-repetition-stop` disables both online and final repetition checks f
 
 ## Production profiles, shared GPU queue, and publication
 
-Use a cohort-specific profile from the [RunPod handover](reference-runpod-handover.md) or [final-evaluation handover](reference-runpod-final-handover.md). The 100-question pilot uses instruct/thinking caps of 2048/8192; the 500-question cohort uses 1024/4096. The built-in profile is a historical template with different caps and roster. It is not the current experiment plan. A profile declaring `cohort_size` is rejected when used with another size.
+Use a cohort-specific profile from the [portable reference guide](runpod-reference.md). The 100-question pilot uses instruct/thinking caps of 2048/8192; the 500-question cohort uses 1024/4096. The six profiles in `profiles/` separate small SNR, remaining SNR and final-evaluation checkpoints at each cohort size. High-level generation, collection and campaign CLIs require an explicit `--profiles` selection. A profile declaring `cohort_size` is rejected when used with another size.
 
 `generate_model_reference.py` selects one checkpoint, source subset and semantic mode. The profile binds the source revision, complete reference/projector/MTP identities, effective sampling, image policy and per-mode runtime. `run_reference_campaign.py` enumerates only each model's supported modes; Muse has thinking only. The overview records actual per-mode parallel counts and does not assign a global generation sequence count.
 
-Run from the repository root after the [README environment setup](../README.md#environment-and-build):
+Run from the repository root after the [README environment setup](workflows.md):
 
 ```bash
 "$SKYMIZER_PYTHON" tools/skymizer/cli/run_reference_campaign.py \
@@ -217,7 +217,7 @@ Use the size500 profile, `--size 500` and a new directory for the full cohort. A
 
 One worker per selected GPU takes generation jobs from a shared queue, while upload workers handle completed jobs. Reference generation can use a validated parallel profile; MTP requires one sequence in this implementation. Complete non-causal image chunks must fit both batch and microbatch. The producer records a row failure instead of splitting such a chunk into causal batches. Use the validated capacity in the later VLM scorer as well.
 
-`--resume` checks the frozen plan, archived source, binaries/libraries, completed artifacts and upload receipts. The archive includes `cli/`, `lib/`, `compare/`, scripts and profiles, plus git source/diff, dependency and GPU provenance. It refuses changed archived files. A directory lock excludes a second owner of that campaign, but does not reserve the GPU against other jobs.
+`--resume` checks the frozen plan, archived source, binaries/libraries, completed artifacts and upload receipts. The archive includes `core/`, `cli/`, `lib/`, `stats/`, scripts and profiles, plus git source/diff, dependency and GPU provenance. It refuses changed archived files. A directory lock excludes a second owner of that campaign, but does not reserve the GPU against other jobs.
 
 Generation jobs have a 48-hour process timeout and uploads have a one-hour timeout with three attempts; configure deadlines before freezing the plan. Cancellation terminates child process groups and kills remaining descendants after the grace period. Completed rows survive native retries within one invocation; a restarted Python job uses a new attempt. Failed/excluded rows remain in the audit and receive no replacements. Ordinary job failures do not stop independent queued jobs.
 
@@ -229,4 +229,4 @@ Parquet, dataset-card config mapping and audit files are added in one compare-an
 
 Campaign exit0 requires every planned job to complete without row failures and all requested uploads to verify. Exit2 means completed processing with failures; exit130 means interruption. Preserve `status.json`, attempt logs and exact Hub revisions. An upload-enabled campaign requires the archived uploader to match this release before any work is dispatched, and checks again before upload. Legacy archives are preserved and refused for automatic publication. Use a new campaign directory, or upload an existing completed run with the current standalone `upload_reference.py --run OLD_RUN --profiles OLD_ARCHIVED_PROFILE --model CHECKPOINT --mode MODE --private`. This revalidates the local artifacts and destination; an old receipt alone is not sufficient. Do not replace files in an immutable archive.
 
-`restore_reference_models.py --profiles "$COHORT_PROFILE"` plans exact S3 object downloads for all reference shards, projectors and declared MTP sidecars. Add `--download` to fetch missing files. It verifies complete SHA256 and size, preserves verified files, rejects mismatches and installs downloads without overwriting another writer. Exact object keys do not require bucket listing. Use the handover's S3 region and model-root mapping.
+`restore_reference_models.py --profiles "$COHORT_PROFILE"` plans exact S3 object downloads for all reference shards, projectors and declared MTP sidecars. Add `--download` to fetch missing files. It verifies complete SHA256 and size, preserves verified files, rejects mismatches and installs downloads without overwriting another writer. Exact object keys do not require bucket listing. Set the S3 bucket's region and the selected model root as described in the [reference guide](runpod-reference.md).

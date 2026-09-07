@@ -16,8 +16,8 @@ import json
 import numpy as np
 import pytest
 
-from compare.contracts import DEFAULT_METRICS
-import cli.random_subsample_power as rsp
+from stats.contracts import DEFAULT_METRICS
+import stats.cli.random_subsample_power as rsp
 
 
 def _population(n=40, seed=5, effect=0.02):
@@ -143,7 +143,7 @@ def test_null_verdict_rows_are_not_counted_as_detections(tmp_path, monkeypatch):
 @pytest.mark.parametrize("failure", ["runtime", "execution", "missing", "rejected", "nonfinite", "reference", "budget"])
 def test_legacy_loaders_reject_invalid_paired_collections(tmp_path, loader, failure):
     from test_saved_metrics_paired_compare import _make_pair
-    import cli.variance_decomposition as vd
+    import stats.cli.variance_decomposition as vd
 
     options = {"n_items": 4}
     if failure == "runtime":
@@ -178,7 +178,7 @@ def test_legacy_loaders_reject_invalid_paired_collections(tmp_path, loader, fail
 @pytest.mark.parametrize("loader", ["random", "variance"])
 def test_legacy_loaders_keep_every_valid_paired_item(tmp_path, loader):
     from test_saved_metrics_paired_compare import _make_pair
-    import cli.variance_decomposition as vd
+    import stats.cli.variance_decomposition as vd
 
     a_dir, b_dir = _make_pair(tmp_path, n_items=4)
     if loader == "random":

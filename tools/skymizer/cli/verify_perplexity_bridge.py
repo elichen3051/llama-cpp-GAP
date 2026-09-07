@@ -59,7 +59,7 @@ def verify(args):
 
 def _verify_locked(args):
     meta = json.loads((args.llm_collection / "collect_meta.json").read_text())
-    from cli.saved_metrics_paired_compare import require_collection_success
+    from stats.collection_io import require_collection_success
     require_collection_success(args.llm_collection, "llm-kld")
     protocol, windows = load_corpus_map(args.llm_collection, meta)
     prepared = json.loads((args.prepared / "manifest.json").read_text())

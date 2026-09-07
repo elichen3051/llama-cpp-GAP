@@ -17,7 +17,7 @@ import math
 import numpy as np
 import pytest
 
-from compare.contracts import (
+from stats.contracts import (
     AlignmentError,
     DEFAULT_METRICS,
     LOWER_IS_BETTER,
@@ -25,9 +25,9 @@ from compare.contracts import (
     POOLED_TAIL_ROWS,
     POOLED_TOKEN_METRICS,
 )
-from compare.engine import compare_items
-from compare.render import format_comparison_table
-from compare.tokens import _pooled_distribution_block, _pooled_ladder
+from stats.engine import compare_items
+from stats.render import format_comparison_table
+from stats.tokens import _pooled_distribution_block, _pooled_ladder
 
 
 def _llama_perplexity_percentile(values, fraction):

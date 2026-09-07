@@ -10,7 +10,7 @@ Use these checks when freezing a comparison. Details belong to the linked guide.
 | Preserve source image order and complete tile groups | Image count is not tile count. Similar image dimensions do not prove equal native context use. | [Image and prefix failures](troubleshooting.md#image-and-prefix-failures) |
 | Use identical eligible rows and targets | One-sided exclusions or failures change the paired sample. | [Completion and artifacts](collect.md#completion-and-artifacts) |
 | Pick grouping before comparing candidates | Tokens within an answer or corpus block are correlated. Articles and blocks can also remain dependent. | [Corpus groups](compare.md#fixed-text-corpora-and-grouped-inference) |
-| Distinguish original and saved-base PPL | llama-perplexity's uint16 saved reference can clip low log probabilities. | [Text bridge](perplexity-llm-kld-aws-handover.md) |
+| Distinguish original and saved-base PPL | llama-perplexity's uint16 saved reference can clip low log probabilities. | [Text bridge](text-bridge.md) |
 | Keep pilot planning separate from prospective power | Observed pilot effects do not supply an externally chosen meaningful effect. | [Planning](../knowledge/seq-power-analysis.md) |
 
 Dataset row indices are positions after the selected sort. Use stable item IDs and pinned dataset content when reconciling runs. Pilot overlap with a later collection must be stated; it is not an independent replication.
