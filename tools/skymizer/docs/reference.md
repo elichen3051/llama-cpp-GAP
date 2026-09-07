@@ -9,23 +9,21 @@ Transformers, an HF processor/tokenizer, or the parent reference-generator repo.
 
 ## Build and generate
 
-Run from the llama.cpp checkout:
+Use the [README environment and build commands](../README.md#environment-and-build), then run from the repository root. This short example illustrates the low-level interface; use a validated cohort profile for formal generation.
 
 ```bash
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DGGML_CUDA=ON
-cmake --build build --target llama-reference llama-vlm-kld llama-llm-kld -j4
-UV_PROJECT_ENVIRONMENT="$PWD/.venv" uv sync --project tools/skymizer --python 3.12
-
-.venv/bin/python tools/skymizer/cli/generate_reference.py \
-  --dataset /path/to/prepared-dataset --out /path/to/new-reference \
+"$SKYMIZER_PYTHON" tools/skymizer/cli/generate_reference.py \
+  --llama-reference "$SKYMIZER_WORK/build/bin/llama-reference" \
+  --dataset /path/to/prepared-dataset --out "$SKYMIZER_WORK/reference-example" \
   --no-enable-thinking -- \
   -m /models/model-bf16.gguf --mmproj /models/mmproj.gguf \
-  -ngl 99 -c 8192 -n 128 --seed 1234
+  -ngl all -c 8192 -b 2048 -ub 512 -t 8 -tb 8 -fa on --fit off \
+  -ctk f16 -ctv f16 -n 128 --seed 1234
 ```
 
 For a text-only dataset, omit `--mmproj`. A run with a projector can mix text,
 single-image, and multi-image rows. All native options follow `--`; use
-`build/bin/llama-reference --help` for llama.cpp flags. The tool uses a context
+`"$SKYMIZER_WORK/build/bin/llama-reference" --help` for llama.cpp flags. The tool uses a context
 of 8192 and a generation cap of 128 unless overridden. Autoregressive generation supports `-np N` parallel sequences in one model/context; MTP currently requires `-np 1`.
 
 With the default separate KV allocation, native `-c` is total context: use `-np 4 -c 131072` to retain 32768 positions per sequence. The high-level `generate_model_reference.py --parallel 4` instead treats profile `ctx` and `--ctx` as per-sequence capacity and multiplies by the slot count. Check actual `n_ctx`, `n_ctx_per_seq` and `total_slots` in metadata. Each row has its own sampler, seed, repetition history, positions and token/logprob buffers; image prefill is serial, and active rows share batched autoregressive decode. Completion order may differ from request order; the Python driver restores source order. Different batch shapes can change floating-point results and sampled trajectories, even with the same seed.
@@ -64,8 +62,9 @@ thinking tokens remain in the trajectory and count toward the generation cap.
 The equivalent of querying server `/props` is:
 
 ```bash
-build/bin/llama-reference -m /models/model-bf16.gguf \
-  --mmproj /models/mmproj.gguf -ngl 99 -c 8192 --describe > props.json
+"$SKYMIZER_WORK/build/bin/llama-reference" -m /models/model-bf16.gguf \
+  --mmproj /models/mmproj.gguf -ngl all -c 8192 -b 2048 -ub 512 \
+  -t 8 -tb 8 -fa on --fit off -ctk f16 -ctv f16 --describe > "$SKYMIZER_WORK/props.json"
 ```
 
 This loads the model/projector and reports effective sampling, actual context
@@ -201,30 +200,33 @@ Native `--no-repetition-stop` disables both online and final repetition checks f
 
 ## Production profiles, shared GPU queue, and publication
 
-The current RunPod protocol calls the 100-row cohort the pilot. Its generation caps differ from the 500-row cohort; the four size/mode values are pending confirmation and are not yet represented by the shared defaults below. The current model roster and readiness gaps are in [the reference handover](reference-runpod-handover.md).
+Use a cohort-specific profile from the [RunPod handover](reference-runpod-handover.md) or [final-evaluation handover](reference-runpod-final-handover.md). The 100-question pilot uses instruct/thinking caps of 2048/8192; the 500-question cohort uses 1024/4096. The built-in profile is a historical template with different caps and roster. It is not the current experiment plan. A profile declaring `cohort_size` is rejected when used with another size.
 
-`generate_model_reference.py` uses `scripts/reference_model_profiles.json` for one BF16 model, source subset, and mode. It pins the prepared dataset revision, model-card sampling, default image budget, and generation caps: 8192 instruct or 16384 thinking. The profile records pinned model/projector hashes, which restoration, campaign validation, and publication verify. Later KLD uses at most 2048 or 4096 generated positions respectively. The profile selects MTP only where the local speed tests support it; H100 entries are unmeasured starting points.
+`generate_model_reference.py` selects one checkpoint, source subset and semantic mode. The profile binds the source revision, complete reference/projector/MTP identities, effective sampling, image policy and per-mode runtime. `run_reference_campaign.py` enumerates only each model's supported modes; Muse has thinking only. The overview records actual per-mode parallel counts and does not assign a global generation sequence count.
 
-Non-causal image attention requires the complete image chunk to fit in both `-b` and `-ub`. The producer rejects an insufficient capacity before decoding and records a recoverable row failure. Gemma 4 26B/31B use ubatch2048 to accommodate their default image budget. Do not split such an image into smaller causal batches to bypass the requirement. Apply sufficient image capacity to a later VLM scorer too, with identical settings for both paired candidates.
-
-A campaign job is one model/source/mode. One worker per selected GPU takes jobs from a shared queue; the native process uses the selected runtime profile's parallel count (default 1). Two separate upload workers allow GPU generation to advance while uploads run. A single host can use four or six GPU identifiers; separate hosts can select disjoint models with `--models` and keep their own output directories.
+Run from the repository root after the [README environment setup](../README.md#environment-and-build):
 
 ```bash
-.venv/bin/python tools/skymizer/cli/run_reference_campaign.py \
-  --out /opt/dlami/nvme/native-reference-pilot --size 100 --gpus 0,1,2,3 --hardware pro6000
+"$SKYMIZER_PYTHON" tools/skymizer/cli/run_reference_campaign.py \
+  --profiles "$COHORT_PROFILE" --models "$CHECKPOINT" \
+  --out "$SKYMIZER_WORK/reference-pilot" --size 100 --gpus 0 --hardware pro6000 \
+  --llama-reference "$SKYMIZER_WORK/build/bin/llama-reference"
 ```
 
-The campaign defaults to all six production models, seven sources, both modes, and upload enabled: 84 jobs, each requesting 100 rows. Use size500 and a new directory for collect-500. A diagnostic run can use `--sources mmmu-pro-vision --num-samples 1 --no-upload`; short runs cannot be published into formal configs. Keep the host/GPU identity and hardware profile consistent inside one campaign.
+Use the size500 profile, `--size 500` and a new directory for the full cohort. A diagnostic run can select one source and use `--num-samples 1 --no-upload`; short runs cannot be published into formal configs. Finish the SNR-decision group before launching final-evaluation models for each cohort. The campaign has no cross-host group gate or global GPU lock; the operator controls disjoint GPU assignments and group order.
 
-`--resume` checks the frozen plan, archived scripts, executable/libraries, completed artifacts and upload receipts. A lock prevents two owners of the same campaign directory. It does not reserve GPUs across different directories or hosts. The archive contains the scripts actually executed, profiles, source revision/full tracked diff, untracked-file hashes, dependency information and GPU details. Preserve any untracked source content outside the archived Skymizer files separately.
+One worker per selected GPU takes generation jobs from a shared queue, while upload workers handle completed jobs. Reference generation can use a validated parallel profile; MTP requires one sequence in this implementation. Complete non-causal image chunks must fit both batch and microbatch. The producer records a row failure instead of splitting such a chunk into causal batches. Use the validated capacity in the later VLM scorer as well.
 
-Ordinary row/job/upload failures do not stop the remaining queue. Generation jobs have a 48-hour whole-process timeout, including data preparation; uploads have a one-hour timeout and three attempts. `--job-timeout`, `--upload-timeout` and `--kill-grace` can change these before freezing the plan. Cancellation and timeouts terminate child process groups, then kill descendants after the grace period. Native recovery retains completed rows within one driver invocation. A host restart or interrupted Python driver reruns that whole job in a new attempt directory. Completed cohorts with failed rows remain final; modified or missing completed artifacts require investigation.
+`--resume` checks the frozen plan, archived source, binaries/libraries, completed artifacts and upload receipts. The archive includes `cli/`, `lib/`, `compare/`, scripts and profiles, plus git source/diff, dependency and GPU provenance. It refuses changed archived files. A directory lock excludes a second owner of that campaign, but does not reserve the GPU against other jobs.
 
-`upload_reference.py` validates the full source cohort, exact eligible/excluded/failed partition, BF16 identities, mode/cap, native template/image policy and frozen effective sampling. It publishes to `elichen-skymizer/<model>-pilot` or `<model>-collect-500`, with the original source config plus `-ins`/`-think` and split `train`. Only eligible rows are published; exclusions and failures remain in the audit, without replacement samples. Non-repeating capped answers remain eligible for later quality review.
+Generation jobs have a 48-hour process timeout and uploads have a one-hour timeout with three attempts; configure deadlines before freezing the plan. Cancellation terminates child process groups and kills remaining descendants after the grace period. Completed rows survive native retries within one invocation; a restarted Python job uses a new attempt. Failed/excluded rows remain in the audit and receive no replacements. Ordinary job failures do not stop independent queued jobs.
 
-Publication adds parquet, dataset-card mapping and audit files in one compare-and-swap Hub commit. Occupied namespaces or existing configs that would absorb the new files fail closed. Repeating the same upload verifies every audit file, parquet hash and README mapping at the pinned commit. `upload/receipt.json` records verified publication; a process exit alone is insufficient. Full native logs and attempt scripts remain in the local campaign archive and should be copied to research storage by the operator.
+`upload_reference.py` validates cohort reconciliation, identities, source revision, templates, image policy, mode, caps and sampling before staging parquet. Publication uses `elichen-skymizer/<checkpoint>-pilot` or `<checkpoint>-collect-500`; each source config gains `-ins` or `-think`, with split `train`. Only eligible rows enter the dataset; complete audit files record failures and exclusions.
 
-Campaign `status.json` reconciles every planned job. Exit0 means all jobs completed without row failures and any requested uploads were verified; exit2 means processing finished with failures; exit130 means interrupted. Include operator notes with host/GPU, exact commands, UTC times, restart reasons, outstanding jobs and verified Hub revisions. Do not remove failed attempts or mark missing work complete.
+Publication defaults to private, including the campaign path. Existing public destinations are changed to private and verified before data upload. Privacy is checked again before accepting a receipt. Permission errors or a destination that remains public stop publication. `--private` remains accepted explicitly; `--dry-run` only validates and exports local files. Hugging Face ignores `create_repo(private=True)` for an existing repository, so changing its visibility requires `update_repo_settings`; see the [Hub API contract](https://huggingface.co/docs/huggingface_hub/en/package_reference/hf_api#huggingface_hub.HfApi.create_repo).
 
+Parquet, dataset-card config mapping and audit files are added in one compare-and-swap Hub commit. Existing conflicting data/config namespaces are refused. Repeated uploads verify the pinned remote files and hashes. The local `upload/receipt.json` records the verified revision and private status. A receipt records the observed visibility at verification time; an external owner can subsequently change repository settings.
 
-`restore_reference_models.py --profiles tools/skymizer/scripts/reference_model_profiles.json` plans BF16 model/projector restoration from the archived S3 keys into the nested profile paths. Add `--download` to fetch missing files with AWS CLI. It checks complete file SHA256 and sizes, skips verified existing files, rejects existing mismatches before downloading, and installs verified temporary files without overwriting another writer. Gemma sidecar heads are separate pinned HF downloads listed in the profile; they are not included in the BF16 S3 restore.
+Campaign exit0 requires every planned job to complete without row failures and all requested uploads to verify. Exit2 means completed processing with failures; exit130 means interruption. Preserve `status.json`, attempt logs and exact Hub revisions. An upload-enabled campaign requires the archived uploader to match this release before any work is dispatched, and checks again before upload. Legacy archives are preserved and refused for automatic publication. Use a new campaign directory, or upload an existing completed run with the current standalone `upload_reference.py --run OLD_RUN --profiles OLD_ARCHIVED_PROFILE --model CHECKPOINT --mode MODE --private`. This revalidates the local artifacts and destination; an old receipt alone is not sufficient. Do not replace files in an immutable archive.
+
+`restore_reference_models.py --profiles "$COHORT_PROFILE"` plans exact S3 object downloads for all reference shards, projectors and declared MTP sidecars. Add `--download` to fetch missing files. It verifies complete SHA256 and size, preserves verified files, rejects mismatches and installs downloads without overwriting another writer. Exact object keys do not require bucket listing. Use the handover's S3 region and model-root mapping.

@@ -1,6 +1,6 @@
 # RunPod: 單純產生 reference
 
-更新日期: 2026-09-06。本文件只處理 reference 生成、驗收與交付。[VLM KLD](/home/ubuntu/llamacpp_kld_aws_handover.md) 與 [llama-perplexity / LLM KLD](/home/ubuntu/llamacpp_perplexity_llm_kld_aws_handover.md) 分開；文字橋接依目前決策延後。
+更新日期: 2026-09-06。本文件只處理 reference 生成、驗收與交付。[VLM KLD](/home/ubuntu/llamacpp_kld_aws_handover.md) 與 [llama-perplexity / LLM KLD](/home/ubuntu/llamacpp_perplexity_llm_kld_aws_handover.md) 分開；文字橋接與文章／連續區塊統計已完成驗收，操作方式見該專用文件。
 
 Qwen3.5-4B / Gemma E4B 的 100 / 500 題已另備可執行的 [小模型交接文件](/home/ubuntu/llamacpp_reference_runpod_handover_qwen_gemma_4b.md) 與兩份外部 profiles。其餘四個 SNR checkpoint 的外部 profiles、MTP 還原修正與 84-job 操作步驟在第 7 節，GPU 驗收狀態列於第 8 節。InternVL / GLM / Muse 的 100 / 500 題另見 [最終評估組交接](reference-runpod-final-handover.md)，以該文件與補充包的最終驗收狀態為準。先依第 3 節設定環境，再依第 7 節核對來源、建置、還原與生成。不要直接執行舊版預設六模型 campaign。
 

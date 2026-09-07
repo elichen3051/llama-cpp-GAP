@@ -10,10 +10,16 @@ def validate_reference_cohort(profiles, size):
         raise ValueError(f"profile cohort_size={expected!r} does not match requested size={size}")
 
 
+def model_modes(profile, requested):
+    supported = profile.get("semantic_modes", profile.get("sampling_args", profile.get("effective_sampling", {})))
+    modes = [mode for mode in requested if mode in ("instruct", "thinking") and mode in supported]
+    if not modes:
+        raise ValueError(f"unsupported semantic modes: {requested}")
+    return modes
+
+
 def reference_template(profile, mode):
-    modes = profile.get("semantic_modes", profile.get("sampling_args", profile.get("effective_sampling", {})))
-    if mode not in ("instruct", "thinking") or mode not in modes:
-        raise ValueError(f"unsupported semantic mode: {mode}")
+    model_modes(profile, [mode])
     prompts = profile.get("system_prompt", {})
     template_kwargs = profile.get("chat_template_kwargs", {})
     if not isinstance(prompts, dict) or not isinstance(template_kwargs, dict):
@@ -32,12 +38,18 @@ def reference_template(profile, mode):
 
 
 def kld_runtime(profiles, model, mode, hardware):
-    generation = profiles["models"][model]["runtime"][hardware][mode]
+    model_modes(profiles["models"][model], [mode])
+    profile = profiles["models"][model]
+    allow_attributes = profile.get("allow_vocab_attr_mismatch", False)
+    if type(allow_attributes) is not bool:
+        raise ValueError("profile allow_vocab_attr_mismatch must be a boolean")
+    generation = profile["runtime"][hardware][mode]
     return {
         "n_ctx": generation["ctx"], "n_batch": generation["batch"],
         "n_ubatch": generation["ubatch"], "tf_chunk": generation["batch"],
         "n_gpu_layers": -2, "n_threads": generation["threads"], "metric_threads": 8,
         "flash_attn": "enabled", "swa_full": False, "mtp": False,
+        "allow_vocab_attr_mismatch": allow_attributes,
         "num_eval_tokens": profiles["kld_eval_tokens"][mode],
         "image_token_budget": "inherit reference dataset", "cache_type_k": "f16", "cache_type_v": "f16",
     }
@@ -45,14 +57,18 @@ def kld_runtime(profiles, model, mode, hardware):
 
 def study_overview(profiles, plan):
     model_root = Path(plan["models_dir"])
-    modes = plan["modes"]
+    requested_modes = plan["modes"]
     suffix = "pilot" if plan["size"] == 100 else "collect-500"
     models = {}
     for name in plan["models"]:
         profile = profiles["models"][name]
+        modes = model_modes(profile, requested_modes)
         runtime = {mode: {key: value for key, value in profile["runtime"][plan["hardware"]][mode].items()
                           if key not in ("trial", "validation")} for mode in modes}
+        for settings in runtime.values():
+            settings.setdefault("parallel", 1)
         models[name] = {
+            "modes": modes,
             "ref_model": str(model_root / profile["model"]),
             "ref_mmproj": str(model_root / profile["mmproj"]),
             "reference_runtime": runtime,
@@ -66,12 +82,12 @@ def study_overview(profiles, plan):
         "schema": "skymizer-reference-study-v1", "stage": plan.get("stage", "reference"), "hardware": plan["hardware"],
         "source": {**profiles["dataset"], "split": "train", "requested_per_job": plan["num_samples"] or plan["size"]},
         "subsets": [f"{source}-subsample-{plan['size']}-" + ("ins" if mode == "instruct" else "think")
-                    for source in plan["sources"] for mode in modes],
-        "generation_caps": {mode: profiles["generation_caps"][mode] for mode in modes},
+                    for source in plan["sources"] for mode in requested_modes],
+        "generation_caps": {mode: profiles["generation_caps"][mode] for mode in requested_modes},
         "reference_common": {"gpu_layers": "all", "flash_attn": "on", "cache_type_k": "f16",
-                             "cache_type_v": "f16", "sequences": 1, "fit": "off", "seed": profiles["seed"],
+                             "cache_type_v": "f16", "fit": "off", "seed": profiles["seed"],
                              "image_token_budget": profiles["image_token_budget"]},
-        "models": models, "generation_jobs": len(models) * len(plan["sources"]) * len(modes),
+        "models": models, "generation_jobs": sum(len(model["modes"]) for model in models.values()) * len(plan["sources"]),
         "layout": {"scripts": "scripts/skymizer", "script_hashes": "scripts/manifest.json",
                    "provenance": "scripts/provenance", "status": "status.json",
                    "reference": "artifacts/<model>/<subset>/attempt-<number>/dataset",

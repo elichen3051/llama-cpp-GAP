@@ -1,100 +1,5 @@
 #!/usr/bin/env python3
-# =============================================================================
-# saved_metrics_paired_compare.py
-#
-# Item-level PAIRED comparison of two quantization candidates from ON-THE-FLY
-# metric dumps (collect_kld.py / VLMK .npz) instead of stored logits — the
-# metrics-pipeline counterpart of paired_compare.py, producing the same report.
-#
-# Inputs are TWO collect_kld.py dirs that share the SAME reference:
-#     --candidate-a <ref-vs-A metrics dir>   (metrics/*.npz + collect_meta.json)
-#     --candidate-b <ref-vs-B metrics dir>
-#
-# Each per-token VLMK record already carries everything the paired report
-# needs; per-item scores are reconstructed exactly as paired_compare computes
-# them from raw logits:
-#     nll            = mean nll_cand
-#     kld            = mean kld                  (full-vocab by construction)
-#     reversed_kld   = mean reversed_kld
-#     js_kld         = mean js_kld
-#     ear            = mean ear                  (VLMK v2 dumps only; Expected
-#                      Acceptance Rate, sum min(p_ref, p_cand) = 1 - TV,
-#                      arXiv:2605.02404. v1 dumps predate the column: `ear` is
-#                      then dropped from the default metric set with a
-#                      persisted warning, or hard-fails if explicitly
-#                      requested via --metrics.)
-#     same_top_rate  = mean(argmax_ref == argmax_cand)
-#     mse_dp         = mean(((exp(-nll_cand) - exp(-nll_ref)) * 100)^2)
-#     entropy        = mean entropy_cand         (candidate-only, no verdict)
-# plus the DESCRIPTIVE per-token distribution ladders (max / 99.9% / 99.0% /
-# 95.0% / 90.0% / median / 10.0% / 5.0% / 1.0% / 0.1% / min over ALL tokens of
-# ALL items flattened, with the item@position each value came from and no
-# bootstrap or CI) built by paired_compare from the per-token `kld` and `ear`
-# columns this script threads through. The `ear` ladder needs the v2 column;
-# a v1 dir gets the kld ladder alone.
-# and handed to paired_compare.compare_items — the SAME statistics engine
-# (item/token weighting, seeded paired bootstrap, verdict truth table,
-# ppl/ppl_ratio/rms_dp derivation, pooled per-token ladders) and the SAME markdown
-# renderer. On the validation runs the resulting report matches the
-# stored-logits report to float32 metric-storage rounding (~1e-7 relative)
-# with identical verdicts.
-#
-# Alignment & guards (all hard failures exit 1 with the reason on stderr):
-#   - collect_meta.json of the two dirs must agree on the reference identity
-#     (ref_model + ref_mmproj) and on every field that changes the numbers:
-#     dataset/subset/split/sort_by/num_eval_tokens/image_{min,max}_tokens/
-#     tf_chunk/n_batch/n_ubatch/media_wrapper. Hard fail on mismatch. When a
-#     collect_meta.json is MISSING these cross-dir checks (and same-model
-#     detection) cannot run — that downgrade is warned about AND persisted in
-#     the report, but the per-item guards below still apply.
-#   - Per item, the two dirs' vocab/npos/n_prefill/n_past_actual and `target`
-#     columns must
-#     match (hard fail — anything else is item misalignment).
-#   - REFERENCE CONSISTENCY: the per-token nll_ref/entropy_ref/argmax_ref
-#     columns must be bit-identical between the two dirs. The paired verdict
-#     is only meaningful if A and B were measured against the same reference
-#     realization; with a shared build/GPU/--tf-chunk the reference forward
-#     passes are bit-exact, so any drift here means the premise is broken
-#     (different build, GPU, or batching). Hard fail by default;
-#     --allow-ref-drift downgrades it to a warning, and the drift magnitude
-#     (worst per-item max |Δ nll_ref|, total argmax_ref flips) is persisted
-#     in the report and JSON so the artifact can prove how (im)pure the
-#     pairing was.
-#   - Items missing from either dir hard-fail as missing data before inference.
-#     `--allow-interaction` (alias `--allow-intersection`) explicitly permits
-#     the clean artifact-key intersection and records the missing keys in the
-#     report. `SKIP_OVER_BUDGET` row sets must still match exactly between the
-#     manifests; a mismatch always hard-fails, even with that override.
-#   - Any non-finite metric, rejected/incomplete artifact, or failed collection
-#     row aborts before paired inference; numerical failures are never excluded
-#     from the sample. Fails closed when fewer than 2 usable items remain.
-#     Warnings are emitted when the candidates are the same model+mmproj, or a
-#     candidate equals the reference.
-#
-# Usage:
-#   python3 tools/skymizer/saved_metrics_paired_compare.py \
-#       --candidate-a tmp/kld-q4km-mmf16/ \
-#       --candidate-b tmp/kld-q4km-mmq80/ \
-#       --out tmp/paired-q4km.md \
-#       [--label-a Q4KM_MMF16] [--label-b Q4KM_MMQ80] \
-#       [--metrics nll kld reversed_kld js_kld ear same_top_rate mse_dp] \
-#       [--confidence-level 0.95] [--bootstrap-iters 5000] [--seed 1234] \
-#       [--weighting both|item|token] [--start 0] [--end N|-1] \
-#       [--num-eval-tokens N]   (compare-time cap: per item, first
-#                                min(N, npos) positions; -1 = all, default) \
-#       [--allow-interaction] \
-#       [--allow-ref-drift] [--show-diagnostic-metrics] \
-#       [--output-json tmp/paired-q4km.json]
-#
-# Speed/memory: metric files are ~76 KiB/item at npos=1024, so loading and
-# per-item scoring run serially in seconds — no --jobs/--device machinery is
-# needed (or provided). The one super-linear step is the pooled-token KLD
-# tail bootstrap (item-cluster resampling over ALL tokens, --bootstrap-iters
-# replicates): ~10 s at 1M tokens / 5000 iters on a desktop CPU.
-#
-# Pair with: collect_kld.py (produces the input dirs), paired_compare.py
-# (the stored-logits counterpart whose engine/renderer this reuses).
-# =============================================================================
+"""Compare paired saved metrics using a validated item or corpus-group protocol."""
 
 import argparse
 import json
@@ -350,6 +255,27 @@ def require_collection_success(root: Path, role: str) -> None:
     raise ValueError(f"{role}: {'; '.join(details)}; paired inference aborted")
 
 
+
+def validate_collection_pair(a_dir, b_dir):
+    """Check completed collection identities while the caller holds both reader locks."""
+    for role, root in (("candidate-a", a_dir), ("candidate-b", b_dir)):
+        require_collection_success(root, role)
+    a_meta = load_kld_collect_meta(a_dir)
+    b_meta = load_kld_collect_meta(b_dir)
+    require_execution_alignment(a_meta, b_meta)
+    warnings = check_kld_meta_alignment(a_meta, b_meta)
+    for warning in warnings:
+        print(f"WARNING: {warning}", file=sys.stderr)
+    budget_skips = require_common_budget_skips({"candidate-a": a_dir, "candidate-b": b_dir})
+    return a_meta, b_meta, warnings, budget_skips
+
+
+def aligned_metric_items(a_dir, b_dir, *, allow_interaction=False):
+    matched, drops = find_metric_items(a_dir, b_dir)
+    require_complete_item_alignment(drops, allow_interaction=allow_interaction)
+    return matched, drops
+
+
 def _side_scores(m, keep: int):
     """One candidate's per-item score dict from its (sliced) metric columns —
     the same aggregation paired_compare applies to raw logits. Returns
@@ -380,19 +306,8 @@ def _side_scores(m, keep: int):
     return scores, token_metrics
 
 
-def score_item(key: str, a_dir: Path, b_dir: Path, num_eval_tokens: int):
-    """Load one matched item from both dirs, enforce the per-item guards, and
-    return (scores_a, scores_b, token_a, token_b, keep, finite,
-    ref_drift, vlmk_versions). token_a/token_b are {metric: (keep,) float32}
-    dicts of the retained per-token columns ("kld" always, "ear" for VLMK
-    v2+). vlmk_versions = (version_a, version_b) from
-    the two dumps' headers — main() derives from them which metric columns
-    each dir carries (kld_metrics_io.kld_metric_keys). ref_drift is None
-    when the reference columns are bit-identical, else a dict
-    {key, msg, max_dnll_ref, argmax_flips} that main() prints as an ERROR and
-    exits on (or, with --allow-ref-drift, prints as a warning and persists in
-    the report). Raises AlignmentError on shape/target misalignment or an
-    unreadable dump."""
+def load_item_pair(key: str, a_dir: Path, b_dir: Path):
+    """Read each candidate once and attach paths to read errors."""
     def _load(d, role):
         # np.load's own errors (BadZipFile, EOFError, KeyError, ...) carry no
         # path; tag them with the key + dir so the operator knows which of
@@ -405,9 +320,16 @@ def score_item(key: str, a_dir: Path, b_dir: Path, num_eval_tokens: int):
                 f"{key}: {role}: failed to load {path}: "
                 f"{type(e).__name__}: {e}") from e
 
-    ma, ha = _load(a_dir, "candidate-a")
-    mb, hb = _load(b_dir, "candidate-b")
+    return (*_load(a_dir, "candidate-a"), *_load(b_dir, "candidate-b"))
 
+
+
+def score_item(key: str, a_dir: Path, b_dir: Path, num_eval_tokens: int):
+    return score_records(key, *load_item_pair(key, a_dir, b_dir), num_eval_tokens)
+
+
+def score_records(key, ma, ha, mb, hb, num_eval_tokens):
+    """Validate the pair and derive scores from already loaded records."""
     for field in ("vocab", "npos", "n_prefill"):
         if ha[field] != hb[field]:
             raise AlignmentError(
@@ -526,27 +448,13 @@ def _main_locked(args, argv_for_metadata):
                      "collect_kld.py output dir?")
 
     try:
-        require_collection_success(args.candidate_a, "candidate-a")
-        require_collection_success(args.candidate_b, "candidate-b")
-        a_meta = load_kld_collect_meta(args.candidate_a)
-        b_meta = load_kld_collect_meta(args.candidate_b)
-        require_execution_alignment(a_meta, b_meta)
-        warnings = check_kld_meta_alignment(a_meta, b_meta)
-    except (AlignmentError, ValueError) as e:
-        sys.exit(str(e))
-    for w in warnings:
-        print(f"WARNING: {w}", file=sys.stderr)
-    common_budget_skips = require_common_budget_skips({
-        "candidate-a": args.candidate_a,
-        "candidate-b": args.candidate_b,
-    })
-
+        a_meta, b_meta, warnings, common_budget_skips = validate_collection_pair(args.candidate_a, args.candidate_b)
+    except (AlignmentError, ValueError) as error:
+        sys.exit(str(error))
 
     metrics = resolve_metrics(args)
 
-    matched, drops = find_metric_items(args.candidate_a, args.candidate_b)
-    require_complete_item_alignment(
-        drops, allow_interaction=args.allow_interaction)
+    matched, drops = aligned_metric_items(args.candidate_a, args.candidate_b, allow_interaction=args.allow_interaction)
     if not matched:
         def _describe(d):
             n_npz = len(list((Path(d) / "metrics").glob("*.npz")))
@@ -605,8 +513,9 @@ def _main_locked(args, argv_for_metadata):
 
     for key in matched:
         try:
-            sa, sb, tok_a, tok_b, keep, finite, drift, versions = score_item(
-                key, args.candidate_a, args.candidate_b, args.num_eval_tokens)
+            ma, ha, mb, hb = load_item_pair(key, args.candidate_a, args.candidate_b)
+            sa, sb, tok_a, tok_b, keep, finite, drift, versions = score_records(
+                key, ma, ha, mb, hb, args.num_eval_tokens)
         except AlignmentError as e:
             sys.exit(str(e))
         versions_seen["candidate-a"].add(versions[0])
@@ -627,8 +536,6 @@ def _main_locked(args, argv_for_metadata):
                 "paired inference aborted")
         if corpus_protocol is not None:
             from lib.text_corpus import check_corpus_metrics
-            ma, ha = load_kld_metrics(args.candidate_a / "metrics" / f"{key}.npz")
-            mb, hb = load_kld_metrics(args.candidate_b / "metrics" / f"{key}.npz")
             window = check_corpus_metrics(key, ma, ha, corpus_protocol, corpus_windows)
             check_corpus_metrics(key, mb, hb, corpus_protocol, corpus_windows)
             if groups is not None:

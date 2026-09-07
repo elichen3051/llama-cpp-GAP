@@ -334,6 +334,7 @@ from pathlib import Path
 p = argparse.ArgumentParser()
 for key in ("run", "model", "mode", "profiles"):
     p.add_argument("--" + key)
+p.add_argument("--private", action="store_true", required=True)
 a = p.parse_args()
 run = Path(a.run)
 profile = json.loads(Path(a.profiles).read_text())
@@ -354,7 +355,7 @@ manifest = {"repo": "elichen-skymizer/" + a.model + "-pilot", "subset": subset, 
             "cohort": completion["cohort"], "metadata_sha256": sha(run / "metadata.json"), "parquet_sha256": sha(parquet),
             "audit_sha256": {name: sha(run / name) for name in ("metadata.json", "complete.json", "run_start.json", "excluded.jsonl", "failures.jsonl", "native-attempts.json")}}
 (export / "manifest.json").write_text(json.dumps(manifest))
-receipt = {**manifest, "status": "verified", "commit": "b" * 40}
+receipt = {**manifest, "status": "verified", "commit": "b" * 40, "private": a.private}
 (export / "receipt.json").write_text(json.dumps(receipt))
 '''
 
@@ -368,6 +369,10 @@ receipt = {**manifest, "status": "verified", "commit": "b" * 40}
             (archived / "cli/upload_reference.py").write_text(uploader)
         return archived
 
+    current = tmp_path / "current-skymizer"
+    (current / "cli").mkdir(parents=True)
+    (current / "cli/upload_reference.py").write_text(uploader)
+    monkeypatch.setattr(campaign, "SKYMIZER", current)
     monkeypatch.setattr(campaign, "snapshot", snapshot)
     monkeypatch.setattr(campaign, "execution_identity", identity)
     args = argparse.Namespace(out=tmp_path / "campaign", profiles=profile_path, models=["qwen3.5-4b"], sources=["s0", "s1"],
@@ -564,7 +569,7 @@ def test_campaign_snapshot_is_atomic_and_verifies_full_source_provenance(tmp_pat
     import cli.run_reference_campaign as campaign
     root = tmp_path / "repo"
     skymizer = root / "tools/skymizer"
-    for name in ("cli", "lib", "scripts"):
+    for name in ("cli", "lib", "compare", "scripts"):
         (skymizer / name).mkdir(parents=True)
         (skymizer / name / "sample.py").write_text("pass\n")
     profiles = skymizer / "scripts/reference_model_profiles.json"
@@ -758,3 +763,67 @@ def test_kld_dispatch_checks_hashes_without_interpreting_live_plan(tmp_path, mon
     with pytest.raises(ValueError, match="archived scripts changed"):
         launch.archived_dispatch(root)
     assert len(calls) == 1
+
+
+
+def test_campaign_snapshot_includes_statistics_dependencies(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+    from cli import run_reference_campaign as campaign
+    monkeypatch.setattr(campaign.subprocess, "run", lambda *a, **kw: SimpleNamespace(returncode=0))
+    monkeypatch.setattr(campaign.subprocess, "check_output", lambda *a, **kw: b"")
+    monkeypatch.setattr(campaign, "distributions", lambda: [])
+    profile = campaign.SKYMIZER / "scripts/reference_model_profiles.json"
+    scripts = campaign.snapshot(tmp_path, profile)
+    assert (scripts / "compare/engine.py").is_file()
+    hashes = json.loads((tmp_path / "scripts/manifest.json").read_text())
+    assert "skymizer/compare/engine.py" in hashes
+    assert campaign.snapshot(tmp_path, profile) == scripts
+
+
+@pytest.mark.parametrize('privacy', [None, False, 'true'])
+def test_campaign_requires_verified_private_receipt(campaign_fixture, privacy):
+    campaign, args, _, _, _ = campaign_fixture
+    args.sources = ['s0']
+    args.upload, args.num_samples = True, None
+    assert campaign.run_campaign(args) == 0
+    run = next(args.out.glob('artifacts/*/s0-*/attempt-*'))
+    path = run / 'upload/receipt.json'
+    receipt = json.loads(path.read_text())
+    receipt['private'] = privacy
+    path.write_text(json.dumps(receipt))
+    with pytest.raises(ValueError, match='failed verification'):
+        campaign.validate_receipt(run, 'qwen3.5-4b', 's0-subsample-100-ins', 100)
+
+
+
+def test_campaign_rejects_legacy_uploader_before_dispatch(campaign_fixture):
+    campaign, args, _, events, _ = campaign_fixture
+    args.out.mkdir()
+    scripts = campaign.snapshot(args.out, args.profiles)
+    uploader = scripts / "cli/upload_reference.py"
+    uploader.write_text("raise RuntimeError('legacy uploader must not run')\n")
+    original = uploader.read_bytes()
+    args.resume, args.upload, args.num_samples = True, True, None
+    with pytest.raises(ValueError, match="archived uploader differs"):
+        campaign.run_campaign(args)
+    assert events() == []
+    assert not (args.out / "artifacts").exists()
+    assert uploader.read_bytes() == original
+    args.upload = False
+    assert campaign.run_campaign(args) == 0
+
+
+def test_campaign_checks_uploader_again_after_generation(campaign_fixture, monkeypatch):
+    campaign, args, _, _, _ = campaign_fixture
+    execute = campaign.ProcessSupervisor.execute
+    def change_archive(self, command, *pos, **kwargs):
+        result = execute(self, command, *pos, **kwargs)
+        if command[1].endswith("generate_model_reference.py"):
+            path = args.out / "scripts/skymizer/cli/upload_reference.py"
+            path.write_text("raise RuntimeError('changed uploader must not run')\n")
+        return result
+    monkeypatch.setattr(campaign.ProcessSupervisor, "execute", change_archive)
+    args.sources, args.upload, args.num_samples = ["s0"], True, None
+    assert campaign.run_campaign(args) == 2
+    assert not list(args.out.glob("artifacts/*/*/upload-*.log"))
+    assert not list(args.out.glob("artifacts/*/*/attempt-*/upload/receipt.json"))

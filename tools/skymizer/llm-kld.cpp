@@ -149,15 +149,6 @@
 #include <thread>
 #include <vector>
 
-#if defined(_WIN32)
-#    include <io.h>
-#else
-#    include <unistd.h>
-#endif
-
-static constexpr uint32_t VLMK_MAGIC   = 0x564C4D4B; // "VLMK"
-static constexpr uint32_t VLMK_VERSION = 5;          // v5: 76-byte records (+ EAR_64); v4 = 68, v3 = 56, v2 = 44, v1 = 40
-
 
 // ---------------------------------------------------------------------------
 // CLI
@@ -301,60 +292,6 @@ static bool validate_perplexity_window_vocab(const llama_vocab * ref, const llam
     return true;
 }
 
-// ---------------------------------------------------------------------------
-// output writer
-// ---------------------------------------------------------------------------
-
-// Write the whole VLMK file at once (header + records), to <path>.tmp first,
-// fsync, then atomically rename. Metrics are tiny (76 bytes/position), so
-// unlike vlm-score's streaming vlms_writer there is no need to stream — a
-// buffered single-shot write keeps the commit logic trivially reviewable and
-// a crashed/partial run never leaves a complete-looking output behind.
-static bool write_vlmk_file(
-        const std::string & path,
-        uint32_t n_vocab,
-        uint32_t n_prefill,
-        uint32_t n_past_actual,
-        const std::vector<kld_record> & records,
-        stderr_prefix * lp) {
-    const std::string tmp_path = path + ".tmp";
-    FILE * f = fopen(tmp_path.c_str(), "wb");
-    if (f == nullptr) {
-        prefixed_fprintf(lp, "failed to open output %s\n", tmp_path.c_str());
-        return false;
-    }
-    bool ok = true;
-    // Sixth word: llama.cpp's OWN position count after prefill. For a
-    // text-only model that equals n_prefill, or the whole window length in perplexity-window mode.
-    // The field exists so both lanes' headers carry the same
-    // contract, and 0 still means "not recorded".
-    const uint32_t header[6] = {
-        VLMK_MAGIC, VLMK_VERSION, n_vocab,
-        (uint32_t) records.size(), n_prefill, n_past_actual,
-    };
-    ok = ok && fwrite(header, sizeof(header), 1, f) == 1;
-    ok = ok && (records.empty() ||
-                fwrite(records.data(), sizeof(kld_record), records.size(), f) == records.size());
-    ok = ok && fflush(f) == 0;
-#if defined(_WIN32)
-    ok = ok && _commit(_fileno(f)) == 0;
-#else
-    ok = ok && fsync(fileno(f)) == 0;
-#endif
-    ok = (fclose(f) == 0) && ok;
-    if (!ok) {
-        prefixed_fprintf(lp, "failed writing %s: %s\n", tmp_path.c_str(), strerror(errno));
-        std::remove(tmp_path.c_str());
-        return false;
-    }
-    if (std::rename(tmp_path.c_str(), path.c_str()) != 0) {
-        prefixed_fprintf(lp, "failed to rename %s -> %s: %s\n",
-                         tmp_path.c_str(), path.c_str(), strerror(errno));
-        std::remove(tmp_path.c_str());
-        return false;
-    }
-    return true;
-}
 
 // ---------------------------------------------------------------------------
 // manifest
@@ -444,22 +381,7 @@ static bool load_side(model_side & s, const char * tag,
         return false;
     }
 
-    llama_context_params cparams = llama_context_default_params();
-    cparams.n_ctx     = args.n_ctx;
-    cparams.n_batch   = args.n_batch;
-    cparams.n_ubatch  = args.n_ubatch;
-    cparams.n_seq_max = 1;
-    // Set both thread knobs: multi-token ubatches (prefill + chunked teacher
-    // forcing) use n_threads_batch, which would otherwise silently stay at
-    // ggml's compiled default and ignore -t on CPU runs.
-    cparams.n_threads       = args.n_threads;
-    cparams.n_threads_batch = args.n_threads;
-    cparams.flash_attn_type = args.flash_attn_type;
-    // Default false matches the common llama.cpp CLI: the low-level context
-    // default is full SWA, which allocates n_ctx cells for every sliding-window
-    // layer, and this tool always uses a single sequential sequence. --swa-full
-    // restores it for runs that must stay comparable with earlier collections.
-    cparams.swa_full        = args.swa_full;
+    llama_context_params cparams = kld_context_params(args);
     s.lctx.reset(llama_init_from_model(s.model.get(), cparams));
     if (!s.lctx) {
         fprintf(stderr, "[%s] failed to create llama_context\n", tag);

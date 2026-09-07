@@ -1,6 +1,6 @@
 # Paired comparison
 
-The statistics engine and the report, moved verbatim from the README.
+The report compares paired candidate measurements after validating their collection and reference identities.
 
 ### `saved_metrics_paired_compare.py` — item-level paired verdict
 
@@ -35,11 +35,7 @@ uniformly to both dirs; the stored files are unchanged). `-1`
 collection-time `num_eval_tokens` guard, which still requires the two
 dirs to have been *collected* with the same cap.
 
-For each base metric the report shows `a mean`, `b mean`, the
-item-weighted and token-weighted delta `b − a` with its paired-bootstrap
-CI at `--confidence-level`, and a verdict (`A closer` / `B closer` /
-`inconclusive`). Item- and token-weighted runs share the same bootstrap
-seed, so they resample the same item indices.
+For each base metric the report shows both candidate means, the item-weighted and token-weighted delta `b - a`, and a paired CI using `--ci-method` at `--confidence-level`. The default is a Student-t interval without bootstrap resampling. Bootstrap methods share the seed across weightings and resample the same paired item indices. The directional verdict is `A closer`, `B closer` or `inconclusive`.
 
 > [!IMPORTANT]
 > `inconclusive` means *the interval contains 0* — **not** that the two
@@ -126,8 +122,7 @@ What to read off it:
   that reads as "the model with the catastrophic items looks better than it
   is" — a small sample systematically understates rare catastrophic damage,
   and no interval construction can see items that were not drawn. More
-  items are the only fix (the SOP's escalation rule); the report's
-  small-sample note says so.
+  independently sampled items can improve representation of rare events; changing the interval method cannot recover unobserved events.
 - **The t interval is not worse than the bootstrap-t here** — equal or
   slightly higher coverage at every (n, skew), with a 3–33% narrower interval,
   and it has no Monte-Carlo noise at all: a borderline verdict cannot flip
@@ -144,8 +139,8 @@ What to read off it:
 For the bootstrap methods, the two corrected ones need twice the replicates of the percentile method
 (BCa's adjusted levels sit further into the tails; the studentized method
 reads the same levels of a heavier-tailed `t*`), so `--bootstrap-iters` must
-be ≥ 800 at the 0.95 default and ≥ 400 for `percentile`; both comparators
-warn below the customary 2000 (none of this applies to `t`, which draws no
+be ≥ 800 at the 0.95 default and ≥ 400 for `percentile`; the comparator
+warns below the customary 2000 (none of this applies to `t`, which draws no
 replicates). On a degenerate sample (no spread to studentize by, or no usable
 bias correction/acceleration) either bootstrap method falls back to the
 percentile interval and records `fallback` in the JSON; the t interval
@@ -180,26 +175,9 @@ Each p-value is obtained by **inverting the interval that was actually built**
 — solving for the confidence level whose endpoint lands on 0 — so `p ≤ α` and
 "the CI excludes 0" cannot disagree, whichever `--ci-method` is in use.
 
-**Why the primary defaults to `item` weighting.** The verdict is a
-statistical inference, and inference needs independent draws. What was drawn
-independently when this dataset was built is the *item* — one question, one
-image, one answer trajectory; the ~1k tokens inside an answer all share that
-item's image, topic and prefix, so they are correlated evidence, not 1k fresh
-observations. The bootstrap accordingly resamples items, and the item-weighted
-mean is exactly the quantity that resampling estimates: *the expected KLD gap
-on a NEW question drawn from the same population*. That is the claim a
-quantization verdict wants to make, and its CI actually covers it.
-(Pre-registered as the primary in `knowledge/quantization-eval-sop.md`.)
+**Weighting and the sampling unit.** Item weighting gives equal weight to each selected item or corpus group. Token weighting estimates the ratio of total metric sum to total target count, so longer groups contribute more. Under an appropriate sampling design, these estimate different population quantities: the expected group-average difference and the expected group-total difference divided by expected group size. Token weighting also reproduces corpus-pooled NLL/PPL aggregation. Neither weighting guarantees generalization or CI coverage.
 
-Token weighting answers a different question — `llama-perplexity`'s corpus
-aggregation, *the per-token average over THIS corpus* — which keeps a VLM run
-and a wikitext2 run on one estimand and is why the row is always reported.
-But as a confirmatory endpoint it is the weaker story: it is a ratio
-estimator whose weights are themselves random under resampling, and one
-2,000-token answer outvotes twenty 100-token answers, so a single long hard
-item can swing the verdict. Pass `--primary-weighting token` when cross-tool
-comparability matters more than generalization. Both rows are always
-reported; the flag only chooses which one is confirmatory.
+Tokens within an answer are correlated, and questions may share images or source material. The t calculation and bootstrap treat the selected items or groups as independent units; that assumption must be assessed for the study. A fixed corpus or a pilot overlapping the final cohort does not become an independent validation set through resampling. Select the unit, weighting and primary endpoint before inspecting candidate results. `--primary-weighting token` changes the confirmatory endpoint; the requested weighting rows remain available for interpretation.
 
 The report opens with a **`## Verdict summary`** listing just the confirmatory
 endpoint and the exploratory cells that survive Holm, and a
@@ -213,11 +191,11 @@ nothing paired about it.
 | `kld` | lower better | Forward `KL(p_ref ‖ p_cand)` — mass-covering |
 | `reversed_kld` | lower better | Reverse `KL(p_cand ‖ p_ref)` — mode-seeking |
 | `js_kld` | lower better | Jensen-Shannon divergence (symmetric, bounded by ln 2) |
-| `ear` | higher better | Expected Acceptance Rate ([arXiv:2605.02404](https://arxiv.org/abs/2605.02404)): per position `Σ_v min(p_ref, p_cand)` = `1 − TV distance`, averaged over the full vocabulary. `EAR 0.99` ⇒ the two models emit the same token 99% of the time under optimal coupling — the speculative-decoding acceptance probability |
+| `ear` | higher better | Expected Acceptance Rate ([arXiv:2605.02404](https://arxiv.org/abs/2605.02404)): per position `Σ_v min(p_ref, p_cand)` = `1 − TV distance`, summed over the full vocabulary and then averaged over scored positions. `EAR 0.99` ⇒ the two models emit the same token 99% of the time under optimal coupling — the speculative-decoding acceptance probability |
 | `ear_64` / `ear_20` / `ear_10` / `ear_5` | higher better | The **reference's top-K share of EAR**: `Σ_{v ∈ top-K_ref} min(p_ref, p_cand)` with full-vocab probabilities, top-K_ref = the K ids with the largest reference logits (ties → lower id). Decomposes `ear` (`ear_5 <= ear_10 <= ear_20 <= ear_64 <= ear`); its ceiling is the reference's own top-K mass, so a flat reference caps it regardless of the candidate. K=64 requires VLMK v5+; K=5/10/20 requires v4+ |
 | `ear_64_normalized` / `ear_20_normalized` / `ear_10_normalized` / `ear_5_normalized` | higher better | Same K ids, but both rows renormalized over exactly those ids (softmax of the K logits) before `Σ_k min(p̃_ref, p̃_cand)`. Answers "how well does the candidate reproduce the reference's relative preferences among its K most likely tokens" — `1.0` = identical shape on that set. Candidate mass outside the reference's top-K is ignored by design, so it is not monotone in K and should be read together with `ear`. K=64 requires VLMK v5+; normalized K=5/10/20 is present in v3+ |
 | `same_top_rate` | higher better | Fraction of positions where `argmax_ref == argmax_cand` |
-| `mse_dp` | lower better | `mean((p_cand(target) − p_ref(target))²)` in pp² |
+| `mse_dp` | lower better | `mean((100 * (p_cand(target) - p_ref(target)))^2)` in squared percentage points |
 
 Derived (always shown unless hidden):
 
@@ -233,11 +211,7 @@ Reference- and candidate-only rows (no paired verdict — nothing to compare):
 
 - `nll_ref` / `ppl_ref` — the **shared FP reference's own** teacher-forced NLL
   and perplexity at the same target tokens, i.e. `llama-perplexity`'s
-  `PPL(base)`. In this report "baseline" and "candidate" are candidates A and
-  B, so the reference's own likelihood previously had nowhere to appear even
-  though every VLMK record stores `nll_ref` per token. It is identical on both
-  sides by construction (one reference, scored once); the JSON's
-  `max_abs_side_difference` is the witness that it was.
+  `PPL(base)`. Candidates A and B each score the reference during their own collection. The comparator checks their reference columns and reports `max_abs_side_difference`; strict mode rejects drift. `--allow-ref-drift` retains a diagnostic comparison but weakens the shared-reference interpretation.
 - `mean_dp` (pp, **signed**) — each candidate's mean
   `p_cand(target) − p_ref(target)`. `mse_dp` and `rms_dp` are unsigned by
   construction, so a systematically over-confident candidate and a
@@ -246,28 +220,15 @@ Reference- and candidate-only rows (no paired verdict — nothing to compare):
   distribution behind it.
 ### Answer-position strata (exploratory)
 
-Both comparators emit an **`## Answer-position strata`** table: for `kld` and
-`ear`, per-item means restricted to each answer-position range
-(`--position-buckets`, default `0 32 256` → `0-32`, `32-256`, `256+`), tested
-with the same paired **item** bootstrap. An item contributes the mean of its
-own positions in the bucket; an item that never reaches a bucket is dropped
-from it (and counted), never zero-filled.
+The comparator emits an **`## Answer-position strata`** table for KLD and EAR using per-item means within each `--position-buckets` range (default boundaries `0 32 256`). The paired calculation uses the selected `--ci-method`; `t` is the default. An item contributes only when it has positions in that bucket, and absent buckets are counted rather than zero-filled. Article/block grouping disables these strata.
 
-This exists because the effect is not spread evenly over the answer.
-`knowledge/notes-power-variance-decomposition.md` measures the mmproj
-F16-vs-Q8_0 contrast directly and finds the signal concentrated in the **first
-~32 answer tokens**, decaying more than 10× after — while the default eval cap
-is 1024. A single item-mean over all positions therefore dilutes a vision
-effect by roughly 30×, and the only lever used to be a prefix cap, which
-throws the rest of the data away instead of stratifying it.
+Position ranges can reveal effects that a whole-answer average hides. Their usefulness depends on the checkpoint, dataset, image policy and scoring horizon. Earlier projector measurements in [the variance notes](../knowledge/notes-power-variance-decomposition.md) motivated the default boundaries; they do not establish a universal first-32-token effect. The comparison-time cap defaults to `-1`, meaning all stored positions.
 
-The strata were chosen from prior measurements on this data, so every row is
-**exploratory**: `p (Holm)` is adjusted within the strata family only, and
-those rows never carry the confirmatory endpoint's α.
+Every stratum is exploratory. Holm adjustment applies within the strata family, separately from the main table, and does not turn data-chosen boundaries into a confirmatory analysis.
 
 ### Per-item KLD tails (exploratory — own Holm family)
 
-Both comparators emit a **`## Per-item KLD tails`** section: each item's OWN
+The comparator emits a **`## Per-item KLD tails`** section: each item's OWN
 p99 / p99.9 / maximum of its per-token `kld`, with the answer position (and,
 when the producer supplied the `target` column, the target token id) it
 occurred at — so a bad tail is traceable to the token that produced it. The
@@ -298,7 +259,7 @@ below, which remain the descriptive, corpus-scale view.
 
 ### Per-token distribution ladders (descriptive — no bootstrap, no CI)
 
-After the verdict table both comparators emit a **`## Per-token distributions`**
+After the verdict table the comparator emits a **`## Per-token distributions`**
 section: for `kld`, `ear` and the signed `dp`, the full quantile ladder
 
 ```
@@ -404,54 +365,19 @@ zero-width bootstrap CI that would report spurious "significant" verdicts).
 
 ## What gets compared
 
-> [!NOTE]
-> **What a KLD-family difference is made of.** The differences surfaced in
-> the report are the SUM of three terms: LLM quantization + mmproj
-> quantization + image-preprocessing drift (llama.cpp's clip pipeline vs
-> HF's processor). The pipeline never tries to make the vision path equal
-> HF's; it **isolates whichever term you are asking about by holding the
-> other two constant** across reference and both candidates.
->
-> That is a choice you make per experiment, not a fixed rule:
->
-> | You want to measure | Hold constant | Vary |
-> |---|---|---|
-> | **LLM quantization** | mmproj file, llama.cpp build, `media_wrapper` | the LLM GGUF |
-> | **Projector (mmproj) quantization** | the LLM GGUF, llama.cpp build, `media_wrapper` | the mmproj |
->
-> The second row is a real vision measurement, and it is one
-> `llama-perplexity` cannot make at all. It is what the shipped suites do
-> (`vlm-eval-scripts/00_env.sh`: reference F16/F16, A = Q4_K_M with mmproj
-> F16, B = Q4_K_M with mmproj **Q8_0** — LLM quant common to both arms, so
-> the paired delta isolates the projector). Use the
-> [answer-position strata](#answer-position-strata-exploratory) when you do:
-> the projector signal on this data sits in the first ~32 answer tokens.
->
-> 中文:KLD 報告裡的差異 = LLM 量化 + mmproj 量化 + 前處理 drift 的總和。
-> 想量哪一項,就把另外兩項在 reference 和兩個 candidate 之間鎖住;鎖
-> mmproj 量的是 LLM 量化,鎖 LLM GGUF 而讓 mmproj 變動量的就是 projector
-> 本身(這是 `llama-perplexity` 完全做不到的)。
+VLM metrics compare answer-token distributions conditioned on the supplied prompt and images. LLM weights, projector weights, preprocessing, runtime and their interactions can all change those distributions; their effects do not form a general additive decomposition.
 
-- Every metric sits at an **answer-token position only**
-  (`input_ids[n_prefill:]`). The prefill (image + question) is treated as
-  fixed conditioning, and there is no per-image-token metric anywhere: a
-  decoder-only VLM has no target distribution at an image-embedding
-  position, so one is not available in principle. The vision encoder still
-  runs, and its embeddings condition every scored logit — which is why a
-  projector-only A/B is measurable here (see the table above).
-  `collect_kld.py --num-eval-tokens N` caps this to the first N evaluated
-  positions per row (default `-1` = all, clamped to each row's answer
-  length); the two compared dirs must use the same value so their `npos`
-  match (enforced by the comparator's alignment guard).
-- NLL / Δp / PPL are computed at the **target token** (the dataset's
-  stored greedy continuation). KLD is computed over the full vocabulary.
-- "Same top p" is the fraction of positions where reference and
-  candidate pick the same argmax, regardless of whether either matches
-  the target.
-- The main verdict lands in a `## Results` table.
-  `entropy (nats)` is candidate self entropy: it is reported per
-  candidate only, not as a paired reference-vs-candidate distance.
+| Experiment | Hold constant across the compared arms | Vary |
+| --- | --- | --- |
+| LLM quantization | Reference, mmproj, prompt/images, target tokens, runtime and backend | Candidate LLM quantization |
+| Projector quantization | Reference, candidate LLM, prompt/images, target tokens, runtime and backend | Candidate mmproj |
+| Whole-package comparison | Reference, dataset/targets and declared execution protocol | The specified LLM/projector package |
 
+A projector comparison measures its effect on answer-token fidelity conditional on the chosen LLM. It does not isolate a model-independent projector effect or establish task accuracy. NLL can also change with the projector; it is not inherently image-insensitive. Native reference rows avoid legacy HF prompt reconstruction, but still require exact generation and replay provenance.
+
+Targets are the frozen trajectory tokens, which can be sampled rather than greedy, or the observed text-corpus tokens. KLD uses the full vocabulary; NLL and target-probability displacement use the target token. `same_top_rate` compares the two argmax IDs regardless of whether either equals the target. Candidate entropy is descriptive and is not a reference distance.
+
+Every stored VLM record belongs to an answer-token position. The image/prompt prefill is conditioning, and this tool defines no metric over image embeddings. Both candidates must have identical target IDs and compatible native prefill positions. `--num-eval-tokens` derives a shared prefix from those saved records; it cannot create missing targets.
 
 ### Collection and executable verification
 

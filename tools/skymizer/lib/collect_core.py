@@ -1,16 +1,5 @@
-# The one collection engine behind the two KLD collectors (llm/vlm).
-#
-# The collectors' _run_locked bodies were copies of the same lifecycle -- lock ->
-# dataset -> collision scan -> identity -> prep -> n_ctx preflight -> one
-# scorer subprocess over a JSONL manifest -> per-row postprocess -> finalize
-# -- diverging only at well-defined points (dataset loading, per-row prep,
-# scorer argv, artifact paths, postprocess, and the exact log strings). Each
-# collector now builds a CollectorSpec carrying those points as late-bound
-# callables DEFINED IN ITS OWN MODULE, so its module globals stay the
-# monkeypatch surface the tests use (cl.dataset_content_hash and friends),
-# and run_locked() here is the single copy of the lifecycle.
-#
-# Each attempt records declared rows and terminal statuses before comparison can use its metrics.
+"""Shared dataset, preparation, scoring and completion lifecycle for both KLD lanes."""
+
 import os
 import signal
 import threading
@@ -23,6 +12,7 @@ from lib.collection_state import CollectionAttempt, refuse_unfinished_attempts
 
 from lib.collect_common import (
     SKIP_OVER_BUDGET,
+    format_row_progress,
     collision_error,
     manifest_row_writer,
     max_total_tokens_skip_info,
@@ -35,10 +25,6 @@ from lib.collect_common import (
 def make_spec(**kw) -> SimpleNamespace:
     """A CollectorSpec is a plain namespace; see run_locked for the fields."""
     return SimpleNamespace(**kw)
-
-
-def format_row_progress(idx: int, n_rows: int) -> str:
-    return f"[{idx + 1:3d}/{n_rows}]"
 
 
 def run_locked(args, manifest_path, spec):

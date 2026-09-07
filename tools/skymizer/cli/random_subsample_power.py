@@ -113,16 +113,8 @@ def load_population(a_dir: Path, b_dir: Path):
     """Load the complete paired population under the production guards."""
     try:
         with smpc.comparison_locks((a_dir, b_dir)):
-            for role, root in (("candidate-a", a_dir), ("candidate-b", b_dir)):
-                smpc.require_collection_success(root, role)
-            a_meta = smpc.load_kld_collect_meta(a_dir)
-            b_meta = smpc.load_kld_collect_meta(b_dir)
-            smpc.require_execution_alignment(a_meta, b_meta)
-            for warning in smpc.check_kld_meta_alignment(a_meta, b_meta):
-                print(f"WARNING: {warning}", file=sys.stderr)
-            smpc.require_common_budget_skips({"candidate-a": a_dir, "candidate-b": b_dir})
-            matched, drops = smpc.find_metric_items(a_dir, b_dir)
-            smpc.require_complete_item_alignment(drops, allow_interaction=False)
+            smpc.validate_collection_pair(a_dir, b_dir)
+            matched, drops = smpc.aligned_metric_items(a_dir, b_dir)
             if not matched:
                 sys.exit("no matched items between the two dirs")
             scores_a, scores_b, weights, keys = [], [], [], []

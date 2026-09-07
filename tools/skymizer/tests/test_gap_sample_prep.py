@@ -779,13 +779,21 @@ def fake_reference_hub(monkeypatch, tmp_path):
             self.history = {'0': {}}
             self.conflict_once = False
             self.commits = 0
+            self.private = None
+            self.creation_privacies = []
+            self.privacy_updates = []
         def save(self):
             self.head = str(int(self.head) + 1)
             self.history[self.head] = self.files.copy()
-        def create_repo(self, *args, **kwargs):
-            pass
+        def create_repo(self, *args, private, **kwargs):
+            self.creation_privacies.append(private)
+            if self.private is None:
+                self.private = private
+        def update_repo_settings(self, *args, private, **kwargs):
+            self.privacy_updates.append(private)
+            self.private = private
         def repo_info(self, *args, **kwargs):
-            return SimpleNamespace(sha=self.head)
+            return SimpleNamespace(sha=self.head, private=self.private)
         def list_repo_files(self, *args, revision, **kwargs):
             return list(self.history[revision])
         def download(self, repo, path, revision, **kwargs):
@@ -1002,6 +1010,15 @@ def test_kld_launcher_uses_matching_runtime_without_generation_or_analysis(tmp_p
     assert overview["models"][model]["kld_runtime"][mode]["n_ubatch"] == ubatch
     assert overview["models"][model]["reference_runtime"][mode]["ubatch"] == ubatch
     assert "trial" not in json.dumps(overview)
+    assert "--allow-vocab-attr-mismatch" not in command
+    profiles["models"][model]["allow_vocab_attr_mismatch"] = True
+    compatible, _ = launch.build_command(args, plan, profiles, tmp_path / "archived")
+    assert compatible == command + ["--allow-vocab-attr-mismatch"]
+    assert study_overview(profiles, plan)["models"][model]["kld_runtime"][mode]["allow_vocab_attr_mismatch"] is True
+    profiles["models"][model]["allow_vocab_attr_mismatch"] = "true"
+    with pytest.raises(ValueError, match="must be a boolean"):
+        launch.build_command(args, plan, profiles, tmp_path / "archived")
+    profiles["models"][model].pop("allow_vocab_attr_mismatch")
     args.dataset = tmp_path / "local-dataset"
     command, _ = launch.build_command(args, plan, profiles, tmp_path / "archived")
     assert command[command.index("--subset") + 1] == ""
@@ -1057,3 +1074,101 @@ else:
                       "parallel_partial": ["third", "first"], "parallel_timeout": ["first"]}
     assert attempts[1]["requested_ids"] == expected_retry[scenario]
     assert attempts[0]["timed_out"] is (scenario == "parallel_timeout")
+
+
+
+def test_study_overview_uses_each_checkpoint_mode_and_sequence_count(tmp_path):
+    import copy
+    from cli import collect_model_kld as launch
+    from lib.reference_study import study_overview
+    profiles = json.loads((Path(__file__).resolve().parents[1] / "scripts/reference_model_profiles.json").read_text())
+    original = profiles["models"]["qwen3.5-4b"]
+    profiles["models"] = {}
+    for mode, parallel in (("instruct", 4), ("thinking", 1)):
+        profile = copy.deepcopy(original)
+        profile["semantic_modes"] = [mode]
+        for hardware, settings in profile["runtime"].items():
+            profile["runtime"][hardware] = {mode: settings[mode]}
+            profile["runtime"][hardware][mode]["parallel"] = parallel
+        profiles["models"][mode + "-only"] = profile
+    profiles["cohort_size"] = 100
+    plan = {"stage": "kld", "models": list(profiles["models"]), "sources": ["mmmu-pro-vision"],
+            "modes": ["instruct", "thinking"], "hardware": "pro6000", "size": 100,
+            "num_samples": None, "models_dir": str(tmp_path / "models")}
+    overview = study_overview(profiles, plan)
+    assert overview["generation_jobs"] == 2
+    for mode, parallel in (("instruct", 4), ("thinking", 1)):
+        model = overview["models"][mode + "-only"]
+        assert model["modes"] == [mode]
+        assert list(model["kld_runtime"]) == [mode]
+        assert model["reference_runtime"][mode]["parallel"] == parallel
+    args = launch.parse_args(["--study", str(tmp_path / "study"), "--model", "thinking-only", "--mode", "instruct",
+        "--source", "mmmu-pro-vision", "--candidate", "Q4", "--cand-model", str(tmp_path / "candidate.gguf"),
+        "--llama-vlm-kld", str(tmp_path / "llama-vlm-kld"), "--gpu", "0", "--dry-run"])
+    with pytest.raises(ValueError, match="unsupported semantic mode"):
+        launch.build_command(args, plan, profiles, tmp_path / "archive")
+    args.mode = "thinking"
+    launch.build_command(args, plan, profiles, tmp_path / "archive")
+    plan["size"] = 500
+    with pytest.raises(ValueError, match="cohort_size"):
+        launch.build_command(args, plan, profiles, tmp_path / "archive")
+
+
+@pytest.mark.parametrize('existing_private', [None, False, True])
+def test_upload_private_default_checks_new_and_existing_repositories(upload_run, fake_reference_hub, existing_private):
+    from cli import upload_reference as upload
+    run, profiles = upload_run()
+    manifest, parquet = upload.prepare(run, 'test-model', 'instruct', profiles)
+    api = fake_reference_hub
+    api.private = existing_private
+    receipt = upload.publish(run, manifest, parquet)
+    assert receipt['private'] is True and api.private is True
+    assert api.creation_privacies == [True]
+    assert api.privacy_updates == ([True] if existing_private is False else [])
+
+
+@pytest.mark.parametrize('change', ['ignored', 'denied'])
+def test_upload_refuses_private_setting_failure_before_writing(upload_run, fake_reference_hub, monkeypatch, change):
+    from cli import upload_reference as upload
+    run, profiles = upload_run()
+    manifest, parquet = upload.prepare(run, 'test-model', 'instruct', profiles)
+    api = fake_reference_hub
+    api.private = False
+    def update(*args, **kwargs):
+        if change == 'denied':
+            raise PermissionError('setting denied')
+    monkeypatch.setattr(api, 'update_repo_settings', update)
+    with pytest.raises((ValueError, PermissionError), match='private|denied'):
+        upload.publish(run, manifest, parquet)
+    assert api.commits == 0 and not api.files
+    assert not (run / 'upload/receipt.json').exists()
+
+
+def test_upload_refuses_success_receipt_if_privacy_changes(upload_run, fake_reference_hub, monkeypatch):
+    from cli import upload_reference as upload
+    run, profiles = upload_run()
+    manifest, parquet = upload.prepare(run, 'test-model', 'instruct', profiles)
+    api = fake_reference_hub
+    original = api.create_commit
+    def commit(*args, **kwargs):
+        result = original(*args, **kwargs)
+        api.private = False
+        return result
+    monkeypatch.setattr(api, 'create_commit', commit)
+    with pytest.raises(ValueError, match='not private'):
+        upload.publish(run, manifest, parquet)
+    assert not (run / 'upload/receipt.json').exists()
+
+
+@pytest.mark.parametrize('flags', [[], ['--private']])
+def test_upload_cli_defaults_to_private(upload_run, monkeypatch, flags):
+    import sys
+    from cli import upload_reference as upload
+    run, profiles = upload_run()
+    profile_path = run / 'profiles.json'
+    profile_path.write_text(json.dumps(profiles))
+    observed = []
+    monkeypatch.setattr(upload, 'publish', lambda run, manifest, parquet, private: observed.append(private) or {'private': private})
+    monkeypatch.setattr(sys, 'argv', ['upload_reference.py', '--run', str(run), '--model', 'test-model', '--mode', 'instruct', '--profiles', str(profile_path), *flags])
+    upload.main()
+    assert observed == [True]

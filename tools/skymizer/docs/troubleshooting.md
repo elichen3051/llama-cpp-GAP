@@ -1,123 +1,55 @@
 # Verifying outputs and troubleshooting
 
-## Verifying outputs
+Start with the collector's native log, `manifest.csv`, `collect_meta.json` and attempt records. A process exit of zero is not sufficient evidence of a completed metric collection or PPL pass. Preserve failed attempts and use a fresh output directory when retrying.
 
-### Header sanity
+## Header and record inspection
 
-```bash
-python3 -c "
-import numpy as np
-z = np.load('tmp/kld-q4km/metrics/000_test_X.npz')
-print({k: int(z[k]) for k in ('version','vocab','npos','n_prefill')},
-      int(z['n_past_actual']) if 'n_past_actual' in z else 'n_past_actual: not recorded')
-"
-# {'version': 2, 'vocab': 151936, 'npos': 698, 'n_prefill': 218} 1039
-# n_prefill (HF sequential) and n_past_actual (llama.cpp M-RoPE positions)
-# differ by design; a missing member means the dump predates the field.
-```
-
-### Same-pair double-run (determinism check)
+From the repository root:
 
 ```bash
-# Collect the same window twice into two dirs with identical flags:
-python3 tools/skymizer/cli/collect_kld.py ... --out tmp/kld-run1 --end 3
-python3 tools/skymizer/cli/collect_kld.py ... --out tmp/kld-run2 --end 3
-
-# Metric columns must be identical (same build, same GPU, --n-seq-max 1):
-python3 - <<'EOF'
-import numpy as np, pathlib
-for a in sorted(pathlib.Path("tmp/kld-run1/metrics").glob("*.npz")):
-    b = pathlib.Path("tmp/kld-run2/metrics") / a.name
-    za, zb = np.load(a), np.load(b)
-    assert all(np.array_equal(za[k], zb[k]) for k in za.files), a.name
-    print(a.name, "identical")
-EOF
+"$SKYMIZER_PYTHON" - "$METRIC_FILE" <<'PYTHON'
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path('tools/skymizer').resolve()))
+from lib.kld_metrics_io import load_kld_metrics
+metrics, header = load_kld_metrics(Path(sys.argv[1]))
+print(header)
+print({name: (str(values.dtype), values.shape) for name, values in metrics.items()})
+PYTHON
 ```
 
-`review-functionality/smoke_vlm_gemma4.sh` runs exactly this double-run +
-self-pair report end to end on GPU.
+Use the [format definition](formats.md) to interpret version, vocabulary, target count and prefill fields. Native VLM positions and the frozen sequential prefill length may differ. A classic 512-token PPL row instead has `n_prefill=257` and `n_past_actual=512`.
 
-For an across-quant sanity check use the full workflow in
-[TL;DR](../README.md#tldr--canonical-recipe), rather than a single-pair KLD.
+## Reference drift
 
-## Troubleshooting
+The comparator requires exact reference metric columns on the same target IDs. Check both model/projector fingerprints, the reference dataset, binary and loaded libraries, GPU/backend, context, batching, threads, image bounds and scoring horizon. Equal command flags do not establish equality if one of those inputs changed.
 
-### `mtmd_tokenize failed (rc=...); common cause: <__media__> marker count in --formatted-chat must equal --image count (got N)`
+To check reproducibility, collect the same pair and row range into two fresh directories with identical inputs and runtime. Compare the metric records, then run `saved_metrics_paired_compare.py` on those directories; a self-pair should produce zero deltas. `review-functionality/smoke_vlm_gemma4.sh` demonstrates this on GPU. Do not assume every backend or build is deterministic without checking it.
 
-The number of `--image` flags doesn't match the `<__media__>` marker count
-in `formatted_chat.txt`. Check:
+`--allow-ref-drift` records an approximate comparison. It cannot override different binaries, unfinished work, wrong targets or incompatible corpus windows. Keep strict pairing for the primary result.
 
-```bash
-grep -o '<__media__>' tmp/<sample>/formatted_chat.txt | wc -l
-jq -r .num_images tmp/<sample>/meta.json
-```
+## Image and prefix failures
 
-These two must be equal, and you must pass exactly that many `--image` flags
-in dataset order. (In manifest mode `collect_kld.py` handles this for
-you — a marker-mismatch here usually means the dataset row itself is
-malformed; rerun the prep script standalone with `--row N`.)
+For `marker count != num_images`, inspect the prepared prompt's `<__media__>` count and ordered image paths. Native rows use their saved prompt and original images. Legacy HF rows also require the declared tokenizer and supported wrapper reconstruction. A wrong dataset/tokenizer pairing can fail before model loading.
 
-### `after prefill: llama.cpp n_past=X (HF sequential n_prefill=Y; values differ by design due to M-RoPE; not an error)`
+One source image can produce multiple tiles. A strict prefix check must compare the complete source-image tile span against the matching placeholder span. Do not reduce the image resolution or disable a strict check merely to hide a mismatch. Inspect the original row and native chunk log first. The InternVL adjacent-tile checker fix is described in the [final reference handover](reference-runpod-final-handover.md); it does not add an upstream model implementation.
 
-This is informational, **not an error**. `llama.cpp` counts one position per
-merged vision-patch group under M-RoPE; HF counts one entry per image-pad
-token. They refer to the same underlying model state. Teacher forcing uses
-`tokens.bin[n_prefill:]` so answer-position alignment is unaffected.
+If the complete non-causal image chunk exceeds batch or microbatch capacity, use the family runtime that was validated for that projector's defaults. Any runtime change applies to all quantizations of the same checkpoint and creates a new collection identity. A single-model load does not prove reference-plus-candidate capacity.
 
-### Reference drift between saved-metrics directories
+`unsupported model family` during legacy preparation refers to its HF wrapper registry. Prefer native reference rows for upstream-supported models. Models unsupported by the checkout's upstream base remain outside scope; do not add a model implementation to bypass this check.
 
-`saved_metrics_paired_compare.py` refuses two dirs whose stored
-`nll_ref`/`entropy_ref`/`argmax_ref` columns are not bit-identical. The two
-collections did not reproduce the same reference forward pass: confirm the
-reference model/mmproj, llama.cpp build, GPU, batching (`--tf-chunk`,
-`-b`/`-ub`), context, and image bounds are identical, then re-collect.
-`--allow-ref-drift` downgrades the refusal to a recorded warning; do not
-use it for a primary result.
+## Incomplete collections or collisions
 
-### Build can't find `llama-vlm-kld`
+An active writer, interrupted attempt, missing terminal record or one-sided output gap blocks formal comparison. Keep the failed directory intact and repeat the affected work in a new output root. Disjoint appends are allowed only after completed work and with unchanged collection identity. See [completion rules](collect.md#completion-and-artifacts).
 
-The target is registered in `tools/skymizer/CMakeLists.txt`. Reconfigure
-and rebuild:
+For too few paired groups, collect more usable rows or choose the intended complete corpus. At least two groups are necessary to estimate a sampling variance, but that minimum does not imply adequate power or independence.
 
-```bash
-cmake -B build -DGGML_CUDA=ON   # or whichever backend you use
-cmake --build build --target llama-vlm-kld llama-llm-kld -j
-```
+## PPL or KLD anomalies
 
-### Prep script: `marker count N != num_images M`
+For the corpus bridge, first verify exact tokenization, BOS replacement, 512-token windows and targets with `verify_perplexity_bridge.py`. Candidate PPL needs both `--kl-divergence` and `--kl-divergence-base FILE`; the latter alone can select a writer path and overwrite the base. Preserve and recheck the original base SHA.
 
-The decode-and-collapse regex failed to produce the expected `<__media__>`
-count. This usually means the dataset row's `input_ids` contains image-pad
-runs that don't match `num_images`, or the tokenizer was loaded from a
-different model than the dataset claims. Inspect:
+Original reference PPL differs from PPL reconstructed from the clipped uint16 base. Report both. A high candidate PPL with an equally high uncompressed reference PPL is not by itself evidence of damaged candidate bytes. Repeated candidate-only degradation should be checked against the same reference, protocol and a healthy quantization. Loading failures, nonfinite metrics, OOM and ordinary low-bit loss require different diagnoses.
 
-```python
-# run from tools/skymizer (so `cli.` resolves)
-from datasets import load_dataset
-from cli.prep_vlm_score_from_hf import load_tokenizer
-ds = load_dataset("elichen-skymizer/GAP-mmmu-pro-standard-10",
-                  "qwen3.5-4b-ins-gen-2048",
-                  split="train").sort(["num_images"])
-row = ds[<your_row>]
-# prep's load_tokenizer() passes trust_remote_code only for the families that
-# need it (Kimi-VL); use it rather than AutoTokenizer directly.
-tok = load_tokenizer(row["generation_model_name_or_path"])
-print(tok.decode(row["input_ids"][:row["n_prefill_tokens"]], skip_special_tokens=False)[:500])
-```
+## Build or dependency failures
 
-### Prep script: `unsupported model family: '...'`
-
-The dataset row was generated by a model whose name prefix is not in
-`MODEL_FAMILIES` (prep_vlm_score_from_hf.py). Currently registered:
-Qwen3-VL, Qwen3.5, Qwen3.6 (they share the same image wrapper strings;
-the token IDs differ but prep works on decoded text), Gemma-4, and Kimi-VL
-(whose tokenizer is repository code: prep opts it into trust_remote_code,
-see `REMOTE_CODE_TOKENIZER_PREFIXES`). Adding a
-family requires (1) registering its prefix + image-block collapse regex
-(and per-family image-pad token, plus the image-processor schema in
-`derive_image_token_limits`) in prep_vlm_score_from_hf.py, and
-(2) verifying support end-to-end on REAL rows from the collection — grab
-the family's config from the GAP datasets and run the prep + collect smoke
-(`review-functionality/smoke_vlm_gemma4.sh` is the worked example); vendor
-a couple of those rows under `tests/data/` for the hermetic prep tests, as
-done for Qwen3.5 and Kimi-VL (`tests/test_gap_sample_prep.py` SAMPLES).
+Use the [README build commands](../README.md#environment-and-build), including a fresh CMake configuration if a target is absent. Build directories, environments and caches can live outside the checkout. Native rows need the normal Python dependencies; only legacy HF preparation needs the `hf-tokenizer` extra. Never replace binaries or backend libraries underneath an active collection.

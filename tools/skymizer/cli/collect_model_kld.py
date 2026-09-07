@@ -16,7 +16,7 @@ import socket
 
 SKYMIZER = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(SKYMIZER))
-from lib.reference_study import kld_runtime, study_overview
+from lib.reference_study import kld_runtime, study_overview, validate_reference_cohort
 from lib.reference_run import atomic_json
 from lib.collection_state import require_completed_attempts
 from cli.run_reference_campaign import snapshot, tree_hashes, ProcessSupervisor
@@ -47,6 +47,7 @@ def parse_args(argv=None):
 
 
 def build_command(args, plan, profiles, scripts):
+    validate_reference_cohort(profiles, plan["size"])
     for value, key in ((args.model, "models"), (args.source, "sources"), (args.mode, "modes")):
         if value not in plan[key]:
             raise ValueError(f"{value!r} is not in the study's {key}")
@@ -66,6 +67,8 @@ def build_command(args, plan, profiles, scripts):
                "--sort-by", "num_images", "--flash-attn"]
     for key in ("n_ctx", "n_batch", "n_ubatch", "tf_chunk", "n_gpu_layers", "n_threads", "metric_threads", "num_eval_tokens"):
         command += ["--" + key.replace("_", "-"), str(runtime[key])]
+    if runtime["allow_vocab_attr_mismatch"]:
+        command.append("--allow-vocab-attr-mismatch")
     return command, out
 
 
@@ -99,6 +102,7 @@ def prepare_study(args):
             return study, existing.parents[1], None, None
         scripts = snapshot(study, args.profiles)
         profiles = json.loads((scripts / "scripts/reference_model_profiles.json").read_text())
+        validate_reference_cohort(profiles, args.size)
         plan = {"stage": "kld", "hardware": "pro6000", "size": args.size, "num_samples": None,
                 "models_dir": str(model_root), "models": list(profiles["models"]),
                 "sources": profiles["sources"], "modes": ["instruct", "thinking"]}

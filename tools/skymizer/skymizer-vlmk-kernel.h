@@ -13,6 +13,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <cerrno>
 #include <cmath>
 #include <cstdint>
 #include <cstddef>
@@ -23,6 +24,12 @@
 #include <string>
 #include <thread>
 #include <vector>
+
+#if defined(_WIN32)
+#    include <io.h>
+#else
+#    include <unistd.h>
+#endif
 
 // ---------------------------------------------------------------------------
 // metric kernel
@@ -53,6 +60,53 @@ struct kld_record {
 };
 static_assert(offsetof(kld_record, ear_64) == 68, "v5 must preserve the v4 record prefix");
 static_assert(sizeof(kld_record) == 76, "kld_record must be 76 packed bytes (on-disk layout)");
+
+static constexpr uint32_t VLMK_MAGIC   = 0x564C4D4B; // "VLMK"
+static constexpr uint32_t VLMK_VERSION = 5;          // v5: 76-byte records (+ EAR_64); v4 = 68, v3 = 56, v2 = 44, v1 = 40
+
+// Write to a temporary file and rename after the complete file is synced.
+static bool write_vlmk_file(
+        const std::string & path,
+        uint32_t n_vocab,
+        uint32_t n_prefill,
+        uint32_t n_past_actual,
+        const std::vector<kld_record> & records,
+        stderr_prefix * lp) {
+    const std::string tmp_path = path + ".tmp";
+    FILE * f = fopen(tmp_path.c_str(), "wb");
+    if (f == nullptr) {
+        prefixed_fprintf(lp, "failed to open output %s\n", tmp_path.c_str());
+        return false;
+    }
+    bool ok = true;
+    // Sixth word records the caller's consumed position count.
+    const uint32_t header[6] = {
+        VLMK_MAGIC, VLMK_VERSION, n_vocab,
+        (uint32_t) records.size(), n_prefill, n_past_actual,
+    };
+    ok = ok && fwrite(header, sizeof(header), 1, f) == 1;
+    ok = ok && (records.empty() ||
+                fwrite(records.data(), sizeof(kld_record), records.size(), f) == records.size());
+    ok = ok && fflush(f) == 0;
+#if defined(_WIN32)
+    ok = ok && _commit(_fileno(f)) == 0;
+#else
+    ok = ok && fsync(fileno(f)) == 0;
+#endif
+    ok = (fclose(f) == 0) && ok;
+    if (!ok) {
+        prefixed_fprintf(lp, "failed writing %s: %s\n", tmp_path.c_str(), strerror(errno));
+        std::remove(tmp_path.c_str());
+        return false;
+    }
+    if (std::rename(tmp_path.c_str(), path.c_str()) != 0) {
+        prefixed_fprintf(lp, "failed to rename %s -> %s: %s\n",
+                         tmp_path.c_str(), path.c_str(), strerror(errno));
+        std::remove(tmp_path.c_str());
+        return false;
+    }
+    return true;
+}
 
 static bool kld_record_all_finite(const kld_record & rec) {
     const float values[] = {
@@ -897,12 +951,7 @@ static bool run_self_test() {
 }
 
 
-// Dual-model teacher forcing + metric computation + dump write, moved
-// VERBATIM from the byte-identical tail of both kld tools' score_one.
-// SIDE is the per-tool model_side struct; the per-tool write_vlmk_file
-// (their header comments differ) is passed in under the same name so the
-// section text is unchanged. NUMERICAL_CONTRACT.md #1 applies to the
-// kernel this drives.
+// Shared teacher forcing; each caller supplies its model state and output writer.
 template <typename ARGS, typename SIDE, typename WRITE_FN>
 static bool kld_teacher_force_and_write(
         const ARGS & args,

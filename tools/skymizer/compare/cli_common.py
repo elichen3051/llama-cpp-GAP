@@ -1,10 +1,4 @@
-# compare/cli_common.py -- the argparse / validation / output scaffolding the
-# two comparators share (paired_compare over dense logit dirs and
-# saved_metrics_paired_compare over VLMK metric dirs). Their parse_args and
-# main() bodies were copy-pasted and had already drifted once (the stale
-# --ci-method help that commit 0f13f361 had to sweep); every shared piece now
-# has one copy here, and the three help strings that legitimately differ are
-# parameters.
+"""Argument and output helpers for saved-metrics comparison."""
 import json
 import sys
 from pathlib import Path
@@ -42,8 +36,7 @@ def resolve_item_end(end_arg: int | None, n_items: int) -> tuple[int, str | None
 
 
 def add_shared_paired_args(p, *, num_eval_tokens_help: str, end_help: str) -> None:
-    """--out through --end: identical in both tools (same defaults, same
-    help) apart from the two help strings passed in."""
+    """Add report arguments with caller-specific selection descriptions."""
     p.add_argument("--out", required=True, type=Path, help="Markdown report path")
     p.add_argument("--label-a", default=None)
     p.add_argument("--label-b", default=None)
@@ -54,16 +47,16 @@ def add_shared_paired_args(p, *, num_eval_tokens_help: str, end_help: str) -> No
                    default=list(DEFAULT_POSITION_BUCKETS),
                    help="ascending answer-position edges (first must be 0) for "
                         "the exploratory position-strata table; the last "
-                        "bucket is open-ended. Default 0 32 256, because the "
-                        "measured mmproj signal on this data sits in the first "
-                        "~32 answer tokens. Pass a single 0 to report one "
+                        "bucket is open-ended. Default 0 32 256. "
+                        "Pass a single 0 to report one "
                         "bucket, i.e. effectively disable the breakdown.")
     p.add_argument("--equivalence-margin", type=float, default=None,
                    help="TOST margin for the PRIMARY metric, in that metric's "
                         "own units (nats for kld, pp^2 for mse_dp, ...). With "
-                        "it, a primary cell whose CI lies entirely inside "
-                        "+-margin is reported EQUIVALENT rather than merely "
-                        "inconclusive (interval-inclusion TOST). Without it, "
+                        "it, a CI strictly inside +-margin establishes "
+                        "equivalence independently of the directional verdict; "
+                        "EQUIVALENT labels an otherwise inconclusive cell. "
+                        "One-sided alpha=(1-confidence-level)/2. Without it, "
                         "every non-significant cell still reports the tightest "
                         "margin its own interval rules out.")
     p.add_argument("--primary-metric", default=None,

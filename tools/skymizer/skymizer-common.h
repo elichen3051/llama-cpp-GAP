@@ -1,9 +1,4 @@
-// Shared scaffolding for the four skymizer C++ tools (llm/vlm x score/kld):
-// the stderr prefix logger, the reporting integer parser, and the
-// guarded small-file helpers (slurp_file with the f.bad() check,
-// read_tokens_bin with the short-read check, validate_tokens_in_vocab). Bodies moved
-// VERBATIM from the per-tool copies (they were byte-identical); `static`
-// keeps per-TU internal linkage, so codegen is what textual inclusion gave.
+// Shared logging, input validation and context setup for Skymizer tools.
 #pragma once
 
 #include "ggml.h"
@@ -206,4 +201,20 @@ static bool validate_vocab_id_mapping(
                 (long long) n_attr_mismatch);
     }
     return true;
+}
+
+template <typename ARGS>
+static llama_context_params kld_context_params(const ARGS & args) {
+    llama_context_params cparams = llama_context_default_params();
+    cparams.n_ctx     = args.n_ctx;
+    cparams.n_batch   = args.n_batch;
+    cparams.n_ubatch  = args.n_ubatch;
+    cparams.n_seq_max = 1;
+    // Multi-token batches use n_threads_batch.
+    cparams.n_threads       = args.n_threads;
+    cparams.n_threads_batch = args.n_threads;
+    cparams.flash_attn_type = args.flash_attn_type;
+    // Use the CLI cache policy instead of the low-level full-SWA default.
+    cparams.swa_full        = args.swa_full;
+    return cparams;
 }

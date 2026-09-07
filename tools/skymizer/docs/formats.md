@@ -5,21 +5,22 @@ The VLMK (per-token metrics) layout and its lossless `.npz` form. Reader:
 
 ### Metric dump format (VLMK)
 
-Little-endian, magic `"VLMK"`. 24-byte header:
+Little-endian with numeric magic `0x564C4D4B` (the stored bytes are `4b 4d 4c 56`). The format name is VLMK. 24-byte header:
 
 ```text
 offset  size  type    field        notes
 ─────────────────────────────────────────────────────────────
-0       4     uint32  magic        0x564C4D4B ("VLMK")
+0       4     uint32  magic        0x564C4D4B
 4       4     uint32  version      5 (v4 = 68-byte; v3 = 56-byte interim; v2 = 44-byte records
                                     without the EAR_K family; v1 = legacy 40-byte
                                     records without ear)
 8       4     uint32  vocab_size   == llama_vocab_n_tokens (both models)
 12      4     uint32  n_positions  number of scored answer positions
-16      4     uint32  n_prefill    HF ground-truth sequential prefill length,
+16      4     uint32  n_prefill    Frozen sequential first-target index,
                                     echoed from the manifest
-20      4     uint32  n_past_actual llama.cpp's OWN position count after
-                                    prefill; 0 = not recorded (legacy dump)
+20      4     uint32  n_past_actual Native position count after prefill, or full
+                                    window length in perplexity-window mode;
+                                    0 = not recorded (legacy dump)
 24+     ...           n_positions x 76-byte packed records
 ```
 

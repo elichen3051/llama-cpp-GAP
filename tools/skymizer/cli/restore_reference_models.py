@@ -1,21 +1,17 @@
 #!/usr/bin/env python3
 import argparse
-import hashlib
 import json
 import os
 from pathlib import Path
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
 
 
-def sha256(path):
-    digest = hashlib.sha256()
-    with path.open("rb") as stream:
-        for block in iter(lambda: stream.read(8 * 1024 * 1024), b""):
-            digest.update(block)
-    return digest.hexdigest()
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from lib.model_files import sha256_file as sha256
 
 
 def matches(path, record):

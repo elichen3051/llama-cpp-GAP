@@ -30,7 +30,7 @@ sys.path.insert(0, str(SKYMIZER))
 from lib.collect_meta_provenance import execution_identity
 from lib.reference_dataset import sha256_file
 from lib.reference_run import atomic_json, read_records
-from lib.reference_study import study_overview
+from lib.reference_study import model_modes, study_overview, validate_reference_cohort
 
 
 @contextmanager
@@ -67,7 +67,7 @@ def snapshot(out, profiles):
     try:
         directory = staging / "skymizer"
         directory.mkdir()
-        for name in ("cli", "lib", "scripts"):
+        for name in ("cli", "lib", "compare", "scripts"):
             shutil.copytree(SKYMIZER / name, directory / name, ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
         for pattern in ("*.cpp", "*.h", "pyproject.toml", "uv.lock", "CMakeLists.txt"):
             for path in SKYMIZER.glob(pattern):
@@ -106,6 +106,12 @@ def snapshot(out, profiles):
         if staging.exists():
             shutil.rmtree(staging)
     return archive / "skymizer"
+
+
+def require_current_uploader(scripts):
+    relative = Path("cli/upload_reference.py")
+    if sha256_file(scripts / relative) != sha256_file(SKYMIZER / relative):
+        raise ValueError("archived uploader differs from this release; private publication requires a new campaign snapshot or the current standalone uploader with the original run and archived profile; preserve the old archive")
 
 
 class ProcessSupervisor:
@@ -213,7 +219,7 @@ def validate_receipt(run, model, subset, size):
     expected = {"repo": repo, "subset": subset, "rows": completion["rows"]}
     if any(manifest.get(k) != v or receipt.get(k) != v for k, v in expected.items()):
         raise ValueError("upload receipt does not describe this job")
-    if (receipt.get("status") != "verified" or re.fullmatch(r"[0-9a-f]{40,64}", receipt.get("commit", "")) is None
+    if (receipt.get("status") != "verified" or receipt.get("private") is not True or re.fullmatch(r"[0-9a-f]{40,64}", receipt.get("commit", "")) is None
             or manifest.get("cohort") != completion["cohort"] or manifest.get("split") != "train"
             or manifest.get("metadata_sha256") != sha256_file(run / "metadata.json")
             or manifest.get("parquet_sha256") != sha256_file(run / "upload/train-00000-of-00001.parquet")
@@ -249,8 +255,11 @@ def run_campaign(args):
 
 def run_owned_campaign(args, out, stopped):
     scripts = snapshot(out, args.profiles)
+    if args.upload:
+        require_current_uploader(scripts)
     profiles_path = scripts / "scripts/reference_model_profiles.json"
     profiles = json.loads(profiles_path.read_text())
+    validate_reference_cohort(profiles, args.size)
     models = args.models or list(profiles["models"])
     sources = args.sources or profiles["sources"]
     for name, values in (("models", models), ("sources", sources), ("modes", args.modes), ("gpus", args.gpus)):
@@ -281,7 +290,7 @@ def run_owned_campaign(args, out, stopped):
     priority = ["gemma-4-31b-it", "qwen3.6-35b-a3b", "gemma-4-26b-a4b-it", "glm-4.6v-flash", "gemma-4-e4b-it", "qwen3.5-4b"]
     jobs = [(model, f"{source}-subsample-{args.size}-" + ("ins" if mode == "instruct" else "think"), source, mode)
             for model in sorted(models, key=lambda x: (priority.index(x) if x in priority else len(priority), x))
-            for mode in args.modes for source in sources]
+            for mode in model_modes(profiles["models"][model], args.modes) for source in sources]
     if args.dry_run:
         print(json.dumps({"jobs": len(jobs), "plan": settings, "archive": str(out)}, indent=2))
         return 130 if stopped.is_set() else 0
@@ -351,11 +360,12 @@ def run_owned_campaign(args, out, stopped):
 
     def upload(directory, run, model, subset, mode):
         command = [sys.executable, str(scripts / "cli/upload_reference.py"), "--run", str(run),
-                   "--model", model, "--mode", mode, "--profiles", str(profiles_path)]
+                   "--model", model, "--mode", mode, "--profiles", str(profiles_path), "--private"]
         for _ in range(3):
             if stopped.is_set():
                 return
             try:
+                require_current_uploader(scripts)
                 number = next_number(directory, "upload-*.log")
                 code = supervisor.execute(command, directory / f"upload-{number:04d}.log", timeout=args.upload_timeout)
                 if code:

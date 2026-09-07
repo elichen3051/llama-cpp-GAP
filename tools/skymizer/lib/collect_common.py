@@ -6,6 +6,10 @@ import csv
 import datetime
 import errno
 import json
+import re
+from contextlib import contextmanager
+
+import numpy as np
 import subprocess
 import sys
 from pathlib import Path
@@ -16,7 +20,13 @@ from lib.dataset_fingerprint import (
     check_dataset_content_hash,
     check_model_fingerprints,
 )
-from lib.kld_metrics_io import VLMK_VERSION
+from lib.collection_state import fsync_directory
+from lib.kld_metrics_io import (
+    KLD_RECORD_DT, VLMK_VERSION, assert_kld_current_version, assert_kld_file_complete,
+    convert_kld_bin_to_npz, load_kld_metrics,
+)
+
+KLD_FLOAT_KEYS = tuple(k for k in KLD_RECORD_DT.names if KLD_RECORD_DT[k].kind == "f")
 from lib.collect_vision import VisionBudgetReporter  # noqa: F401  (re-exported)
 
 
@@ -442,3 +452,210 @@ def preflight_n_ctx(pending, n_ctx: int, num_eval_tokens: int, n_seq_max: int = 
     requirement = compute_n_ctx_requirement(pending, num_eval_tokens, n_seq_max)
     if requirement is not None and requirement["need"] > int(n_ctx):
         sys.exit(format_n_ctx_preflight_error(requirement, int(n_ctx)))
+
+
+_KLD_DONE_RE = re.compile(r"DONE output_metrics=(\S+) wall_s=([\d.]+)\s*$")
+
+
+
+def dump_stem(idx: int, item_id: str) -> str:
+    return f"{idx:03d}_{item_id}"
+
+def write_kld_manifest(path: Path, entries):
+    with open(path, "w", encoding="utf-8") as f:
+        for entry in entries:
+            f.write(json.dumps(entry, ensure_ascii=False, separators=(",", ":")))
+            f.write("\n")
+
+def parse_kld_done_line(line: str):
+    m = _KLD_DONE_RE.search(line)
+    if m is None:
+        return None
+    return m.group(1), float(m.group(2))
+
+def resolve_dataset_end(end_arg, n_rows):
+    if end_arg is None or end_arg == -1:
+        return n_rows, None
+    if end_arg > n_rows:
+        return (
+            n_rows,
+            f"WARNING: --end {end_arg} exceeds dataset length {n_rows}; "
+            f"falling back to {n_rows} (all available rows).",
+        )
+    return end_arg, None
+
+def apply_dataset_limit(start: int, end: int, limit) -> int:
+    if limit is None or limit == -1:
+        return end
+    return min(end, start + limit)
+
+def format_row_progress(idx: int, n_rows: int) -> str:
+    return f"[{idx + 1:3d}/{n_rows}]"
+
+
+@contextmanager
+def finalized_kld_row(row: dict, num_eval_tokens: int, log_prefix: str):
+    """Yield the checked header for lane-specific checks, then validate and convert the row."""
+    metrics_path = row["metrics_path"]
+    prep_dir = row["prep_dir"]
+
+    try:
+        header = assert_kld_current_version(
+            assert_kld_file_complete(metrics_path), metrics_path)
+        expected_vocab = row.get("reference_vocabulary")
+        if expected_vocab is None and (prep_dir / "meta.json").is_file():
+            expected_vocab = json.loads((prep_dir / "meta.json").read_text()).get("reference_vocabulary")
+        if expected_vocab and header["vocab"] != expected_vocab["size"]:
+            raise ValueError("scorer vocab size differs from reference dataset vocabulary")
+        npos = header["npos"]
+        expected_npos = (min(num_eval_tokens, row["n_answer"])
+                         if num_eval_tokens > 0 else row["n_answer"])
+        if npos != expected_npos:
+            raise ValueError(
+                f"{metrics_path}: npos={npos} != expected n_eval={expected_npos} "
+                f"(n_answer={row['n_answer']}, num_eval_tokens={num_eval_tokens})")
+        if header["n_prefill"] != row["n_prefill"]:
+            raise ValueError(
+                f"{metrics_path}: header n_prefill={header['n_prefill']} != "
+                f"row n_prefill={row['n_prefill']}")
+
+        yield header
+        metrics, _ = load_kld_metrics(metrics_path)
+        tokens = np.fromfile(prep_dir / "tokens.bin", dtype=np.int32)
+        expected_targets = tokens[row["n_prefill"]:row["n_prefill"] + npos]
+        if expected_targets.size != npos or not np.array_equal(metrics["target"], expected_targets):
+            raise ValueError(
+                f"{metrics_path}: embedded target tokens do not match the row's "
+                f"input_ids answer slice")
+        nonfinite = {k: int(n) for k in KLD_FLOAT_KEYS
+                     if (n := (~np.isfinite(metrics[k])).sum())}
+        if nonfinite:
+            raise ValueError(
+                f"{metrics_path}: non-finite metric values (count by column: "
+                f"{nonfinite})")
+    except Exception as e:
+        rejected = metrics_path.with_name(metrics_path.name + ".rejected")
+        try:
+            metrics_path.replace(rejected)
+        except OSError:                      # keep the original error primary
+            rejected = metrics_path
+        if hasattr(e, "add_note"):
+            e.add_note(f"rejected output kept at {rejected}")
+        print(f"{log_prefix} rejected dump kept at {rejected}",
+              file=sys.stderr)
+        raise
+
+    npz_path = metrics_path.with_suffix(".npz")
+    convert_kld_bin_to_npz(metrics_path, npz_path)
+    metrics_path.unlink()
+    fsync_directory(metrics_path.parent)
+
+
+
+def add_collector_selection_args(p):
+    p.add_argument("--sort-desc", action="store_true",
+                   help="Sort --sort-by descending instead of skymizer's default "
+                        "ascending order. Default false preserves existing "
+                        "index-keyed artifact dirs.")
+    p.add_argument("--start", type=int, default=0)
+    p.add_argument("--end",   type=int, default=None,
+                   help="Exclusive end; default or -1 = dataset length. "
+                        "Values past dataset length warn and use all available rows.")
+    p.add_argument("--dataset-limit", type=int, default=None,
+                   help="Score at most N rows starting at --start (i.e. "
+                        "end = start + N, further capped by --end / dataset "
+                        "length). -1 = no cap (same as omitting the flag).")
+    p.add_argument("--num-eval-tokens", type=int, default=-1,
+                   help="Cap scored answer positions per row; -1 = all answer "
+                        "tokens (default). Clamped to each row's answer length.")
+
+
+def add_collector_runtime_args(p):
+    p.add_argument("--n-batch", type=int, default=2048,
+                   help="Scorer prefill logical batch (-b). Default 2048; must be >= --n-ubatch.")
+    p.add_argument("--n-ubatch", type=int, default=2048,
+                   help="Scorer prefill micro-batch + default teacher-forcing chunk (-ub). Default 2048.")
+    p.add_argument("--tf-chunk", type=int, default=-1,
+                   help="Scorer teacher-forcing chunk size (--tf-chunk), decoupled from --n-ubatch. "
+                        "-1 = follow --n-ubatch (batched, default); 1 = per-token. Runs whose "
+                        "metrics are compared against each other MUST use the same value.")
+    p.add_argument("--n-ctx", type=int, default=32768,
+                   help="Scorer context size (-c), per model.")
+    p.add_argument("--n-gpu-layers", type=int, default=99,
+                   help="Scorer GPU layer count (-ngl); -2 means all layers. Default 99.")
+    p.add_argument("--n-threads", type=int, default=-1,
+                   help="Scorer CPU generation/batch threads (-t); -1 = llama.cpp default.")
+    p.add_argument("--metric-threads", type=int, default=-1,
+                   help="Scorer --metric-threads (CPU threads for the per-position "
+                        "metric kernel); -1 = hardware concurrency (default).")
+    flash_group = p.add_mutually_exclusive_group()
+    flash_group.add_argument("--flash-attn", dest="flash_attn", action="store_const",
+                             const="enabled",
+                             help="Require scorer flash attention (explicit enabled mode).")
+    flash_group.add_argument("--no-flash-attn", dest="flash_attn", action="store_const",
+                             const="disabled",
+                             help="Disable scorer flash attention explicitly.")
+    p.set_defaults(flash_attn="auto")
+    p.add_argument("--swa-full", action="store_true",
+                   help="Forwarded to the scorer: full-size KV cache for sliding-window "
+                        "layers (the llama_context default). Off by default, like the "
+                        "common llama.cpp CLI (SWA layers allocate only their window). "
+                        "The two settings differ only by FP reordering; runs that must "
+                        "be comparable use the same one (recorded in collect_meta).")
+
+
+def validate_collector_args(args):
+    if args.num_eval_tokens != -1 and args.num_eval_tokens < 1:
+        sys.exit(f"--num-eval-tokens must be -1 (all) or >= 1, got {args.num_eval_tokens}")
+    if args.max_total_tokens is not None and args.max_total_tokens < 1:
+        sys.exit(f"--max-total-tokens must be >= 1 when set, got {args.max_total_tokens}")
+    if args.n_batch < 1 or args.n_ubatch < 1:
+        sys.exit(f"--n-batch and --n-ubatch must be >= 1, got {args.n_batch} / {args.n_ubatch}")
+    if args.n_ubatch > args.n_batch:
+        sys.exit(f"--n-ubatch ({args.n_ubatch}) must be <= --n-batch ({args.n_batch})")
+    if args.tf_chunk != -1 and args.tf_chunk < 1:
+        sys.exit(f"--tf-chunk must be -1 (follow --n-ubatch) or >= 1, got {args.tf_chunk}")
+    for name in ("image_min_tokens", "image_max_tokens"):
+        value = getattr(args, name, None)
+        if value is not None and value != -1 and value < 1:
+            flag = "--" + name.replace("_", "-")
+            sys.exit(f"{flag} must be -1 (mmproj metadata) or >= 1, got {value}")
+    if args.n_ctx < 1:
+        sys.exit(f"--n-ctx must be >= 1, got {args.n_ctx}")
+    if args.n_gpu_layers < 0 and args.n_gpu_layers != -2:
+        sys.exit(f"--n-gpu-layers must be -2 (all) or >= 0, got {args.n_gpu_layers}")
+    if args.n_threads != -1 and args.n_threads < 1:
+        sys.exit(f"--n-threads must be -1 (default) or >= 1, got {args.n_threads}")
+    if args.dataset_limit is not None and args.dataset_limit != -1 and args.dataset_limit < 1:
+        sys.exit(f"--dataset-limit must be -1 (no cap) or >= 1, got {args.dataset_limit}")
+    if args.metric_threads != -1 and args.metric_threads < 1:
+        sys.exit(f"--metric-threads must be -1 (auto) or >= 1, got {args.metric_threads}")
+    if args.start < 0:
+        sys.exit(f"--start must be >= 0, got {args.start} (a negative index "
+                 "would silently read from the dataset's end and stamp a "
+                 "negative row_idx into artifact stems and manifest.csv)")
+    if args.end is not None and args.end < -1:
+        sys.exit(f"--end must be -1 (all) or >= 0, got {args.end}")
+
+
+
+def require_paths(required_paths):
+    missing = [f"  {flag} -> {path}" for flag, path in required_paths.items()
+               if not Path(path).exists()]
+    if missing:
+        sys.exit("missing required path(s):\n" + "\n".join(missing))
+
+
+@contextmanager
+def locked_manifest(out_dir, columns):
+    manifest_path = out_dir / "manifest.csv"
+    try:
+        out_lock = acquire_out_lock(out_dir)
+    except RuntimeError as error:
+        sys.exit(str(error))
+    with out_lock:
+        try:
+            check_manifest_header(manifest_path, columns)
+        except ValueError as error:
+            sys.exit(str(error))
+        yield manifest_path

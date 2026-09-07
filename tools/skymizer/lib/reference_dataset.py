@@ -7,21 +7,13 @@ from numbers import Real
 from pathlib import Path
 
 from lib.reference_contract import GTContractError, validate_gt_row
-from lib.model_files import model_files
+from lib.model_files import model_files, sha256_file
 
 SCHEMA_VERSION = "skymizer-reference-v2"
 
 
 def canonical_json(value):
     return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False)
-
-
-def sha256_file(path):
-    digest = hashlib.sha256()
-    with Path(path).open("rb") as handle:
-        for block in iter(lambda: handle.read(8 * 1024 * 1024), b""):
-            digest.update(block)
-    return digest.hexdigest()
 
 
 def raw_images(row, column="images"):

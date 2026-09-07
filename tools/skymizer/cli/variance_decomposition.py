@@ -100,7 +100,6 @@ from statistics import NormalDist
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from lib.kld_metrics_io import load_kld_metrics                # noqa: E402
 import cli.saved_metrics_paired_compare as smpc                 # noqa: E402
 
 # metric name -> per-token delta column extractor (B minus A)
@@ -140,31 +139,22 @@ def collect_deltas(a_dir: Path, b_dir: Path, metric: str, cap: int):
     """Load every paired delta array and reject rows unsuitable for variance analysis."""
     try:
         with smpc.comparison_locks((a_dir, b_dir)):
-            for role, root in (("candidate-a", a_dir), ("candidate-b", b_dir)):
-                smpc.require_collection_success(root, role)
-            a_meta = smpc.load_kld_collect_meta(a_dir)
-            b_meta = smpc.load_kld_collect_meta(b_dir)
-            smpc.require_execution_alignment(a_meta, b_meta)
-            for warning in smpc.check_kld_meta_alignment(a_meta, b_meta):
-                print(f"WARNING: {warning}", file=sys.stderr)
-            smpc.require_common_budget_skips({"candidate-a": a_dir, "candidate-b": b_dir})
-            matched, drops = smpc.find_metric_items(a_dir, b_dir)
-            smpc.require_complete_item_alignment(drops, allow_interaction=False)
+            smpc.validate_collection_pair(a_dir, b_dir)
+            matched, drops = smpc.aligned_metric_items(a_dir, b_dir)
             if not matched:
                 sys.exit("no matched items between the two dirs")
             delta_fn = METRIC_COLUMNS[metric]
             deltas, T, npos_all, rho1 = [], [], [], []
             for key in matched:
-                _sa, _sb, _ta, _tb, keep, finite, drift, _versions = smpc.score_item(
-                    key, a_dir, b_dir, cap)
+                ma, ha, mb, _hb = smpc.load_item_pair(key, a_dir, b_dir)
+                _sa, _sb, _ta, _tb, keep, finite, drift, _versions = smpc.score_records(
+                    key, ma, ha, mb, _hb, cap)
                 if drift is not None:
                     sys.exit(f"reference drift on {key}: {drift['msg']}")
                 if not finite:
                     sys.exit(f"{key}: non-finite metric score; variance analysis aborted")
                 if keep < 2:
                     sys.exit(f"{key}: variance analysis requires at least two scored positions")
-                ma, ha = load_kld_metrics(a_dir / "metrics" / f"{key}.npz")
-                mb, _hb = load_kld_metrics(b_dir / "metrics" / f"{key}.npz")
                 dt = delta_fn(ma, mb)[:keep].astype(np.float64)
                 if not np.all(np.isfinite(dt)):
                     sys.exit(f"{key}: non-finite paired differences; variance analysis aborted")

@@ -9,11 +9,7 @@ unreviewed algorithm change.
 
 ## 0. What "identical" means here
 
-Numerical identity holds PER BUILD/BACKEND. Two divergences are by design
-and are NOT violations: GPU run-to-run across different builds/backends,
-and `--n-seq-max > 1` (GEMV vs GEMM decode kernels; measured ~1e-5/1e-6 —
-recorded in docs/gotchas.md). Same-build, same-GPU, `--n-seq-max 1`
-double-runs are bit-exact and the smokes assert it.
+Numerical identity is assessed on the same inputs, build/backend, GPU and execution shape. The KLD scorers use one sequence. Reference generation can use parallel sequences, and generation/replay shapes can differ. Neither equal seeds nor equal CLI flags alone prove bit identity; compare recorded values and executable/backend identities.
 
 Two gates, never confused:
 
@@ -35,7 +31,7 @@ Two gates, never confused:
 | 7 | `dataset_fingerprint` hash-input order (`ds-v3`, including native generation provenance): baked into every stored `collect_meta.json`; reordering invalidates every `dataset_content_hash` | `lib/dataset_fingerprint.py` | `test_dataset_fingerprint.py`; `test_gap_sample_prep.py` (real rows) |
 | 8 | VLMK metric columns stored `<f4`, indices `<i4` (v1 40-byte / v2 44-byte / v3 56-byte / v4 68-byte / v5 76-byte records); float32 storage is the dominant error term — widening upstream accumulators changes bytes for no gain | `lib/kld_metrics_io.py` | `test_kld_metrics_io.py` layout + dtype-strict tests |
 | 9 | Float dtype ladder: float32 stored metric columns in, float64 accumulators for per-item means (`kld_metrics_io.item_means`, `_side_scores`) and every engine aggregation, float32 per-token report columns. No reduction axis or order change | `lib/kld_metrics_io.py`; `cli/saved_metrics_paired_compare.py`; `compare/engine.py` | `test_kld_metrics_io.py` (`item_means`); engine golden |
-| 10 | Paired-statistics frame: the ITEM is the inference unit (the t test's n, the bootstrap's resampling unit); item- and token-weighted are different estimands, both always reported; primary = kld × item (pre-registered, `knowledge/quantization-eval-sop.md`); default CI = paired Student-t (`--ci-method t`, no bootstrap, seed-free), the three bootstrap constructions optional; Holm over the exploratory family; p-values obtained by inverting the interval actually built | `compare/inference.py`, `compare/contracts.py` | `test_multiplicity.py`; `test_ci_methods.py`; engine golden |
+| 10 | Paired-statistics frame: the ITEM is the inference unit (the t test's n, the bootstrap's resampling unit); item- and token-weighted are different estimands, both always reported; primary = kld x item by default (the operator preregisters the study choice); default CI = paired Student-t (`--ci-method t`, no bootstrap, seed-free), the three bootstrap constructions optional; Holm over the exploratory family; p-values obtained by inverting the interval actually built | `compare/inference.py`, `compare/contracts.py` | `test_multiplicity.py`; `test_ci_methods.py`; engine golden |
 | 11 | Per-item tails (`per_item_tails`): each item's p99 / p99.9 / max of its per-token `kld` via `_pooled_ladder` applied to that item alone (same interpolation + witness rule as #6; `max` exact); tested item-weighted with the report's CI method in their OWN Holm family; never a per-item score key, never in the primary family. The `target` annotation column rides beside the metric columns (int32, one id per scored position) | `compare/tokens.py` `_per_item_tail_blocks`; `cli/saved_metrics_paired_compare.py` (target column) | `test_per_item_tails.py`; engine golden |
 | 12 | `compare/student_t.py` stays scipy-free and in the tail form: `I_x` by Lentz's continued fraction with `1 − x` formed directly by the caller, the quantile by bracketed Newton in the tail domain. Every t endpoint and p in every report comes from it; swapping in a library changes the last bits of every golden | `compare/student_t.py` | `test_student_t.py` (closed forms + scipy oracle when installed); engine golden |
 
@@ -62,7 +58,7 @@ Two gates, never confused:
    `manifest.csv` (no timestamps inside).
 
 
-## 3. Collection identity and completion
+## 4. Collection identity and completion
 
 The native-reference v2 integration changes identity/status contracts, not metric
 formulas or VLMK record bytes. `ds-v3` adds native generation metadata and

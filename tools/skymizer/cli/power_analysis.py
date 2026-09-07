@@ -28,7 +28,6 @@ TODO(review, before merge):
 from __future__ import annotations
 
 import argparse
-import json
 import math
 import sys
 from pathlib import Path
@@ -38,9 +37,7 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import cli.saved_metrics_paired_compare as smpc  # noqa: E402
-from compare.cli_common import (  # noqa: E402
-    require_common_budget_skips,
-    require_complete_item_alignment,
+from compare.cli_common import (
     resolve_item_end,
     write_report_and_json,
 )
@@ -169,25 +166,10 @@ def _load_cap_panel_locked(args, caps):
     """Validated aligned candidate-minus-baseline scores for every cap."""
     _check_dirs(args)
     try:
-        smpc.require_collection_success(args.candidate_a, "candidate-a")
-        smpc.require_collection_success(args.candidate_b, "candidate-b")
-        meta_a = smpc.load_kld_collect_meta(args.candidate_a)
-        meta_b = smpc.load_kld_collect_meta(args.candidate_b)
-        smpc.require_execution_alignment(meta_a, meta_b)
-        warnings = smpc.check_kld_meta_alignment(meta_a, meta_b)
-    except (AlignmentError, ValueError) as exc:
-        sys.exit(str(exc))
-
-    for warning in warnings:
-        print(f"WARNING: {warning}", file=sys.stderr)
-    common_budget_skips = require_common_budget_skips({
-        "candidate-a": args.candidate_a,
-        "candidate-b": args.candidate_b,
-    })
-    matched, drops = smpc.find_metric_items(args.candidate_a, args.candidate_b)
-    require_complete_item_alignment(
-        drops, allow_interaction=args.allow_interaction
-    )
+        meta_a, meta_b, warnings, common_budget_skips = smpc.validate_collection_pair(args.candidate_a, args.candidate_b)
+    except (AlignmentError, ValueError) as error:
+        sys.exit(str(error))
+    matched, drops = smpc.aligned_metric_items(args.candidate_a, args.candidate_b, allow_interaction=args.allow_interaction)
     if not matched:
         sys.exit("no items present in both metrics dirs")
     end, end_warning = resolve_item_end(args.end, len(matched))
@@ -212,12 +194,16 @@ def _load_cap_panel_locked(args, caps):
     used = []
     drifts = []
     for key in matched:
+        try:
+            ma, ha, mb, hb = smpc.load_item_pair(key, args.candidate_a, args.candidate_b)
+        except AlignmentError as error:
+            sys.exit(str(error))
         item_scores = {}
         item_drift = None
         for cap in caps:
             try:
                 score_a, score_b, _tok_a, _tok_b, keep, finite, drift, _versions = \
-                    smpc.score_item(key, args.candidate_a, args.candidate_b, cap)
+                    smpc.score_records(key, ma, ha, mb, hb, cap)
             except AlignmentError as exc:
                 sys.exit(str(exc))
             if item_drift is None and drift is not None:

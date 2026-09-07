@@ -18,7 +18,7 @@ import pytest
 
 SKYMIZER = Path(__file__).resolve().parents[1]
 REPO = SKYMIZER.parents[1]
-BIN = REPO / "build" / "bin"
+BIN = Path(os.environ.get("SKYMIZER_TEST_BIN", REPO / "build" / "bin"))
 TOOLS = ("llama-llm-kld", "llama-vlm-kld")
 # Each tool's required arguments (values need not exist: every probe exits
 # before any file is opened, and the usage checks only test for presence).

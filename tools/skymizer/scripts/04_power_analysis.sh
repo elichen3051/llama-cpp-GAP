@@ -1,40 +1,19 @@
 #!/usr/bin/env bash
 set -euo pipefail
-# =============================================================================
-# 04_power_analysis.sh [vlm|llm] — OPTIONAL sample-size / power study on the
-# KLD metric dirs (01 / 02). CPU only, runs on already-collected .npz dumps
-# in seconds-to-minutes.
-#
-# 1. power_analysis.py — prospective N x token-cap design surface. Tokens
-#    remain inside their ordered item prefix; only complete items are sampled.
-#    SESOI=<signed effect> enables prospective power. Without SESOI the tool
-#    emits precision / MDE only and never substitutes the pilot effect.
-#
-# 2. variance_decomposition.py — observed cap-profile diagnostic only:
-#    mu(K), empirical Var[d_i(K)], sign flips, saturation and the failure of
-#    the sigma_b^2 + sigma_w^2/K approximation. Its observed-effect N columns
-#    are not prospective sample-size recommendations.
-#
-# 3. random_subsample_power.py --mode reproducibility — optional stability
-#    diagnostic on this finite pilot. It is deliberately not called power.
-# =============================================================================
-source "$(dirname -- "${BASH_SOURCE[0]}")/00_env.sh"
+# Prospective design, observed cap diagnostics and finite-pilot verdict stability.
+source "$(dirname -- "${BASH_SOURCE[0]}")/00_env.sh" --pipeline
 pick_lane "${1:-vlm}"
 
-# Metric for the variance decomposition (kld | reversed_kld | js_kld | nll | ...).
 METRIC=${METRIC:-kld}
 
-# Design grid. Future item counts may exceed the pilot size because prospective
-# simulation samples from the empirical item distribution with replacement.
+# Prospective simulation samples complete items with replacement.
 TOKEN_CAPS=${TOKEN_CAPS:-"16 32 64 128 256 512 1024 2048"}
 SIZES=${SIZES:-"25 50 75 100 150 200 300 500"}
 POWER_REPS=${POWER_REPS:-2000}
 OUTER_REPS=${OUTER_REPS:-200}
 REPRO_REPS=${REPRO_REPS:-100}
 
-# Signed candidate-B minus candidate-A effect in METRIC units. Leave unset for
-# precision/MDE-only output. Deciding this threshold is a domain decision; the
-# script intentionally has no observed-effect fallback.
+# SESOI is a chosen B-minus-A effect; empty means precision/MDE only.
 SESOI=${SESOI:-}
 EFFECT_PROFILE=${EFFECT_PROFILE:-flat}
 REFERENCE_CAP=${REFERENCE_CAP:-}
@@ -75,11 +54,9 @@ echo "=== variance decomposition (lane=$LANE, metric=$METRIC) ==="
     --candidate-b "$OUT_KLD_B" \
     --metric      "$METRIC" \
     --output-json "$OUT_ROOT/$LANE-variance-decomposition-$METRIC.json"
-# Other knobs: --num-eval-tokens -1  --confidence-level 0.95  --power-target 0.80
 
 echo
-# This finite-pool curve answers a different question: whether the pilot's own
-# verdict is stable under without-replacement subsampling. It is not power.
+# Reproducibility samples this finite pilot without replacement.
 echo "=== verdict reproducibility curve (reps=$REPRO_REPS, sizes=$SIZES) ==="
 # shellcheck disable=SC2086  # SIZES is a deliberate word-split list
 "$PYTHON" cli/random_subsample_power.py \

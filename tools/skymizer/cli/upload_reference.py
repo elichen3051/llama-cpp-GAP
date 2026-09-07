@@ -182,7 +182,7 @@ def require_disjoint_configs(configs, new_paths):
                 raise ValueError("existing config would include the new reference files")
 
 
-def publish(run, manifest, parquet, private=False):
+def publish(run, manifest, parquet, private=True):
     import yaml
     from huggingface_hub import HfApi, CommitOperationAdd, hf_hub_download
     from huggingface_hub.errors import EntryNotFoundError, HfHubHTTPError
@@ -199,7 +199,13 @@ def publish(run, manifest, parquet, private=False):
     def occupied(revision):
         return {p for p in api.list_repo_files(repo, repo_type="dataset", revision=revision)
                 if p == subset or p.startswith(subset + "/") or p == audit or p.startswith(audit + "/")}
+    def repo_info():
+        info = api.repo_info(repo, repo_type="dataset")
+        if private and info.private is not True:
+            raise ValueError("dataset is not private; publication refused")
+        return info
     def verify(revision):
+        repo_info()
         if occupied(revision) != expected_paths:
             raise ValueError("remote subset/audit paths do not match the publication manifest")
         if json.loads(download(manifest_path, revision).read_text()) != manifest:
@@ -219,9 +225,11 @@ def publish(run, manifest, parquet, private=False):
     if json.loads((run / "upload/manifest.json").read_text()) != manifest:
         raise ValueError("local staged manifest changed")
     api.create_repo(repo, repo_type="dataset", exist_ok=True, private=private)
+    if private and api.repo_info(repo, repo_type="dataset").private is not True:
+        api.update_repo_settings(repo, repo_type="dataset", private=True)
     receipt = None
     for retry in range(6):
-        head = api.repo_info(repo, repo_type="dataset").sha
+        head = repo_info().sha
         paths = occupied(head)
         if manifest_path in paths:
             verify(head)
@@ -246,6 +254,7 @@ def publish(run, manifest, parquet, private=False):
         operations.extend([CommitOperationAdd(path_in_repo="README.md", path_or_fileobj=updated.encode()),
                            CommitOperationAdd(path_in_repo=manifest_path, path_or_fileobj=str(run / "upload/manifest.json"))])
         try:
+            repo_info()
             commit = api.create_commit(repo, repo_type="dataset", operations=operations,
                 parent_commit=head, commit_message=f"Add reference config {subset}")
             verify(commit.oid)
@@ -257,7 +266,7 @@ def publish(run, manifest, parquet, private=False):
     if receipt is None:
         raise ValueError("could not commit config after concurrent updates")
     receipt.update(rows=manifest["rows"], parquet_sha256=manifest["parquet_sha256"],
-                   audit_sha256=manifest["audit_sha256"], status="verified")
+                   audit_sha256=manifest["audit_sha256"], private=repo_info().private, status="verified")
     atomic_json(run / "upload/receipt.json", receipt)
     return receipt
 
@@ -268,7 +277,7 @@ def main():
     p.add_argument("--model", required=True)
     p.add_argument("--mode", choices=["instruct", "thinking"], required=True)
     p.add_argument("--profiles", type=Path, default=SKYMIZER / "scripts/reference_model_profiles.json")
-    p.add_argument("--private", action="store_true", help="only affects a newly created dataset repo")
+    p.add_argument("--private", action="store_true", default=True, help="require a private dataset (default); existing public destinations are made private before upload")
     p.add_argument("--dry-run", action="store_true", help="validate and export locally without Hub writes")
     args = p.parse_args()
     try:

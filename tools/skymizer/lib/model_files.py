@@ -1,5 +1,6 @@
-"""Resolve the complete ordered file set for a local GGUF model."""
+"""Resolve and hash local GGUF model files."""
 
+import hashlib
 import re
 from pathlib import Path
 
@@ -19,3 +20,11 @@ def model_files(path):
         if not file.is_file():
             raise ValueError(f"missing GGUF model file: {file}")
     return files
+
+
+def sha256_file(path):
+    digest = hashlib.sha256()
+    with Path(path).open("rb") as handle:
+        for block in iter(lambda: handle.read(8 * 1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
