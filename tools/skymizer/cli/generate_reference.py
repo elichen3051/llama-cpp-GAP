@@ -104,6 +104,101 @@ def load_source(args):
     return ds
 
 
+def _prepare_requests(args, ds, id_column, out):
+    """Save original image bytes and native requests in source order."""
+    requests, source_ids, failures = [], [], {}
+    with (out / "requests.jsonl").open("w") as stream:
+        for index, source in enumerate(ds):
+            row_id = str(source[id_column]) if id_column else f"row-{index:08d}"
+            if FS_SAFE_ID_RE.fullmatch(row_id) is None or row_id in (".", "..") or row_id in source_ids:
+                raise ValueError(f"row id must be unique and filesystem-safe: {row_id!r}")
+            source_ids.append(row_id)
+            try:
+                question = source[args.question_column]
+                if not isinstance(question, str):
+                    raise ValueError("question must be a string")
+                pictures = raw_images(source, args.images_column)
+                if not question and not pictures:
+                    raise ValueError("provide question text or at least one image")
+                paths = []
+                for number, raw in enumerate(pictures):
+                    image_path = out / "inputs" / str(index) / f"image-{number}.bin"
+                    image_path.parent.mkdir(parents=True, exist_ok=True)
+                    image_path.write_bytes(raw)
+                    paths.append(str(image_path))
+                request = {"id": row_id, "question": question, "images": paths}
+                if args.enable_thinking is not None:
+                    request["enable_thinking"] = args.enable_thinking
+                if args.thinking_column:
+                    thinking = source[args.thinking_column]
+                    if not isinstance(thinking, bool):
+                        raise ValueError("thinking column must be boolean")
+                    request["enable_thinking"] = thinking
+                if args.system_prompt is not None:
+                    request["system_prompt"] = args.system_prompt
+                requests.append(request)
+                stream.write(canonical_json(request) + "\n")
+            except (ValueError, OSError, TypeError) as error:
+                failures[row_id] = {"id": row_id, "status": "preparation_failed", "error": str(error), "attempts": 0}
+    return requests, source_ids, failures
+
+
+def _snapshot_source(out):
+    """Keep the generator and its local dependencies with this attempt."""
+    snapshot = out / "scripts"
+    snapshot.mkdir()
+    for relative in ("cli/generate_reference.py", "cli/generate_model_reference.py", "lib/reference_run.py",
+                     "lib/reference_dataset.py", "lib/reference_contract.py", "lib/reference_study.py", "lib/collect_meta_provenance.py",
+                     "core/reference.cpp", "core/skymizer-repetition.h", "core/skymizer-identity.h",
+                     "lib/model_files.py", "pyproject.toml", "uv.lock", ".python-version"):
+        path = SKYMIZER / relative
+        if path.is_file():
+            target = snapshot / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(path, target)
+
+
+def _record_model_identity(metadata, execution):
+    """Bind generated rows to the exact model, projector and optional MTP head."""
+    metadata["binary_sha256"] = execution["binary_sha256"]
+    metadata["execution_identity"] = execution
+    metadata["model_files"] = []
+    for path in model_files(metadata["model_path"]):
+        print(f"Hashing {path}", flush=True)
+        metadata["model_files"].append({"path": str(path), "size": path.stat().st_size, "sha256": sha256_file(path)})
+    if metadata["decoding"]["method"] == "mtp":
+        mtp = metadata["decoding"]["mtp"]
+        if mtp["head_source"] == "sidecar":
+            mtp["head_files"] = [{"path": str(path), "size": path.stat().st_size, "sha256": sha256_file(path)}
+                                 for path in model_files(mtp["head_path"])]
+    if metadata["mmproj_path"]:
+        metadata["mmproj_sha256"] = sha256_file(metadata["mmproj_path"])
+
+
+def _classify_results(args, ds, source_ids, requests, results, metadata, failures):
+    """Validate generated rows and separate repetition exclusions from failures."""
+    requests_by_id = {r["id"]: r for r in requests}
+    eligible, excluded = [], []
+    for row_id, source in zip(source_ids, ds):
+        if row_id not in results:
+            continue
+        result = results[row_id]
+        request = requests_by_id[row_id]
+        try:
+            pictures = [Path(path).read_bytes() for path in request["images"]]
+            source_meta = {k: v for k, v in source.items() if k != args.images_column}
+            row = build_row(source_meta, request, result, metadata, pictures)
+        except (ValueError, KeyError, TypeError, OSError) as error:
+            failures[row_id] = {"id": row_id, "status": "validation_failed", "error": str(error)}
+            continue
+        if result.get("repetition") is not None:
+            excluded.append({"id": row_id, "reason": "repetition", "evidence": result["repetition"],
+                             "generated_tokens": row["generated_tokens_len"], "generated_text": result["content"]})
+        else:
+            eligible.append(row)
+    return eligible, excluded
+
+
 def generate(args):
     from datasets import Dataset
     binary = args.llama_reference.resolve()
@@ -122,51 +217,8 @@ def generate(args):
     state = {"status": "preparing", "dataset_source": source_info, "requested": len(ds)}
     atomic_json(out / "run_state.json", state)
     try:
-        requests, source_ids, failures = [], [], {}
-        with (out / "requests.jsonl").open("w") as stream:
-            for index, source in enumerate(ds):
-                row_id = str(source[id_column]) if id_column else f"row-{index:08d}"
-                if FS_SAFE_ID_RE.fullmatch(row_id) is None or row_id in (".", "..") or row_id in source_ids:
-                    raise ValueError(f"row id must be unique and filesystem-safe: {row_id!r}")
-                source_ids.append(row_id)
-                try:
-                    question = source[args.question_column]
-                    if not isinstance(question, str):
-                        raise ValueError("question must be a string")
-                    pictures = raw_images(source, args.images_column)
-                    if not question and not pictures:
-                        raise ValueError("provide question text or at least one image")
-                    paths = []
-                    for number, raw in enumerate(pictures):
-                        image_path = out / "inputs" / str(index) / f"image-{number}.bin"
-                        image_path.parent.mkdir(parents=True, exist_ok=True)
-                        image_path.write_bytes(raw)
-                        paths.append(str(image_path))
-                    request = {"id": row_id, "question": question, "images": paths}
-                    if args.enable_thinking is not None:
-                        request["enable_thinking"] = args.enable_thinking
-                    if args.thinking_column:
-                        thinking = source[args.thinking_column]
-                        if not isinstance(thinking, bool):
-                            raise ValueError("thinking column must be boolean")
-                        request["enable_thinking"] = thinking
-                    if args.system_prompt is not None:
-                        request["system_prompt"] = args.system_prompt
-                    requests.append(request)
-                    stream.write(canonical_json(request) + "\n")
-                except (ValueError, OSError, TypeError) as error:
-                    failures[row_id] = {"id": row_id, "status": "preparation_failed", "error": str(error), "attempts": 0}
-        snapshot = out / "scripts"
-        snapshot.mkdir()
-        for relative in ("cli/generate_reference.py", "cli/generate_model_reference.py", "lib/reference_run.py",
-                         "lib/reference_dataset.py", "lib/reference_contract.py", "lib/reference_study.py", "lib/collect_meta_provenance.py",
-                         "core/reference.cpp", "core/skymizer-repetition.h", "core/skymizer-identity.h",
-                         "lib/model_files.py", "pyproject.toml", "uv.lock", ".python-version"):
-            path = SKYMIZER / relative
-            if path.is_file():
-                target = snapshot / relative
-                target.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copyfile(path, target)
+        requests, source_ids, failures = _prepare_requests(args, ds, id_column, out)
+        _snapshot_source(out)
         metadata, results, execution = {"dataset_source": source_info}, {}, None
         state.update(status="running", requested_ids=source_ids, native_args=args.llama_args,
                      row_retries=args.row_retries, startup_retries=args.startup_retries, row_timeout=args.row_timeout)
@@ -183,19 +235,7 @@ def generate(args):
             if native_metadata is not None:
                 metadata = native_metadata
             if results:
-                metadata["binary_sha256"] = execution["binary_sha256"]
-                metadata["execution_identity"] = execution
-                metadata["model_files"] = []
-                for path in model_files(metadata["model_path"]):
-                    print(f"Hashing {path}", flush=True)
-                    metadata["model_files"].append({"path": str(path), "size": path.stat().st_size, "sha256": sha256_file(path)})
-                if metadata["decoding"]["method"] == "mtp":
-                    mtp = metadata["decoding"]["mtp"]
-                    if mtp["head_source"] == "sidecar":
-                        mtp["head_files"] = [{"path": str(path), "size": path.stat().st_size, "sha256": sha256_file(path)}
-                                             for path in model_files(mtp["head_path"])]
-                if metadata["mmproj_path"]:
-                    metadata["mmproj_sha256"] = sha256_file(metadata["mmproj_path"])
+                _record_model_identity(metadata, execution)
         else:
             atomic_json(out / "run_start.json", state)
         metadata["dataset_source"] = source_info
@@ -203,25 +243,7 @@ def generate(args):
         metadata["thinking_column"] = args.thinking_column
         metadata["driver_recovery"] = {"row_retries": args.row_retries, "startup_retries": args.startup_retries,
                                        "row_timeout": args.row_timeout, "native_timeout": args.native_timeout}
-        requests_by_id = {r["id"]: r for r in requests}
-        eligible, excluded = [], []
-        for row_id, source in zip(source_ids, ds):
-            if row_id not in results:
-                continue
-            result = results[row_id]
-            request = requests_by_id[row_id]
-            try:
-                pictures = [Path(path).read_bytes() for path in request["images"]]
-                source_meta = {k: v for k, v in source.items() if k != args.images_column}
-                row = build_row(source_meta, request, result, metadata, pictures)
-            except (ValueError, KeyError, TypeError, OSError) as error:
-                failures[row_id] = {"id": row_id, "status": "validation_failed", "error": str(error)}
-                continue
-            if result.get("repetition") is not None:
-                excluded.append({"id": row_id, "reason": "repetition", "evidence": result["repetition"],
-                                 "generated_tokens": row["generated_tokens_len"], "generated_text": result["content"]})
-            else:
-                eligible.append(row)
+        eligible, excluded = _classify_results(args, ds, source_ids, requests, results, metadata, failures)
         eligible_ids = [r["id"] for r in eligible]
         excluded_ids = [r["id"] for r in excluded]
         failed_ids = [i for i in source_ids if i in failures]

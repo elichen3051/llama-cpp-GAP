@@ -273,58 +273,14 @@ def _load_cap_panel_locked(args, caps):
     }
 
 
-def render_markdown(result):
-    design = result["design"]
-    lines = ["# Sequential-prefix power analysis", ""]
-    lines.extend([
-        "> [!IMPORTANT]",
-        "> `--num-eval-tokens` defines an ordered prefix estimand. Tokens were ",
-        "> never resampled or counted as independent observations; every Monte-Carlo ",
-        "> draw resampled complete paired items with replacement.",
-        "",
-    ])
-    if design["mode"] == "precision_only":
-        lines.extend([
-            "> [!NOTE]",
-            "> No SESOI was supplied. This report gives precision and MDE only; it ",
-            "> intentionally does not substitute the pilot's observed effect and call ",
-            "> that prospective power.",
-            "",
-        ])
-    elif design["effect_profile"] == "flat":
-        lines.extend([
-            "> [!NOTE]",
-            "> `flat` asks a separate question at each cap: power if that cap-level ",
-            "> estimand equals the same SESOI. The cells are comparable design ",
-            "> scenarios, not one joint token-level data-generating process.",
-            "",
-        ])
-    else:
-        lines.extend([
-            "> [!NOTE]",
-            "> `pilot` applies one constant shift to the whole prefix profile so the ",
-            "> reference cap equals the SESOI. It is coherent across caps but retains ",
-            "> the pilot's effect-vs-position shape as a modeling assumption.",
-            "",
-        ])
-
-    lines.extend([
-        "## Design",
-        "",
-        f"- metric / weighting: `{result['estimand']['metric']}` / "
-        f"`{design['weighting']}`",
-        f"- pilot items: {design['pilot_n_items']}",
-        f"- test: paired Student-t, {design['confidence_level']:.1%} CI",
-        f"- target power: {design['target_power']:.1%}",
-        f"- SESOI: `{design['sesoi']}`" if design["sesoi"] is not None else "- SESOI: not supplied",
-        f"- future-dataset reps: {design['reps']}; outer pilot reps: {design['outer_reps']}",
-        f"- seed: {design['seed']}",
+def _pilot_cap_lines(design):
+    lines = [
         "",
         "## Pilot cap profile",
         "",
         "| K | observed pilot effect | effective SD [outer p10, p90] | mean evaluated tokens/item | reaching K |",
         "|---:|---:|---:|---:|---:|",
-    ])
+    ]
     for row in design["pilot_caps"]:
         if "effective_sd_outer_p10" in row:
             effective_sd = (
@@ -339,8 +295,11 @@ def render_markdown(result):
             f"{effective_sd} | {row['mean_tokens_per_item']:.1f} | "
             f"{row['fraction_reaching_cap']:.1%} |"
         )
+    return lines
 
-    lines.extend(["", "## Design surface", ""])
+
+def _design_surface_lines(design):
+    lines = ["", "## Design surface", ""]
     if design["mode"] == "prospective_power":
         lines.extend([
             "Power counts only rejection in the assumed effect's direction. `null rej.` ",
@@ -395,7 +354,11 @@ def render_markdown(result):
                 f"{cell['expected_ci_half_width']:.6g} | {cell['mde_approx']:.6g} | "
                 f"{cell['expected_evaluated_tokens']:.0f} |"
             )
+    return lines
 
+
+def _required_n_lines(design):
+    lines = []
     if design["mode"] == "prospective_power":
         lines.extend([
             "",
@@ -416,6 +379,61 @@ def render_markdown(result):
                 f"{row['first_evaluated_n_mc_lower_bound'] or '—'} | "
                 f"{row['first_evaluated_n_pilot_power_p10'] or '—'} |"
             )
+    return lines
+
+
+def render_markdown(result):
+    design = result["design"]
+    lines = ["# Sequential-prefix power analysis", ""]
+    lines.extend([
+        "> [!IMPORTANT]",
+        "> `--num-eval-tokens` defines an ordered prefix estimand. Tokens were ",
+        "> never resampled or counted as independent observations; every Monte-Carlo ",
+        "> draw resampled complete paired items with replacement.",
+        "",
+    ])
+    if design["mode"] == "precision_only":
+        lines.extend([
+            "> [!NOTE]",
+            "> No SESOI was supplied. This report gives precision and MDE only; it ",
+            "> intentionally does not substitute the pilot's observed effect and call ",
+            "> that prospective power.",
+            "",
+        ])
+    elif design["effect_profile"] == "flat":
+        lines.extend([
+            "> [!NOTE]",
+            "> `flat` asks a separate question at each cap: power if that cap-level ",
+            "> estimand equals the same SESOI. The cells are comparable design ",
+            "> scenarios, not one joint token-level data-generating process.",
+            "",
+        ])
+    else:
+        lines.extend([
+            "> [!NOTE]",
+            "> `pilot` applies one constant shift to the whole prefix profile so the ",
+            "> reference cap equals the SESOI. It is coherent across caps but retains ",
+            "> the pilot's effect-vs-position shape as a modeling assumption.",
+            "",
+        ])
+
+    lines.extend([
+        "## Design",
+        "",
+        f"- metric / weighting: `{result['estimand']['metric']}` / "
+        f"`{design['weighting']}`",
+        f"- pilot items: {design['pilot_n_items']}",
+        f"- test: paired Student-t, {design['confidence_level']:.1%} CI",
+        f"- target power: {design['target_power']:.1%}",
+        f"- SESOI: `{design['sesoi']}`" if design["sesoi"] is not None else "- SESOI: not supplied",
+        f"- future-dataset reps: {design['reps']}; outer pilot reps: {design['outer_reps']}",
+        f"- seed: {design['seed']}",
+    ])
+    lines.extend(_pilot_cap_lines(design))
+
+    lines.extend(_design_surface_lines(design))
+
+    lines.extend(_required_n_lines(design))
 
     lines.extend([
         "",

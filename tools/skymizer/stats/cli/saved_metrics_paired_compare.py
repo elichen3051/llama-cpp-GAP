@@ -65,6 +65,62 @@ def parse_args(argv=None):
     return p.parse_args(argv)
 
 
+def _resolve_available_metrics(metrics, requested_metrics, versions_seen, warnings):
+    """Keep shared columns, but fail if an explicitly requested metric is missing."""
+    version_desc = {role: "v" + "/v".join(str(v) for v in sorted(vs))
+                    for role, vs in versions_seen.items()}
+    if versions_seen["candidate-a"] != versions_seen["candidate-b"] or \
+            any(len(vs) > 1 for vs in versions_seen.values()):
+        warnings.append(
+            "mixed VLMK versions: candidate-a dumps are "
+            f"{version_desc['candidate-a']}, candidate-b dumps are "
+            f"{version_desc['candidate-b']}; only the columns every dump "
+            "carries are compared")
+        print(f"WARNING: {warnings[-1]}", file=sys.stderr)
+    missing_by_metric: dict[str, list[str]] = {}
+    for role, vs in versions_seen.items():
+        for v in sorted(vs):
+            for m in metrics:
+                if m in KLD_METRIC_KEYS and m not in kld_metric_keys(v):
+                    missing_by_metric.setdefault(m, []).append(f"{role} (VLMK v{v})")
+    for m, where in missing_by_metric.items():
+        if requested_metrics and m in requested_metrics:
+            sys.exit(
+                f"--metrics {m} requested, but the {m!r} column is absent from "
+                f"{', '.join(where)}; re-collect that dir with the current "
+                "llama-{vlm,llm}-kld (writes VLMK v" + str(VLMK_VERSION) + ").")
+        metrics = tuple(x for x in metrics if x != m)
+        warnings.append(
+            f"the {m!r} metric was dropped from this report: its column is "
+            f"absent from {', '.join(where)} — re-collect that dir with the "
+            "current scorer to get it")
+        print(f"WARNING: {warnings[-1]}", file=sys.stderr)
+
+    return metrics
+
+
+def _format_report(result, args, *, reference_label, metrics_source, drops, n_used, warnings, drift_summary):
+    table = format_comparison_table(
+        result, reference_label=reference_label, display_weighting=args.weighting,
+        show_diagnostic_metrics=args.show_diagnostic_metrics,
+        drops=drops, n_matched=n_used,
+        num_eval_tokens=args.num_eval_tokens)
+    collector = "collect_llm_kld.py" if metrics_source == "llm_kld_metrics" else "collect_kld.py"
+    table += (f"note: computed from on-the-fly VLMK metric dumps ({collector}); "
+              "no logits were stored. KLD-family metrics are full-vocab by "
+              "construction.\n")
+    for w in warnings:
+        table += f"warning: {w}\n"
+    if drift_summary is not None and args.allow_ref_drift:
+        table += (f"note: --allow-ref-drift accepted {drift_summary['n_items']} "
+                  f"item(s) whose reference columns differ between the dirs "
+                  f"({drift_summary['n_used']} used in the comparison; worst "
+                  f"max |Δ nll_ref| = {drift_summary['max_abs_dnll_ref']:.3e}, "
+                  f"{drift_summary['argmax_ref_flips']} argmax_ref flip(s)) — "
+                  "the comparison is only approximately paired.\n")
+    return table
+
+
 def main(argv=None) -> int:
     argv_for_metadata = metadata_argv(argv, "saved_metrics_paired_compare.py")
     args = parse_args(argv)
@@ -217,41 +273,7 @@ def _main_locked(args, argv_for_metadata):
             append_unit(key, sa, sb, tok_a, tok_b, keep)
     require_min_items(scores_a, matched)
 
-    # Which metric columns each dir carries follows from its dumps' VLMK
-    # versions (kld_metrics_io is the single authority on per-version
-    # layouts). A requested base metric missing from any used dump is dropped
-    # from the DEFAULT set with a persisted warning that names the dir(s) and
-    # version(s) responsible (the rest of the report is unaffected), but is a
-    # hard failure when the operator explicitly asked for it — silently
-    # reporting less than requested would look like a complete answer.
-    version_desc = {role: "v" + "/v".join(str(v) for v in sorted(vs))
-                    for role, vs in versions_seen.items()}
-    if versions_seen["candidate-a"] != versions_seen["candidate-b"] or \
-            any(len(vs) > 1 for vs in versions_seen.values()):
-        warnings.append(
-            "mixed VLMK versions: candidate-a dumps are "
-            f"{version_desc['candidate-a']}, candidate-b dumps are "
-            f"{version_desc['candidate-b']}; only the columns every dump "
-            "carries are compared")
-        print(f"WARNING: {warnings[-1]}", file=sys.stderr)
-    missing_by_metric: dict[str, list[str]] = {}
-    for role, vs in versions_seen.items():
-        for v in sorted(vs):
-            for m in metrics:
-                if m in KLD_METRIC_KEYS and m not in kld_metric_keys(v):
-                    missing_by_metric.setdefault(m, []).append(f"{role} (VLMK v{v})")
-    for m, where in missing_by_metric.items():
-        if args.metrics and m in args.metrics:
-            sys.exit(
-                f"--metrics {m} requested, but the {m!r} column is absent from "
-                f"{', '.join(where)}; re-collect that dir with the current "
-                "llama-{vlm,llm}-kld (writes VLMK v" + str(VLMK_VERSION) + ").")
-        metrics = tuple(x for x in metrics if x != m)
-        warnings.append(
-            f"the {m!r} metric was dropped from this report: its column is "
-            f"absent from {', '.join(where)} — re-collect that dir with the "
-            "current scorer to get it")
-        print(f"WARNING: {warnings[-1]}", file=sys.stderr)
+    metrics = _resolve_available_metrics(metrics, args.metrics, versions_seen, warnings)
 
     a_label = _infer_cand_label(a_meta, args.label_a, "candidate-a")
     b_label = _infer_cand_label(b_meta, args.label_b, "candidate-b")
@@ -333,27 +355,9 @@ def _main_locked(args, argv_for_metadata):
     if drift_summary is not None:
         result["alignment"]["ref_drift"] = drift_summary
 
-    table = format_comparison_table(
-        result, reference_label=ref_label, display_weighting=args.weighting,
-        show_diagnostic_metrics=args.show_diagnostic_metrics,
-        drops=drops, n_matched=len(used),
-        num_eval_tokens=args.num_eval_tokens)
-    collector = "collect_llm_kld.py" if metrics_source == "llm_kld_metrics" else "collect_kld.py"
-    table += (f"note: computed from on-the-fly VLMK metric dumps ({collector}); "
-              "no logits were stored. KLD-family metrics are full-vocab by "
-              "construction.\n")
-    # Persist the meta warnings: an archived report must carry its own caveats
-    # (a degenerate same-model comparison reads exactly like a genuine
-    # "inconclusive" win otherwise).
-    for w in warnings:
-        table += f"warning: {w}\n"
-    if drift_summary is not None and args.allow_ref_drift:
-        table += (f"note: --allow-ref-drift accepted {drift_summary['n_items']} "
-                  f"item(s) whose reference columns differ between the dirs "
-                  f"({drift_summary['n_used']} used in the comparison; worst "
-                  f"max |Δ nll_ref| = {drift_summary['max_abs_dnll_ref']:.3e}, "
-                  f"{drift_summary['argmax_ref_flips']} argmax_ref flip(s)) — "
-                  "the comparison is only approximately paired.\n")
+    table = _format_report(
+        result, args, reference_label=ref_label, metrics_source=metrics_source,
+        drops=drops, n_used=len(used), warnings=warnings, drift_summary=drift_summary)
     write_report_and_json(args, table, result)
     return 0
 

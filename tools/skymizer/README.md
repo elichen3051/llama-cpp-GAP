@@ -38,8 +38,12 @@ export TMPDIR="$SKYMIZER_WORK/tmp"
 export UV_CACHE_DIR="$SKYMIZER_WORK/uv-cache"
 export UV_PROJECT_ENVIRONMENT="$SKYMIZER_WORK/venv"
 export HF_HOME="$SKYMIZER_WORK/hf"
+export CCACHE_DIR="$SKYMIZER_WORK/ccache"
+export CCACHE_TEMPDIR="$TMPDIR/ccache"
+export CUDA_CACHE_PATH="$SKYMIZER_WORK/cuda-cache"
+export XDG_CACHE_HOME="$SKYMIZER_WORK/xdg-cache"
 export PYTHONDONTWRITEBYTECODE=1
-mkdir -p "$TMPDIR"
+mkdir -p "$TMPDIR" "$CCACHE_TEMPDIR"
 uv sync --project tools/skymizer --python 3.12.3 --locked --group dev
 export SKYMIZER_PYTHON="$UV_PROJECT_ENVIRONMENT/bin/python"
 
@@ -178,3 +182,5 @@ CUDA_VISIBLE_DEVICES='' SKYMIZER_TEST_BIN="$SKYMIZER_WORK/build/bin" \
 Use a dedicated `--basetemp`: pytest clears that directory. Native integration checks require built binaries; external-model checks require model/data assets. Functional GPU helpers live in `verify_and_validation_scripts/`. Preserve numerical reduction order, RNG order, metric layout and report semantics during refactoring; the independent oracle and exact fixtures enforce [NUMERICAL_CONTRACT.md](NUMERICAL_CONTRACT.md).
 
 Version 0.2.0 moves C++ sources into `core/`, `compare/` into `stats/`, the four analysis commands into `stats/cli/`, and `review-functionality/` into `verify_and_validation_scripts/`. Workflow names and profile paths changed too. Existing reference datasets keep their format. Existing campaign archives remain immutable: resume them with their original archived code, or start a new study using their validated local dataset. Do not rewrite old archives to resemble a new release.
+
+For implementation review, follow the [architecture and invariant map](docs/architecture.md).

@@ -112,76 +112,14 @@ def verdicts_of(result):
     return out
 
 
-def main(argv=None) -> int:
-    args = parse_args(argv)
-    if args.mode == "power":
-        print(
-            "WARNING: --mode power is a legacy conditional-replication "
-            "diagnostic driven by the pilot's observed effect. Use "
-            "power_analysis.py --sesoi ... for prospective planning.",
-            file=sys.stderr,
-        )
-    scores_a, scores_b, weights, keys = load_population(
-        args.candidate_a, args.candidate_b)
-    pop = len(keys)
-    # Without replacement, N cannot exceed the pool; WITH replacement it can,
-    # which is precisely the point of --mode power (it answers "what if I
-    # collected MORE rows", which the reproducibility curve structurally
-    # cannot).
-    if args.mode == "power":
-        sizes = sorted({n for n in args.sizes if n >= 2})
-    else:
-        sizes = sorted({n for n in args.sizes if 2 <= n <= pop})
-    skipped = sorted(set(args.sizes) - set(sizes))
-    if skipped:
-        limit = "N >= 2" if args.mode == "power" else f"2 <= N <= {pop}"
-        print(f"WARNING: skipping sizes {skipped} (population is {pop}, "
-              f"need {limit})", file=sys.stderr)
-
-    # Restrict to the metrics every item actually carries: v1 metric dumps
-    # predate the `ear` column, and this sweep's verdict counting only needs
-    # the base per-item means (tail metrics need per-token arrays, which this
-    # tool deliberately does not thread through).
-    base_metrics = tuple(
-        m for m in DEFAULT_METRICS
-        if all(m in s for s in (*scores_a, *scores_b)))
-    dropped_metrics = tuple(m for m in DEFAULT_METRICS if m not in base_metrics)
-    if dropped_metrics:
-        print(f"WARNING: metrics {list(dropped_metrics)} missing from at least "
-              "one item (pre-ear VLMK v1 dumps?); excluded from the sweep",
-              file=sys.stderr)
-
-    # Full-population verdicts define the "true" direction each metric tests
-    # against using the report's default Student-t test.
-    full = compare_items(
-        scores_a, scores_b, weights, metrics=base_metrics,
-        confidence_level=args.confidence_level,
-        bootstrap_iters=max(args.bootstrap_iters, 5000), seed=args.seed,
-        model_a_label="A", model_b_label="B")
-    truth = verdicts_of(full)
-
-    # The effect the power curve conditions on, with its own uncertainty:
-    # a power number computed from one pilot is only as good as that pilot's
-    # effect estimate, and the report has to say so out loud.
-    primary = full["multiplicity"]["primary_endpoint"]
-    primary_block = full["metrics"][primary["metric"]][
-        f"{primary['weighting']}_weighted"]
-    effect = {
-        "metric": primary["metric"],
-        "weighting": primary["weighting"],
-        "estimate": primary_block["delta_candidate_minus_baseline"],
-        "ci_lower": primary_block["ci_delta"]["lower"],
-        "ci_upper": primary_block["ci_delta"]["upper"],
-        "verdict": primary_block["decision"]["verdict"],
-    }
-
+def _count_resampled_verdicts(args, scores_a, scores_b, weights, sizes, truth, base_metrics, population):
     rng = np.random.default_rng(args.seed)
     replace = args.mode == "power"
     # counts[(met, wt)][n] = {verdict: hits}
     counts = {k: {n: {} for n in sizes} for k in truth}
     for n in sizes:
         for rep in range(args.reps):
-            idx = rng.choice(pop, size=n, replace=replace)
+            idx = rng.choice(population, size=n, replace=replace)
             res = compare_items(
                 [scores_a[i] for i in idx],
                 [scores_b[i] for i in idx],
@@ -194,11 +132,10 @@ def main(argv=None) -> int:
             for k, v in verdicts_of(res).items():
                 counts[k][n][v] = counts[k][n].get(v, 0) + 1
         print(f"size {n}: {args.reps} reps done", file=sys.stderr)
+    return counts
 
-    # rate(k, n) = fraction of draws whose verdict matches the population's.
-    # In reproducibility mode that is verdict STABILITY; in power mode, for a
-    # metric whose population verdict is a detected difference, it is an
-    # conditional replication diagnostic driven by the observed effect.
+
+def _render_report(args, pop, sizes, truth, counts, effect):
     def hits(k, n):
         return counts[k][n].get(truth[k], 0)
 
@@ -304,11 +241,82 @@ def main(argv=None) -> int:
                      + (f"N = {got}" if got is not None
                         else f"not reached by N = {sizes[-1]}"))
     text = "\n".join(lines) + "\n"
+    return text, min_n
+
+
+def main(argv=None) -> int:
+    args = parse_args(argv)
+    if args.mode == "power":
+        print(
+            "WARNING: --mode power is a legacy conditional-replication "
+            "diagnostic driven by the pilot's observed effect. Use "
+            "power_analysis.py --sesoi ... for prospective planning.",
+            file=sys.stderr,
+        )
+    scores_a, scores_b, weights, keys = load_population(
+        args.candidate_a, args.candidate_b)
+    pop = len(keys)
+    # Without replacement, N cannot exceed the pool; WITH replacement it can,
+    # which is precisely the point of --mode power (it answers "what if I
+    # collected MORE rows", which the reproducibility curve structurally
+    # cannot).
+    if args.mode == "power":
+        sizes = sorted({n for n in args.sizes if n >= 2})
+    else:
+        sizes = sorted({n for n in args.sizes if 2 <= n <= pop})
+    skipped = sorted(set(args.sizes) - set(sizes))
+    if skipped:
+        limit = "N >= 2" if args.mode == "power" else f"2 <= N <= {pop}"
+        print(f"WARNING: skipping sizes {skipped} (population is {pop}, "
+              f"need {limit})", file=sys.stderr)
+
+    # Restrict to the metrics every item actually carries: v1 metric dumps
+    # predate the `ear` column, and this sweep's verdict counting only needs
+    # the base per-item means (tail metrics need per-token arrays, which this
+    # tool deliberately does not thread through).
+    base_metrics = tuple(
+        m for m in DEFAULT_METRICS
+        if all(m in s for s in (*scores_a, *scores_b)))
+    dropped_metrics = tuple(m for m in DEFAULT_METRICS if m not in base_metrics)
+    if dropped_metrics:
+        print(f"WARNING: metrics {list(dropped_metrics)} missing from at least "
+              "one item (pre-ear VLMK v1 dumps?); excluded from the sweep",
+              file=sys.stderr)
+
+    # Full-population verdicts define the "true" direction each metric tests
+    # against using the report's default Student-t test.
+    full = compare_items(
+        scores_a, scores_b, weights, metrics=base_metrics,
+        confidence_level=args.confidence_level,
+        bootstrap_iters=max(args.bootstrap_iters, 5000), seed=args.seed,
+        model_a_label="A", model_b_label="B")
+    truth = verdicts_of(full)
+
+    # The effect the power curve conditions on, with its own uncertainty:
+    # a power number computed from one pilot is only as good as that pilot's
+    # effect estimate, and the report has to say so out loud.
+    primary = full["multiplicity"]["primary_endpoint"]
+    primary_block = full["metrics"][primary["metric"]][
+        f"{primary['weighting']}_weighted"]
+    effect = {
+        "metric": primary["metric"],
+        "weighting": primary["weighting"],
+        "estimate": primary_block["delta_candidate_minus_baseline"],
+        "ci_lower": primary_block["ci_delta"]["lower"],
+        "ci_upper": primary_block["ci_delta"]["upper"],
+        "verdict": primary_block["decision"]["verdict"],
+    }
+
+    counts = _count_resampled_verdicts(
+        args, scores_a, scores_b, weights, sizes, truth, base_metrics, pop)
+
+    text, min_n = _render_report(args, pop, sizes, truth, counts, effect)
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(text, encoding="utf-8")
     print(f"wrote report -> {args.out}", file=sys.stderr)
 
     if args.output_json:
+        is_power = args.mode == "power"
         payload = {
             "mode": args.mode,
             "is_power_estimate": is_power,

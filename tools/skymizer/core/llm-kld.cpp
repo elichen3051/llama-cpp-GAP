@@ -1,126 +1,32 @@
-// llama-llm-kld — on-the-fly paired fidelity metrics for text-only LLM evaluation.
-//
-// Loads TWO GGUF models — a reference (e.g. F16) and a candidate
-// (e.g. Q4_K_M) — runs the SAME teacher-forced prompt+answer token stream through both, and
-// computes per-answer-token divergence metrics from the two full-vocab logit
-// rows while they are still in memory. Only the metrics are written to disk:
-// 76 bytes/position instead of vocab * 4 bytes/position of dense fp32 logits
-// (~8,000x smaller at vocab ~152k). Top-K metrics select reference tokens.
-//
-// Deliberately a STANDALONE module, independent of vlm-score.cpp (which dumps
-// logits for offline comparison): the two tools answer different questions and
-// reviewing/maintaining them separately keeps each contract small. The small
-// helpers shared with vlm-score.cpp (stderr prefixing, file slurping, token
-// reading) are duplicated here on purpose.
-//
-// Does NOT sample. Does NOT generate. Pure dual forward + metric extraction.
+// Compare two text models on the same teacher-forced prompt and answer tokens.
+// Write per-answer-token metrics; metric computation and the VLMK layout are in skymizer-vlmk-kernel.h.
 //
 // CLI:
 //   --ref-model <gguf>                 Reference LLM weights
 //   --cand-model <gguf>                Candidate LLM weights
 //   --tokens-in <path>                 Binary file: int32[L] of full input_ids
-//   --n-prefill <int>                  First answer-token index (must match HF stored value)
+//   --n-prefill <int>                  First answer-token index (must match the stored value)
 //   --output-metrics <path>            Output binary file (VLMK records)
-//   --manifest <jsonl>                 Batch mode: JSONL entries with tokens_in,
-//                                      n_prefill, output_metrics. Loads both models once.
-//                                      Takes precedence: the per-row flags
-//                                      above are ignored when given.
-//   --num-eval-tokens <int>            Stop teacher-forcing after this many answer
-//                                      positions (-1 = all, default; clamped to
-//                                      L - n_prefill)
-//   --perplexity-window                Decode one full even-length context window per side, like classic np1 perplexity.
-//                                      Requires L = -c = -b = -ub and n_prefill = L/2 + 1; scores all L/2 - 1 targets.
-//                                      Input tokens must already include the caller's BOS policy; no tokens are changed.
+//   --manifest <jsonl>                 Batch JSONL input takes precedence over per-row CLI flags. Load both models once.
+//   --num-eval-tokens <int>            Answer positions to score (-1 = all, default; clamped to L - n_prefill)
+//   --perplexity-window                Decode one full context window per side, like classic np1 perplexity.
+//                                      Requires even L = -c = -b = -ub and n_prefill = L/2 + 1; score all L/2 - 1 targets.
+//                                      Input tokens already include the caller's BOS policy; no tokens are changed.
 //   -ngl <int>                         GPU layers to offload, per model (default 99)
 //   -c <int>                           Context size, per model (default 32768)
 //   -b <int>                           Logical batch size for prefill (default 2048)
-//   -ub <int>                          Physical micro-batch for prefill; also the
-//                                      default teacher-forcing chunk size (default 2048)
-//   --tf-chunk <int>                   Teacher-forcing chunk size, decoupled from -ub
-//                                      (default -1 = follow -ub). Same numerics caveat
-//                                      as vlm-score: batched chunks shift logits by FP
-//                                      non-associativity, so runs that must be
-//                                      comparable (e.g. ref-vs-A and ref-vs-B sharing
-//                                      the same reference) MUST use the same --tf-chunk.
-//   -t <int>                           CPU threads for llama decode
-//                                      (default -1 = ggml's compiled default;
-//                                      irrelevant for fully-offloaded GPU runs)
-//   --metric-threads <int>             Threads for the per-position metric kernel
-//                                      (default -1 = hardware concurrency)
+//   -ub <int>                          Physical micro-batch and default teacher-forcing chunk size (default 2048)
+//   --tf-chunk <int>                   Teacher-forcing chunk size (-1 = follow -ub, default).
+//                                      Keep chunk size fixed across comparable runs; batch shape can change floating-point rounding.
+//   -t <int>                           CPU threads for llama decode (default -1 = ggml's compiled default; irrelevant for fully-offloaded GPU runs)
+//   --metric-threads <int>             Threads for the metric kernel (-1 = hardware concurrency, default)
 //   --flash-attn                       Require flash attention
 //   --no-flash-attn                    Disable flash attention (default: auto)
-//   --swa-full                         Full-size KV cache for sliding-window layers
-//                                      (the llama_context default). Off by default:
-//                                      SWA layers allocate only their window, like
-//                                      the common llama.cpp CLI. Same attention math
-//                                      either way; results differ by FP reordering
-//                                      only, so runs that must be comparable use the
-//                                      same setting (recorded in collect_meta.json).
-//   --allow-vocab-attr-mismatch        Accept per-token ATTRIBUTE differences
-//                                      (token type / EOG flags) between the two
-//                                      vocabs; token texts must still match id
-//                                      by id. For same-base-model conversions
-//                                      whose metadata disagrees (e.g. which id
-//                                      is <eos>). Every mismatch is logged.
-//   --self-test                        Run the metric-kernel self test (no models
-//                                      needed) and exit 0/1
-//   --vlmk-version                     Print the VLMK format version this binary
-//                                      writes (stdout, integer) and exit 0; the
-//                                      collectors preflight it against their
-//                                      kld_metrics_io.VLMK_VERSION so a stale
-//                                      build is refused before any GPU work
-//
-// NOTE: the answer region tokens[n_prefill:] is teacher-forced from the stored
-// token ids through BOTH models, so position i of the metrics aligns by answer
-// index. Each side keeps its own KV cache / n_past, which is always equal after
-// text prefill. The two models MUST share a vocabulary; size, vocabulary type,
-// and every token ID's text and attributes are checked at startup
-// (--allow-vocab-attr-mismatch downgrades only the attribute check to a
-// logged warning; texts remain strict).
-//
-// Output binary layout (LE on x86_64), magic "VLMK":
-//   uint32_t magic = 0x564C4D4B                ("VLMK")
-//   uint32_t version = 5                       (v1 = 40-byte records without ear)
-//   uint32_t vocab_size                        (== llama_vocab_n_tokens, both models)
-//   uint32_t n_positions                       (# answer tokens scored)
-//   uint32_t n_prefill                         (HF ground-truth sequential
-//                                              length, echoed from the manifest)
-//   uint32_t n_past_actual                     (llama.cpp's OWN position count
-//                                              after prefill -- the number that
-//                                              actually moves when the vision
-//                                              budget changes; 0 = not recorded,
-//                                              i.e. written before this field)
-//                                              With --perplexity-window, this is L because the whole window was decoded.
-// followed by n_positions packed records of 76 bytes:
-//   float32 kld                                KL(p_ref || p_cand), nats
-//   float32 reversed_kld                       KL(p_cand || p_ref), nats
-//   float32 js_kld                             Jensen-Shannon divergence, nats
-//   float32 nll_ref                            -log p_ref(target)
-//   float32 nll_cand                           -log p_cand(target)
-//   float32 entropy_ref                        -sum p_ref * log p_ref
-//   float32 entropy_cand                       -sum p_cand * log p_cand
-//   float32 ear                                sum min(p_ref, p_cand) = 1 - TV distance
-//   float32 ear_20                             sum of min(p_ref, p_cand) over the reference's
-//                                              top-20 slots, full-vocab probabilities (v4)
-//   float32 ear_10 / ear_5                     same, top-10 / top-5 (v4)
-//   float32 ear_20_normalized                  same slots, both rows renormalized on them
-//                                              first (v4)
-//   float32 ear_10_normalized / ear_5_normalized  same, top-10 / top-5 (v4)
-//   int32   target                             teacher-forced target token id
-//   int32   argmax_ref                         reference argmax token id
-//   int32   argmax_cand                        candidate argmax token id
-//   float32 ear_64, ear_64_normalized (v5, after the v4 prefix)
-// All metrics use float64 accumulation and float32 storage. Derivable downstream: same_top = (argmax_ref == argmax_cand),
-// p(target) = exp(-nll), delta-p at target, perplexities = exp(mean nll).
-// `ear` is the per-position Expected Acceptance Rate (arXiv:2605.02404): the
-// probability-mass overlap sum_i min(p_ref(i), p_cand(i)) = 1 - d_TV, i.e. the
-// max probability that optimally-coupled samples from the two distributions
-// agree. Computed over the full vocabulary.
-//
-// Consumed by tools/skymizer/kld_metrics_io.py (load + lossless .npz
-// conversion) and orchestrated over a dataset by tools/skymizer/collect_llm_kld.py.
-//
-// Build registered in tools/skymizer/CMakeLists.txt.
+//   --swa-full                         Use full-size SWA KV caches (default: window-sized).
+//                                      Keep this setting fixed across comparable runs; cache layout can change floating-point rounding.
+//   --allow-vocab-attr-mismatch        Allow and log token-attribute differences; token text must match at every ID.
+//   --self-test                        Run the metric-kernel self test without models and exit 0/1
+//   --vlmk-version                     Print the VLMK format version and exit 0
 
 #include "skymizer-identity.h"
 #include "common.h"
@@ -149,12 +55,7 @@
 #include <thread>
 #include <vector>
 
-
-// ---------------------------------------------------------------------------
-// CLI
-// ---------------------------------------------------------------------------
-
-struct vlm_kld_args {
+struct llm_kld_args {
     std::string ref_model_path;
     std::string cand_model_path;
     std::string tokens_in_path;
@@ -177,11 +78,10 @@ struct vlm_kld_args {
     bool print_vlmk_version = false;
 };
 
-
-static bool parse_args(int argc, char ** argv, vlm_kld_args & a) {
+static bool parse_args(int argc, char ** argv, llm_kld_args & args) {
     bool saw_flash_attn = false;
     for (int i = 1; i < argc; ++i) {
-        std::string k = argv[i];
+        std::string key = argv[i];
         auto need = [&](const char * what) -> const char * {
             if (i + 1 >= argc) {
                 fprintf(stderr, "missing value for %s\n", what);
@@ -190,92 +90,147 @@ static bool parse_args(int argc, char ** argv, vlm_kld_args & a) {
             return argv[++i];
         };
         auto need_int = [&](const char * what, int & out) {
-            const char * v = need(what);
-            return v != nullptr && parse_int_arg(what, v, out);
+            const char * value = need(what);
+            return value != nullptr && parse_int_arg(what, value, out);
         };
-        if      (k == "--ref-model")        { const char * v = need("--ref-model");        if (!v) return false; a.ref_model_path = v; }
-        else if (k == "--cand-model")       { const char * v = need("--cand-model");       if (!v) return false; a.cand_model_path = v; }
-        else if (k == "--tokens-in")        { const char * v = need("--tokens-in");        if (!v) return false; a.tokens_in_path = v; }
-        else if (k == "--n-prefill")        { if (!need_int("--n-prefill",        a.n_prefill))        return false; }
-        else if (k == "--output-metrics")   { const char * v = need("--output-metrics");   if (!v) return false; a.output_metrics_path = v; }
-        else if (k == "--manifest")         { const char * v = need("--manifest");         if (!v) return false; a.manifest_path = v; }
-        else if (k == "--num-eval-tokens")  { if (!need_int("--num-eval-tokens",  a.num_eval_tokens))  return false; }
-        else if (k == "-ngl")               { if (!need_int("-ngl",               a.n_gpu_layers))     return false; }
-        else if (k == "-c")                 { if (!need_int("-c",                 a.n_ctx))            return false; }
-        else if (k == "-b")                 { if (!need_int("-b",                 a.n_batch))          return false; }
-        else if (k == "-ub")                { if (!need_int("-ub",                a.n_ubatch))         return false; }
-        else if (k == "--tf-chunk")         { if (!need_int("--tf-chunk",         a.tf_chunk))         return false; }
-        else if (k == "-t")                 { if (!need_int("-t",                 a.n_threads))        return false; }
-        else if (k == "--metric-threads")   { if (!need_int("--metric-threads",   a.metric_threads))   return false; }
-        else if (k == "--flash-attn" || k == "--no-flash-attn") {
+        if (key == "--ref-model") {
+            const char * value = need("--ref-model");
+            if (!value) {
+                return false;
+            }
+            args.ref_model_path = value;
+        } else if (key == "--cand-model") {
+            const char * value = need("--cand-model");
+            if (!value) {
+                return false;
+            }
+            args.cand_model_path = value;
+        } else if (key == "--tokens-in") {
+            const char * value = need("--tokens-in");
+            if (!value) {
+                return false;
+            }
+            args.tokens_in_path = value;
+        } else if (key == "--n-prefill") {
+            if (!need_int("--n-prefill", args.n_prefill)) {
+                return false;
+            }
+        } else if (key == "--output-metrics") {
+            const char * value = need("--output-metrics");
+            if (!value) {
+                return false;
+            }
+            args.output_metrics_path = value;
+        } else if (key == "--manifest") {
+            const char * value = need("--manifest");
+            if (!value) {
+                return false;
+            }
+            args.manifest_path = value;
+        } else if (key == "--num-eval-tokens") {
+            if (!need_int("--num-eval-tokens", args.num_eval_tokens)) {
+                return false;
+            }
+        } else if (key == "-ngl") {
+            if (!need_int("-ngl", args.n_gpu_layers)) {
+                return false;
+            }
+        } else if (key == "-c") {
+            if (!need_int("-c", args.n_ctx)) {
+                return false;
+            }
+        } else if (key == "-b") {
+            if (!need_int("-b", args.n_batch)) {
+                return false;
+            }
+        } else if (key == "-ub") {
+            if (!need_int("-ub", args.n_ubatch)) {
+                return false;
+            }
+        } else if (key == "--tf-chunk") {
+            if (!need_int("--tf-chunk", args.tf_chunk)) {
+                return false;
+            }
+        } else if (key == "-t") {
+            if (!need_int("-t", args.n_threads)) {
+                return false;
+            }
+        } else if (key == "--metric-threads") {
+            if (!need_int("--metric-threads", args.metric_threads)) {
+                return false;
+            }
+        } else if (key == "--flash-attn" || key == "--no-flash-attn") {
             if (saw_flash_attn) {
                 fprintf(stderr, "flash-attention mode specified more than once\n");
                 return false;
             }
             saw_flash_attn = true;
-            a.flash_attn_type = k == "--flash-attn"
+            args.flash_attn_type = key == "--flash-attn"
                 ? LLAMA_FLASH_ATTN_TYPE_ENABLED
                 : LLAMA_FLASH_ATTN_TYPE_DISABLED;
-        }
-        else if (k == "--swa-full")         { a.swa_full = true; }
-        else if (k == "--perplexity-window") { a.perplexity_window = true; }
-        else if (k == "--allow-vocab-attr-mismatch") { a.allow_vocab_attr_mismatch = true; }
-        else if (k == "--self-test")        { a.self_test = true; }
-        else if (k == "--vlmk-version")     { a.print_vlmk_version = true; }
-        else if (k == "--help" || k == "-h") {
+        } else if (key == "--swa-full") {
+            args.swa_full = true;
+        } else if (key == "--perplexity-window") {
+            args.perplexity_window = true;
+        } else if (key == "--allow-vocab-attr-mismatch") {
+            args.allow_vocab_attr_mismatch = true;
+        } else if (key == "--self-test") {
+            args.self_test = true;
+        } else if (key == "--vlmk-version") {
+            args.print_vlmk_version = true;
+        } else if (key == "--help" || key == "-h") {
             fprintf(stderr, "see header of llm-kld.cpp for CLI documentation\n");
             return false;
         } else {
-            fprintf(stderr, "unknown argument: %s\n", k.c_str());
+            fprintf(stderr, "unknown argument: %s\n", key.c_str());
             return false;
         }
     }
-    if (a.self_test || a.print_vlmk_version) {
+    if (args.self_test || args.print_vlmk_version) {
         return true;   // no other arguments required
     }
-    if (a.ref_model_path.empty() || a.cand_model_path.empty()) {
+    if (args.ref_model_path.empty() || args.cand_model_path.empty()) {
         fprintf(stderr, "missing required arguments (run with --help)\n");
         return false;
     }
-    if (a.manifest_path.empty()) {
-        if (a.tokens_in_path.empty() || a.output_metrics_path.empty() ||
-            a.n_prefill < 0) {
+    if (args.manifest_path.empty()) {
+        if (args.tokens_in_path.empty() || args.output_metrics_path.empty() ||
+            args.n_prefill < 0) {
             fprintf(stderr, "missing required arguments (run with --help)\n");
             return false;
         }
     }
-    if (a.n_batch < 1 || a.n_ubatch < 1) {
-        fprintf(stderr, "-b and -ub must be >= 1, got -b %d -ub %d\n", a.n_batch, a.n_ubatch);
+    if (args.n_batch < 1 || args.n_ubatch < 1) {
+        fprintf(stderr, "-b and -ub must be >= 1, got -b %d -ub %d\n", args.n_batch, args.n_ubatch);
         return false;
     }
-    if (a.n_ubatch > a.n_batch) {
-        fprintf(stderr, "-ub (%d) must be <= -b (%d)\n", a.n_ubatch, a.n_batch);
+    if (args.n_ubatch > args.n_batch) {
+        fprintf(stderr, "-ub (%d) must be <= -b (%d)\n", args.n_ubatch, args.n_batch);
         return false;
     }
-    if (a.tf_chunk != -1 && a.tf_chunk < 1) {
-        fprintf(stderr, "--tf-chunk must be -1 (follow -ub) or >= 1, got %d\n", a.tf_chunk);
+    if (args.tf_chunk != -1 && args.tf_chunk < 1) {
+        fprintf(stderr, "--tf-chunk must be -1 (follow -ub) or >= 1, got %d\n", args.tf_chunk);
         return false;
     }
-    if (a.num_eval_tokens != -1 && a.num_eval_tokens < 1) {
-        fprintf(stderr, "num-eval-tokens must be -1 (all) or >= 1, got %d\n", a.num_eval_tokens);
+    if (args.num_eval_tokens != -1 && args.num_eval_tokens < 1) {
+        fprintf(stderr, "num-eval-tokens must be -1 (all) or >= 1, got %d\n", args.num_eval_tokens);
         return false;
     }
-    if (a.metric_threads != -1 && a.metric_threads < 1) {
-        fprintf(stderr, "--metric-threads must be -1 (auto) or >= 1, got %d\n", a.metric_threads);
+    if (args.metric_threads != -1 && args.metric_threads < 1) {
+        fprintf(stderr, "--metric-threads must be -1 (auto) or >= 1, got %d\n", args.metric_threads);
         return false;
     }
-    if (a.perplexity_window &&
-            (a.n_ctx < 4 || a.n_ctx % 2 != 0 || a.n_batch != a.n_ctx || a.n_ubatch != a.n_ctx ||
-             (a.tf_chunk != -1 && a.tf_chunk != a.n_ctx) ||
-             (a.num_eval_tokens != -1 && a.num_eval_tokens != a.n_ctx / 2 - 1))) {
+    if (args.perplexity_window &&
+            (args.n_ctx < 4 || args.n_ctx % 2 != 0 || args.n_batch != args.n_ctx || args.n_ubatch != args.n_ctx ||
+             (args.tf_chunk != -1 && args.tf_chunk != args.n_ctx) ||
+             (args.num_eval_tokens != -1 && args.num_eval_tokens != args.n_ctx / 2 - 1))) {
         fprintf(stderr, "--perplexity-window requires even -c >= 4, -b = -ub = -c, --tf-chunk -1 or -c, and all -c/2 - 1 targets\n");
         return false;
     }
     return true;
 }
 
-
-static bool validate_perplexity_window_input(const vlm_kld_args & args, size_t n_tokens, stderr_prefix * lp) {
+static bool validate_perplexity_window_input(const llm_kld_args & args, size_t n_tokens, stderr_prefix * lp) {
     if (n_tokens != (size_t) args.n_ctx || args.n_prefill != args.n_ctx / 2 + 1) {
         prefixed_fprintf(lp, "--perplexity-window requires exactly %d tokens and n_prefill=%d, got %zu tokens and n_prefill=%d\n",
                          args.n_ctx, args.n_ctx / 2 + 1, n_tokens, args.n_prefill);
@@ -291,11 +246,6 @@ static bool validate_perplexity_window_vocab(const llama_vocab * ref, const llam
     }
     return true;
 }
-
-
-// ---------------------------------------------------------------------------
-// manifest
-// ---------------------------------------------------------------------------
 
 struct manifest_entry {
     nlohmann::ordered_json reference_vocabulary;
@@ -356,10 +306,6 @@ static bool read_manifest(const std::string & path, std::vector<manifest_entry> 
     return true;
 }
 
-// ---------------------------------------------------------------------------
-// scoring
-// ---------------------------------------------------------------------------
-
 // One loaded model plus its decode state for the current item.
 struct model_side {
     const char *      tag;   // "ref" / "cand" (log labels)
@@ -370,7 +316,7 @@ struct model_side {
 
 static bool load_side(model_side & s, const char * tag,
                       const std::string & model_path,
-                      const vlm_kld_args & args) {
+                      const llm_kld_args & args) {
     s.tag = tag;
 
     llama_model_params mparams = llama_model_default_params();
@@ -426,7 +372,7 @@ static bool prefill_side(model_side & s,
 }
 
 static bool score_perplexity_window(
-        const vlm_kld_args & args,
+        const llm_kld_args & args,
         model_side & ref,
         model_side & cand,
         int32_t n_vocab,
@@ -483,12 +429,10 @@ static bool score_perplexity_window(
     return write_vlmk_file(args.output_metrics_path, n_vocab, args.n_prefill, length, records, lp);
 }
 
-// Score one item: prefill both sides, teacher-force the shared answer tokens
-// through both in chunks, and compute one kld_record per answer position from
-// the two in-memory logit rows. Records are buffered (76 B/position) and the
-// output is committed atomically at the end.
+// Prefill both sides, then score the shared answer tokens in chunks.
+// Buffer records until the complete output can be written atomically.
 static bool score_one(
-        const vlm_kld_args & args,
+        const llm_kld_args & args,
         model_side & ref,
         model_side & cand,
         int32_t n_vocab,
@@ -541,14 +485,66 @@ static bool score_one(
                                        tokens_full, lp, write_vlmk_file);
 }
 
-// ---------------------------------------------------------------------------
-// main
-// ---------------------------------------------------------------------------
+static int score_manifest(
+        const llm_kld_args & args,
+        const std::vector<manifest_entry> & manifest_entries,
+        model_side & ref,
+        model_side & cand,
+        int32_t n_vocab,
+        int eff_n_batch) {
+    bool any_failed = false;
+    ggml_log_callback saved_llama_log_callback = nullptr;
+    void * saved_llama_log_user_data = nullptr;
+    llama_log_get(&saved_llama_log_callback, &saved_llama_log_user_data);
+
+    const size_t n_entries = manifest_entries.size();
+    for (size_t i = 0; i < n_entries; ++i) {
+        const manifest_entry & entry = manifest_entries[i];
+        if (!entry.ok) {
+            fprintf(stderr, "[manifest entry %zu/%zu] %s\n", i + 1, n_entries, entry.error.c_str());
+            any_failed = true;
+            continue;
+        }
+
+        stderr_prefix prefix;
+        prefix.text = "[row " + std::to_string(i + 1) + "/" + std::to_string(n_entries) + "] ";
+        llama_log_set(prefixed_log_callback, &prefix);
+
+        llm_kld_args row_args = args;
+        row_args.tokens_in_path       = entry.tokens_in_path;
+        row_args.n_prefill            = entry.n_prefill;
+        row_args.output_metrics_path  = entry.output_metrics_path;
+        row_args.manifest_path.clear();
+
+        bool row_ok = false;
+        const auto t_start = std::chrono::steady_clock::now();
+        try {
+            row_ok = score_one(row_args, ref, cand, n_vocab, eff_n_batch, &prefix);
+        } catch (const std::exception & ex) {
+            prefixed_fprintf(&prefix, "unhandled exception: %s\n", ex.what());
+        }
+        const auto t_end = std::chrono::steady_clock::now();
+        const double wall_s = std::chrono::duration<double>(t_end - t_start).count();
+
+        llama_log_set(saved_llama_log_callback, saved_llama_log_user_data);
+
+        if (row_ok) {
+            fprintf(stderr, "[row] DONE output_metrics=%s wall_s=%.3f\n",
+                    entry.output_metrics_path.c_str(), wall_s);
+        } else {
+            any_failed = true;
+        }
+    }
+
+    return any_failed ? 1 : 0;
+}
 
 int main(int argc, char ** argv) {
     const int identity_command = skymizer_identity::command(argc, argv);
-    if (identity_command >= 0) { return identity_command; }
-    vlm_kld_args args;
+    if (identity_command >= 0) {
+        return identity_command;
+    }
+    llm_kld_args args;
     if (!parse_args(argc, argv, args)) {
         return 1;
     }
@@ -565,21 +561,25 @@ int main(int argc, char ** argv) {
         return 1;
     }
     if (args.perplexity_window) {
-        const auto valid_input = [](const vlm_kld_args & row) {
+        const auto valid_input = [](const llm_kld_args & row) {
             return validate_perplexity_window_input(row, read_tokens_bin(row.tokens_in_path, nullptr).size(), nullptr);
         };
         if (args.manifest_path.empty()) {
-            if (!valid_input(args)) { return 1; }
+            if (!valid_input(args)) {
+                return 1;
+            }
         } else {
             for (const auto & entry : manifest_entries) {
                 if (!entry.ok) {
                     fprintf(stderr, "%s\n", entry.error.c_str());
                     return 1;
                 }
-                vlm_kld_args row = args;
+                llm_kld_args row = args;
                 row.tokens_in_path = entry.tokens_in_path;
                 row.n_prefill = entry.n_prefill;
-                if (!valid_input(row)) { return 1; }
+                if (!valid_input(row)) {
+                    return 1;
+                }
             }
         }
     }
@@ -606,8 +606,7 @@ int main(int argc, char ** argv) {
         return 1;
     }
 
-    // The metrics compare distributions index-by-index, so both models must
-    // share one vocabulary. (Quantizations of the same base model do.)
+    // Both distributions must use the same token IDs.
     const llama_vocab * ref_vocab  = llama_model_get_vocab(ref.model.get());
     const llama_vocab * cand_vocab = llama_model_get_vocab(cand.model.get());
     if (args.perplexity_window && !validate_perplexity_window_vocab(ref_vocab, cand_vocab)) {
@@ -619,8 +618,7 @@ int main(int argc, char ** argv) {
     }
     const int32_t n_vocab = llama_vocab_n_tokens(ref_vocab);
 
-    // Both contexts were created with the same n_batch/n_ctx, so their
-    // effective (clamped) batch sizes agree; reconcile via min() anyway.
+    // Use the smaller effective batch size after context setup.
     const int eff_n_batch = (int) std::min(llama_n_batch(ref.lctx.get()),
                                            llama_n_batch(cand.lctx.get()));
 
@@ -633,49 +631,5 @@ int main(int argc, char ** argv) {
         }
     }
 
-    bool any_failed = false;
-    ggml_log_callback saved_llama_log_callback = nullptr;
-    void * saved_llama_log_user_data = nullptr;
-    llama_log_get(&saved_llama_log_callback, &saved_llama_log_user_data);
-
-    const size_t n_entries = manifest_entries.size();
-    for (size_t i = 0; i < n_entries; ++i) {
-        const manifest_entry & e = manifest_entries[i];
-        if (!e.ok) {
-            fprintf(stderr, "[manifest entry %zu/%zu] %s\n", i + 1, n_entries, e.error.c_str());
-            any_failed = true;
-            continue;
-        }
-
-        stderr_prefix prefix;
-        prefix.text = "[row " + std::to_string(i + 1) + "/" + std::to_string(n_entries) + "] ";
-        llama_log_set(prefixed_log_callback, &prefix);
-
-        vlm_kld_args ea = args;
-        ea.tokens_in_path       = e.tokens_in_path;
-        ea.n_prefill            = e.n_prefill;
-        ea.output_metrics_path  = e.output_metrics_path;
-        ea.manifest_path.clear();
-
-        bool row_ok = false;
-        const auto t_start = std::chrono::steady_clock::now();
-        try {
-            row_ok = score_one(ea, ref, cand, n_vocab, eff_n_batch, &prefix);
-        } catch (const std::exception & ex) {
-            prefixed_fprintf(&prefix, "unhandled exception: %s\n", ex.what());
-        }
-        const auto t_end = std::chrono::steady_clock::now();
-        const double wall_s = std::chrono::duration<double>(t_end - t_start).count();
-
-        llama_log_set(saved_llama_log_callback, saved_llama_log_user_data);
-
-        if (row_ok) {
-            fprintf(stderr, "[row] DONE output_metrics=%s wall_s=%.3f\n",
-                    e.output_metrics_path.c_str(), wall_s);
-        } else {
-            any_failed = true;
-        }
-    }
-
-    return any_failed ? 1 : 0;
+    return score_manifest(args, manifest_entries, ref, cand, n_vocab, eff_n_batch);
 }

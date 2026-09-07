@@ -608,175 +608,197 @@ static void usage(int, char ** argv) {
                     "  output: metadata.json and generations.jsonl; text/image support, one model load, no HTTP or HF tokenizer\n", argv[0]);
 }
 
-int main(int argc, char ** argv) {
-    const int identity_command = skymizer_identity::command(argc, argv);
-    if (identity_command >= 0) { return identity_command; }
-    try {
-        common_params params;
-        params.n_predict = 128;
-        params.n_ctx = 8192;
-        params.use_jinja = true;
-        std::string requests_path;
-        std::string out_dir;
-        bool describe = false;
-        bool repetition_stop = true;
-        bool continue_on_error = false;
-        std::vector<char *> common_args{argv[0]};
-        json command = json::array();
-        for (int i = 0; i < argc; ++i) {
-            command.push_back(argv[i]);
+struct reference_args {
+    common_params params;
+    std::string requests_path;
+    std::string out_dir;
+    bool describe = false;
+    bool repetition_stop = true;
+    bool continue_on_error = false;
+    json command = json::array();
+};
+
+static reference_args parse_reference_args(int argc, char ** argv) {
+    reference_args args;
+    auto & params = args.params;
+    params.n_predict = 128;
+    params.n_ctx = 8192;
+    params.use_jinja = true;
+    std::vector<char *> common_args{argv[0]};
+    for (int i = 0; i < argc; ++i) {
+        args.command.push_back(argv[i]);
+    }
+    for (int i = 1; i < argc; ++i) {
+        std::string key = argv[i];
+        if (key == "--requests" || key == "--out-dir") {
+            require(i + 1 < argc, "missing value for " + key);
+            (key == "--requests" ? args.requests_path : args.out_dir) = argv[++i];
+        } else if (key == "--describe") {
+            args.describe = true;
+        } else if (key == "--repetition-stop" || key == "--no-repetition-stop") {
+            args.repetition_stop = key == "--repetition-stop";
+        } else if (key == "--continue-on-error") {
+            args.continue_on_error = true;
+        } else {
+            common_args.push_back(argv[i]);
         }
-        for (int i = 1; i < argc; ++i) {
-            std::string key = argv[i];
-            if (key == "--requests" || key == "--out-dir") {
-                require(i + 1 < argc, "missing value for " + key);
-                (key == "--requests" ? requests_path : out_dir) = argv[++i];
-            } else if (key == "--describe") {
-                describe = true;
-            } else if (key == "--repetition-stop" || key == "--no-repetition-stop") {
-                repetition_stop = key == "--repetition-stop";
-            } else if (key == "--continue-on-error") {
-                continue_on_error = true;
-            } else {
-                common_args.push_back(argv[i]);
+    }
+    common_init();
+    require(common_params_parse(common_args.size(), common_args.data(), params, LLAMA_EXAMPLE_CLI, usage), "invalid arguments");
+    require(!params.model.path.empty() && fs::is_regular_file(params.model.path), "provide an existing local GGUF with -m");
+    require(params.model.hf_repo.empty() && params.model.url.empty() && params.mmproj.hf_repo.empty() && params.mmproj.url.empty(),
+            "reference generation requires local GGUF files");
+    const bool mtp = std::find(params.speculative.types.begin(), params.speculative.types.end(), COMMON_SPECULATIVE_TYPE_DRAFT_MTP) != params.speculative.types.end();
+    require(std::all_of(params.speculative.types.begin(), params.speculative.types.end(), [](auto type) {
+                return type == COMMON_SPECULATIVE_TYPE_NONE || type == COMMON_SPECULATIVE_TYPE_DRAFT_MTP;
+            }) && (mtp || !params.speculative.has_dft()),
+            "reference generation supports only autoregressive or --spec-type draft-mtp");
+    params.speculative.types = {mtp ? COMMON_SPECULATIVE_TYPE_DRAFT_MTP : COMMON_SPECULATIVE_TYPE_NONE};
+    require(!params.speculative.has_synth(), "synthetic acceptance is not valid for reference generation");
+    require(params.lora_adapters.empty(), "LoRA is not supported for native reference generation");
+    if (mtp) {
+        const auto & d = params.speculative.draft;
+        require(d.n_max > 0 && d.n_max < UINT16_MAX && d.n_min >= 0 && d.n_min <= d.n_max, "invalid MTP draft bounds");
+        require(std::isfinite(d.p_min) && d.p_min >= 0 && d.p_min <= 1, "invalid MTP confidence threshold");
+        require(d.mparams.hf_repo.empty() && d.mparams.url.empty(), "MTP requires local head files");
+        require(!params.speculative.has_dft() || fs::is_regular_file(d.mparams.path), "MTP sidecar does not exist");
+        require(d.n_max < std::min(params.n_batch, params.n_ubatch), "MTP draft maximum must be smaller than both batch and ubatch sizes");
+        const auto limits = common_speculative_get_output_limits(params.n_batch, 1, d.n_max);
+        params.n_outputs_max = limits.total;
+        params.n_outputs_max_per_seq = limits.per_seq;
+    }
+    require(params.n_parallel > 0 && params.n_parallel <= std::min(params.n_batch, params.n_ubatch),
+            "parallel sequences must fit in batch and ubatch");
+    require(!mtp || params.n_parallel == 1, "MTP reference generation requires one sequence");
+    require(params.n_predict > 0, "-n must be positive");
+    require(params.prompt.empty() && params.image.empty(), "use --requests for prompts and images");
+    require(params.antiprompt.empty(), "custom reverse prompts are unsupported; model EOG and template stops are used");
+    require(params.n_predict < INT32_MAX, "generation cap is too large");
+    require(args.describe || (!args.requests_path.empty() && !args.out_dir.empty()), "provide --requests and --out-dir, or --describe");
+    return args;
+}
+
+static int run_requests(
+        reference_context & context,
+        std::ifstream & requests,
+        const std::string & out_dir,
+        bool continue_on_error) {
+    fs::create_directories(out_dir);
+    std::ofstream metadata(fs::path(out_dir) / "metadata.json");
+    metadata << context.metadata.dump(2) << '\n';
+    metadata.flush();
+    require(bool(metadata), "failed to write metadata");
+    metadata.close();
+    std::ofstream output(fs::path(out_dir) / "generations.jsonl");
+    std::ofstream events(fs::path(out_dir) / "events.jsonl");
+    auto event = [&](json value) {
+        events << value.dump(-1, ' ', false, json::error_handler_t::replace) << '\n';
+        events.flush();
+        require(bool(events), "failed to write row journal");
+    };
+    auto write_result = [&](json result) {
+        auto id = result.at("id").get<std::string>();
+        output << result.dump(-1, ' ', false, json::error_handler_t::replace) << '\n';
+        output.flush();
+        require(bool(output), "failed to write generation");
+        event({{"event", "row_succeeded"}, {"id", id}});
+        std::cerr << "[reference] id=" << id << " tokens=" << result["token_logprobs"].size() << '\n';
+    };
+    auto row_error = [&](const std::string & id, const std::exception & error) {
+        const std::string message = error.what();
+        const bool data_error = message.find("exceeds context") != std::string::npos ||
+            message.find("non-causal image exceeds") != std::string::npos ||
+            message.find("cannot read image") != std::string::npos || message.find("template") != std::string::npos ||
+            message.find("question") != std::string::npos;
+        event({{"event", "row_failed"}, {"id", id}, {"error", message}, {"retryable", !data_error}});
+        std::cerr << "[reference] failed id=" << id << " error=" << message << '\n';
+        return continue_on_error && data_error;
+    };
+    std::vector<std::unique_ptr<reference_row>> slots(context.params.n_parallel);
+    std::set<std::string> seen;
+    std::string line;
+    size_t count = 0;
+    bool exhausted = false;
+    while (true) {
+        for (size_t sequence = 0; sequence < slots.size(); ++sequence) {
+            auto & slot = slots[sequence];
+            while (!slot && !exhausted) {
+                if (!std::getline(requests, line)) {
+                    exhausted = true;
+                    break;
+                }
+                if (line.empty()) {
+                    continue;
+                }
+                auto request = json::parse(line);
+                auto id = request.at("id").get<std::string>();
+                require(!id.empty(), "request id must not be empty");
+                require(seen.insert(id).second, "duplicate request id: " + id);
+                ++count;
+                event({{"event", "row_started"}, {"id", id}, {"index", count - 1}, {"sequence", sequence}});
+                try {
+                    if (slots.size() == 1) {
+                        write_result(context.generate(request));
+                    } else {
+                        slot = context.prepare(request, sequence);
+                        auto first = context.sample(*slot, -1);
+                        context.emit(*slot, first.first, first.second);
+                        if (context.finished(*slot)) {
+                            write_result(context.finish_row(*slot));
+                            slot.reset();
+                        }
+                    }
+                } catch (const std::exception & error) {
+                    slot.reset();
+                    if (!row_error(id, error)) {
+                        return 2;
+                    }
+                }
             }
         }
-        common_init();
-        require(common_params_parse(common_args.size(), common_args.data(), params, LLAMA_EXAMPLE_CLI, usage), "invalid arguments");
-        require(!params.model.path.empty() && fs::is_regular_file(params.model.path), "provide an existing local GGUF with -m");
-        require(params.model.hf_repo.empty() && params.model.url.empty() && params.mmproj.hf_repo.empty() && params.mmproj.url.empty(),
-                "reference generation requires local GGUF files");
-        const bool mtp = std::find(params.speculative.types.begin(), params.speculative.types.end(), COMMON_SPECULATIVE_TYPE_DRAFT_MTP) != params.speculative.types.end();
-        require(std::all_of(params.speculative.types.begin(), params.speculative.types.end(), [](auto type) {
-                    return type == COMMON_SPECULATIVE_TYPE_NONE || type == COMMON_SPECULATIVE_TYPE_DRAFT_MTP;
-                }) && (mtp || !params.speculative.has_dft()),
-                "reference generation supports only autoregressive or --spec-type draft-mtp");
-        params.speculative.types = {mtp ? COMMON_SPECULATIVE_TYPE_DRAFT_MTP : COMMON_SPECULATIVE_TYPE_NONE};
-        require(!params.speculative.has_synth(), "synthetic acceptance is not valid for reference generation");
-        require(params.lora_adapters.empty(), "LoRA is not supported for native reference generation");
-        if (mtp) {
-            const auto & d = params.speculative.draft;
-            require(d.n_max > 0 && d.n_max < UINT16_MAX && d.n_min >= 0 && d.n_min <= d.n_max, "invalid MTP draft bounds");
-            require(std::isfinite(d.p_min) && d.p_min >= 0 && d.p_min <= 1, "invalid MTP confidence threshold");
-            require(d.mparams.hf_repo.empty() && d.mparams.url.empty(), "MTP requires local head files");
-            require(!params.speculative.has_dft() || fs::is_regular_file(d.mparams.path), "MTP sidecar does not exist");
-            require(d.n_max < std::min(params.n_batch, params.n_ubatch), "MTP draft maximum must be smaller than both batch and ubatch sizes");
-            const auto limits = common_speculative_get_output_limits(params.n_batch, 1, d.n_max);
-            params.n_outputs_max = limits.total;
-            params.n_outputs_max_per_seq = limits.per_seq;
+        if (std::none_of(slots.begin(), slots.end(), [](const auto & row) { return bool(row); })) {
+            break;
         }
-        require(params.n_parallel > 0 && params.n_parallel <= std::min(params.n_batch, params.n_ubatch),
-                "parallel sequences must fit in batch and ubatch");
-        require(!mtp || params.n_parallel == 1, "MTP reference generation requires one sequence");
-        require(params.n_predict > 0, "-n must be positive");
-        require(params.prompt.empty() && params.image.empty(), "use --requests for prompts and images");
-        require(params.antiprompt.empty(), "custom reverse prompts are unsupported; model EOG and template stops are used");
-        require(params.n_predict < INT32_MAX, "generation cap is too large");
-        require(describe || (!requests_path.empty() && !out_dir.empty()), "provide --requests and --out-dir, or --describe");
+        context.decode(slots);
+        for (auto & row : slots) {
+            if (row && context.finished(*row)) {
+                write_result(context.finish_row(*row));
+                row.reset();
+            }
+        }
+    }
+    require(count > 0, "requests file is empty");
+    return 0;
+}
+
+int main(int argc, char ** argv) {
+    const int identity_command = skymizer_identity::command(argc, argv);
+    if (identity_command >= 0) {
+        return identity_command;
+    }
+    try {
+        auto args = parse_reference_args(argc, argv);
         std::ifstream requests;
-        if (!describe) {
-            requests.open(requests_path);
+        if (!args.describe) {
+            requests.open(args.requests_path);
             require(bool(requests), "cannot read requests file");
-            require(!fs::exists(out_dir), "output directory already exists: " + out_dir);
+            require(!fs::exists(args.out_dir), "output directory already exists: " + args.out_dir);
         }
         ggml_backend_load_all();
         mtmd_helper_log_set(common_log_default_callback, nullptr);
-        reference_context context(std::move(params), repetition_stop);
-        context.metadata["repetition_detector"] = {{"enabled", repetition_stop}, {"version", "exact-token-repeat-v1"},
+        reference_context context(std::move(args.params), args.repetition_stop);
+        context.metadata["repetition_detector"] = {{"enabled", args.repetition_stop}, {"version", "exact-token-repeat-v1"},
             {"source_commit", "d4163fc1c328fe39310465680647b465cf96c4af"},
             {"source_sha256", "8c0ede4aa476d7ceea39e57ac4bd3e462569d45683c5672746fee1d65940bda9"},
             {"min_repeated_tokens", skymizer_repetition::min_span}, {"min_repeats", skymizer_repetition::min_repeats},
             {"online_window", skymizer_repetition::window}, {"check_interval", skymizer_repetition::interval},
             {"input", "generated_target_accepted_token_ids"}, {"final_scan", "exact_consecutive_blocks_anywhere"}};
-        context.metadata["command"] = command;
-        if (describe) {
+        context.metadata["command"] = args.command;
+        if (args.describe) {
             std::cout << context.metadata.dump(2) << '\n';
             return 0;
         }
-        fs::create_directories(out_dir);
-        std::ofstream metadata(fs::path(out_dir) / "metadata.json");
-        metadata << context.metadata.dump(2) << '\n';
-        metadata.flush();
-        require(bool(metadata), "failed to write metadata");
-        metadata.close();
-        std::ofstream output(fs::path(out_dir) / "generations.jsonl");
-        std::ofstream events(fs::path(out_dir) / "events.jsonl");
-        auto event = [&](json value) {
-            events << value.dump(-1, ' ', false, json::error_handler_t::replace) << '\n';
-            events.flush();
-            require(bool(events), "failed to write row journal");
-        };
-        auto write_result = [&](json result) {
-            auto id = result.at("id").get<std::string>();
-            output << result.dump(-1, ' ', false, json::error_handler_t::replace) << '\n';
-            output.flush();
-            require(bool(output), "failed to write generation");
-            event({{"event", "row_succeeded"}, {"id", id}});
-            std::cerr << "[reference] id=" << id << " tokens=" << result["token_logprobs"].size() << '\n';
-        };
-        auto row_error = [&](const std::string & id, const std::exception & error) {
-            const std::string message = error.what();
-            const bool data_error = message.find("exceeds context") != std::string::npos ||
-                message.find("non-causal image exceeds") != std::string::npos ||
-                message.find("cannot read image") != std::string::npos || message.find("template") != std::string::npos ||
-                message.find("question") != std::string::npos;
-            event({{"event", "row_failed"}, {"id", id}, {"error", message}, {"retryable", !data_error}});
-            std::cerr << "[reference] failed id=" << id << " error=" << message << '\n';
-            return continue_on_error && data_error;
-        };
-        std::vector<std::unique_ptr<reference_row>> slots(context.params.n_parallel);
-        std::set<std::string> seen;
-        std::string line;
-        size_t count = 0;
-        bool exhausted = false;
-        while (true) {
-            for (size_t sequence = 0; sequence < slots.size(); ++sequence) {
-                auto & slot = slots[sequence];
-                while (!slot && !exhausted) {
-                    if (!std::getline(requests, line)) {
-                        exhausted = true;
-                        break;
-                    }
-                    if (line.empty()) {
-                        continue;
-                    }
-                    auto request = json::parse(line);
-                    auto id = request.at("id").get<std::string>();
-                    require(!id.empty(), "request id must not be empty");
-                    require(seen.insert(id).second, "duplicate request id: " + id);
-                    ++count;
-                    event({{"event", "row_started"}, {"id", id}, {"index", count - 1}, {"sequence", sequence}});
-                    try {
-                        if (slots.size() == 1) {
-                            write_result(context.generate(request));
-                        } else {
-                            slot = context.prepare(request, sequence);
-                            auto first = context.sample(*slot, -1);
-                            context.emit(*slot, first.first, first.second);
-                            if (context.finished(*slot)) {
-                                write_result(context.finish_row(*slot));
-                                slot.reset();
-                            }
-                        }
-                    } catch (const std::exception & error) {
-                        slot.reset();
-                        if (!row_error(id, error)) { return 2; }
-                    }
-                }
-            }
-            if (std::none_of(slots.begin(), slots.end(), [](const auto & row) { return bool(row); })) {
-                break;
-            }
-            context.decode(slots);
-            for (auto & row : slots) {
-                if (row && context.finished(*row)) {
-                    write_result(context.finish_row(*row));
-                    row.reset();
-                }
-            }
-        }
-        require(count > 0, "requests file is empty");
-        return 0;
+        return run_requests(context, requests, args.out_dir, args.continue_on_error);
     } catch (const std::exception & error) {
         std::cerr << "llama-reference: " << error.what() << '\n';
         return 1;

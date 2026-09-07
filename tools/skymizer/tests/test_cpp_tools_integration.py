@@ -398,7 +398,7 @@ float * llama_get_logits_ith(llama_context * ctx, int32_t i) {
 }
 int main(int argc, char ** argv) {
     assert(argc == 2);
-    vlm_kld_args a;
+    llm_kld_args a;
     a.metric_threads = 2;
     a.tokens_in_path = std::string(argv[1]) + "/tokens.bin";
     a.output_metrics_path = std::string(argv[1]) + "/metrics.bin";
@@ -448,7 +448,7 @@ int main(int argc, char ** argv) {
         flags.insert(flags.end(), extra.begin(), extra.end());
         std::vector<char *> argv;
         for (auto & flag : flags) { argv.push_back(flag.data()); }
-        vlm_kld_args parsed;
+        llm_kld_args parsed;
         return parse_args(argv.size(), argv.data(), parsed);
     };
     assert(parse({}) && parse({"--num-eval-tokens", "3"}) && parse({"--tf-chunk", "8"}));

@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # Install prerequisites, build native tools, sync the locked Python env and run CPU checks.
 # SKYMIZER_WORK sets build/venv/tmp/cache defaults; explicit path overrides take priority.
-# Overrides: BUILD_DIR, VENV_DIR (then UV_PROJECT_ENVIRONMENT), TMPDIR, UV_CACHE_DIR.
+# Overrides: BUILD_DIR, VENV_DIR (then UV_PROJECT_ENVIRONMENT), TMPDIR, UV_CACHE_DIR, CCACHE_DIR, CCACHE_TEMPDIR, CUDA_CACHE_PATH, HF_HOME, XDG_CACHE_HOME.
 # Other controls: JOBS, PYTHON_VERSION, FORCE_CPU=1, SKIP_APT=1, SKIP_BUILD=1, SKIP_TESTS=1.
 set -euo pipefail
 if [[ "${1:-}" == --help ]]; then
-    echo 'Set SKYMIZER_WORK to a writable work volume. Overrides: BUILD_DIR, VENV_DIR, TMPDIR, UV_CACHE_DIR, JOBS, PYTHON_VERSION.'
+    echo 'Set SKYMIZER_WORK to a writable work volume. Overrides: BUILD_DIR, VENV_DIR, TMPDIR, UV_CACHE_DIR, CCACHE_DIR, CCACHE_TEMPDIR, CUDA_CACHE_PATH, HF_HOME, XDG_CACHE_HOME, JOBS, PYTHON_VERSION.'
     echo 'Controls: FORCE_CPU=1, SKIP_APT=1, SKIP_BUILD=1, SKIP_TESTS=1. See docs/workflows.md.'
     exit 0
 fi
@@ -20,13 +20,18 @@ VENV_DIR="${VENV_DIR:-${UV_PROJECT_ENVIRONMENT:-${SKYMIZER_WORK:+$SKYMIZER_WORK/
 VENV_DIR="${VENV_DIR:-$REPO_ROOT/.venv}"
 TMPDIR="${TMPDIR:-${SKYMIZER_WORK:-$BUILD_DIR}/tmp}"
 UV_CACHE_DIR="${UV_CACHE_DIR:-${SKYMIZER_WORK:-$BUILD_DIR}/uv-cache}"
+CCACHE_DIR="${CCACHE_DIR:-$SKYMIZER_WORK/ccache}"
+CCACHE_TEMPDIR="${CCACHE_TEMPDIR:-$TMPDIR/ccache}"
+CUDA_CACHE_PATH="${CUDA_CACHE_PATH:-$SKYMIZER_WORK/cuda-cache}"
+HF_HOME="${HF_HOME:-$SKYMIZER_WORK/hf}"
+XDG_CACHE_HOME="${XDG_CACHE_HOME:-$SKYMIZER_WORK/xdg-cache}"
 # uv resolves relative environment paths from its project; bind overrides to the caller.
-for setup_path in BUILD_DIR VENV_DIR TMPDIR UV_CACHE_DIR; do
+for setup_path in BUILD_DIR VENV_DIR TMPDIR UV_CACHE_DIR CCACHE_DIR CCACHE_TEMPDIR CUDA_CACHE_PATH HF_HOME XDG_CACHE_HOME; do
     [[ "${!setup_path}" == /* ]] || printf -v "$setup_path" '%s/%s' "$PWD" "${!setup_path}"
 done
-export TMPDIR UV_CACHE_DIR PYTHONDONTWRITEBYTECODE=1
+export TMPDIR UV_CACHE_DIR CCACHE_DIR CCACHE_TEMPDIR CUDA_CACHE_PATH HF_HOME XDG_CACHE_HOME PYTHONDONTWRITEBYTECODE=1
 export UV_PROJECT_ENVIRONMENT="$VENV_DIR"
-mkdir -p -- "$TMPDIR" "$UV_CACHE_DIR"
+mkdir -p -- "$TMPDIR" "$UV_CACHE_DIR" "$CCACHE_DIR" "$CCACHE_TEMPDIR" "$CUDA_CACHE_PATH" "$HF_HOME" "$XDG_CACHE_HOME"
 JOBS="${JOBS:-$(nproc)}"
 PYTHON_VERSION="${PYTHON_VERSION:-3.12.3}"
 

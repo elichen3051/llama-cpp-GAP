@@ -336,6 +336,72 @@ def cost_model_from_manifest(manifest_path: Path):
     return {"cfix": cfix, "ctok": ctok, "r2": r2, "n_rows": len(rows)}
 
 
+def _planning_hint(mu, token_share, coll_cap, cap_saturated, n80_min, n):
+    floor_str = (f"N_min={n80_min}" if n80_min is not None
+                 else "no floor (token noise explains all variance)")
+    if mu == 0.0:
+        hint = "no observed mean difference; this pilot does not size a nonzero effect"
+    elif token_share > 0.5:
+        if coll_cap not in (None, -1) and cap_saturated < 0.05:
+            hint = ("token noise dominates, BUT answers are already fully "
+                    f"stored ({100*cap_saturated:.0f}% of items hit the "
+                    f"collection cap {coll_cap}) — extending --num-eval-tokens "
+                    "adds no tokens; treat as item-bound: add items or switch "
+                    "dataset")
+        else:
+            hint = ("token noise dominates -> extending --num-eval-tokens helps"
+                    + (f"; but N_min={n80_min} exceeds the {n} items on hand — "
+                       "more items are needed regardless"
+                       if n80_min is not None and n80_min > n else
+                       f"; floor {floor_str} is within the {n} items on hand"))
+    elif token_share < 0.3:
+        hint = ("item heterogeneity dominates -> more eval tokens are nearly "
+                "useless; add items or switch to a higher-signal dataset")
+    else:
+        hint = ("mixed regime -> token extension gives moderate gains, "
+                f"bounded by {floor_str}")
+    return hint
+
+
+def _print_cap_ladder(curve, worst, flips, power_target):
+    print()
+    print("empirical cap ladder (design table — nothing here assumes the 1/K law):")
+    npow = f"Nobs_{int(power_target*100)}"
+    print(f"  {'K':>5}  {'mu(K)':>12}  {'sd(K)':>10}  {'d(K)':>8}  "
+          f"{npow + '(K)':>8}  {'noise%':>6}  {'log2(pred/emp)':>14}")
+    for r in curve:
+        nreq = "inf" if r["n_required"] is None else str(r["n_required"])
+        share = ("   n/a" if not np.isfinite(r["noise_share_local"])
+                 else f"{100*r['noise_share_local']:5.1f}%")
+        fit = ("   n/a" if not np.isfinite(r["log2_pred_over_emp"])
+               else f"{r['log2_pred_over_emp']:+14.2f}")
+        print(f"  {r['K']:>5}  {r['mu']:>+12.4e}  {r['sd']:>10.3e}  "
+              f"{(r['mu']/r['sd'] if r['sd'] > 0 else math.copysign(r['snr'], r['mu'])):>+8.3f}  "
+              f"{nreq:>8}  {share}  {fit}")
+    if worst is not None and abs(worst["log2_pred_over_emp"]) > 0.3:
+        fit = worst["log2_pred_over_emp"]
+        if fit < 0:
+            direction = ("UNDERestimates the real variance (front-loaded token "
+                         "variance: short caps are noisier than the law thinks; "
+                         "the F1 pattern)")
+        else:
+            direction = ("OVERestimates the real variance (rear-loaded token "
+                         "variance: short caps are quieter than the law thinks)")
+        print(f"  model check: the sigma_b^2 + sigma_w^2/K law {direction} by up "
+              f"to {2**abs(fit):.2f}x (worst at K={worst['K']}) — position "
+              "non-stationarity (backtest-2026-08-26 F1). Plan from the "
+              "empirical columns above, not from the law.")
+    if flips:
+        wobble = " (K=16 alone is often small-sample wobble)" if flips == [16] else ""
+        print(f"  WARNING: mu(K) changes SIGN vs the full cap at K={flips}{wobble} — "
+              "the cap is an estimator choice here, not a precision knob. "
+              "Pre-register the verdict cap and inspect the position-resolved "
+              "delta profile before trusting any single-cap verdict "
+              "(backtest-2026-08-26 F7/F9).")
+    else:
+        print("  sign(mu(K)) stable across all caps.")
+
+
 def main(argv=None) -> int:
     args = parse_args(argv)
     if args.num_eval_tokens != -1 and args.num_eval_tokens < 1:
@@ -412,29 +478,7 @@ def main(argv=None) -> int:
         k_star = math.sqrt((cost["cfix"] / cost["ctok"])
                            * (float(s2w.mean()) / var_between))
 
-    floor_str = (f"N_min={n80_min}" if n80_min is not None
-                 else "no floor (token noise explains all variance)")
-    if mu == 0.0:
-        hint = "no observed mean difference; this pilot does not size a nonzero effect"
-    elif token_share > 0.5:
-        if coll_cap not in (None, -1) and cap_saturated < 0.05:
-            hint = ("token noise dominates, BUT answers are already fully "
-                    f"stored ({100*cap_saturated:.0f}% of items hit the "
-                    f"collection cap {coll_cap}) — extending --num-eval-tokens "
-                    "adds no tokens; treat as item-bound: add items or switch "
-                    "dataset")
-        else:
-            hint = ("token noise dominates -> extending --num-eval-tokens helps"
-                    + (f"; but N_min={n80_min} exceeds the {n} items on hand — "
-                       "more items are needed regardless"
-                       if n80_min is not None and n80_min > n else
-                       f"; floor {floor_str} is within the {n} items on hand"))
-    elif token_share < 0.3:
-        hint = ("item heterogeneity dominates -> more eval tokens are nearly "
-                "useless; add items or switch to a higher-signal dataset")
-    else:
-        hint = ("mixed regime -> token extension gives moderate gains, "
-                f"bounded by {floor_str}")
+    hint = _planning_hint(mu, token_share, coll_cap, cap_saturated, n80_min, n)
 
     cap_str = "all stored" if args.num_eval_tokens == -1 else str(args.num_eval_tokens)
     print(f"metric={args.metric}  analysis-cap={cap_str}  items={n} "
@@ -464,42 +508,7 @@ def main(argv=None) -> int:
           "   (from the SNR interval; mu is ESTIMATED and N ~ 1/mu^2, so this "
           "interval is the answer, not the point estimate)")
 
-    print()
-    print("empirical cap ladder (design table — nothing here assumes the 1/K law):")
-    npow = f"Nobs_{int(args.power_target*100)}"
-    print(f"  {'K':>5}  {'mu(K)':>12}  {'sd(K)':>10}  {'d(K)':>8}  "
-          f"{npow + '(K)':>8}  {'noise%':>6}  {'log2(pred/emp)':>14}")
-    for r in curve:
-        nreq = "inf" if r["n_required"] is None else str(r["n_required"])
-        share = ("   n/a" if not np.isfinite(r["noise_share_local"])
-                 else f"{100*r['noise_share_local']:5.1f}%")
-        fit = ("   n/a" if not np.isfinite(r["log2_pred_over_emp"])
-               else f"{r['log2_pred_over_emp']:+14.2f}")
-        print(f"  {r['K']:>5}  {r['mu']:>+12.4e}  {r['sd']:>10.3e}  "
-              f"{(r['mu']/r['sd'] if r['sd'] > 0 else math.copysign(r['snr'], r['mu'])):>+8.3f}  "
-              f"{nreq:>8}  {share}  {fit}")
-    if worst is not None and abs(worst["log2_pred_over_emp"]) > 0.3:
-        fit = worst["log2_pred_over_emp"]
-        if fit < 0:
-            direction = ("UNDERestimates the real variance (front-loaded token "
-                         "variance: short caps are noisier than the law thinks; "
-                         "the F1 pattern)")
-        else:
-            direction = ("OVERestimates the real variance (rear-loaded token "
-                         "variance: short caps are quieter than the law thinks)")
-        print(f"  model check: the sigma_b^2 + sigma_w^2/K law {direction} by up "
-              f"to {2**abs(fit):.2f}x (worst at K={worst['K']}) — position "
-              "non-stationarity (backtest-2026-08-26 F1). Plan from the "
-              "empirical columns above, not from the law.")
-    if flips:
-        wobble = " (K=16 alone is often small-sample wobble)" if flips == [16] else ""
-        print(f"  WARNING: mu(K) changes SIGN vs the full cap at K={flips}{wobble} — "
-              "the cap is an estimator choice here, not a precision knob. "
-              "Pre-register the verdict cap and inspect the position-resolved "
-              "delta profile before trusting any single-cap verdict "
-              "(backtest-2026-08-26 F7/F9).")
-    else:
-        print("  sign(mu(K)) stable across all caps.")
+    _print_cap_ladder(curve, worst, flips, args.power_target)
 
     if k_star is not None:
         print(f"K* (sqrt-rule seed)         = {k_star:.0f}   "
