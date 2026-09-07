@@ -56,6 +56,8 @@ The validated Python environment uses Python 3.12.3, NumPy 2.5.2, datasets 5.0.1
 
 For local CPU statistics and tests, run `uv sync --python 3.12 --locked --group dev` from `tools/skymizer`. With `UV_PROJECT_ENVIRONMENT` unset, this creates `.venv`; use `.venv/bin/python` or activate it with `source .venv/bin/activate`.
 
+Student-t tests, t distribution functions and Wilson intervals use SciPy. Function docstrings carry API references; [statistical APIs and verification](docs/statistical-apis.md) records MATLAB, Julia and Wolfram correspondences and independent checks. Token-weighted results are descriptive only.
+
 The KLD acceptance environment used CUDA 13.2.51 and an RTX PRO 6000 Blackwell Server Edition. Python pins do not pin CUDA, compiler flags, model files or GPU behavior: retain native binary/backend hashes and runtime metadata with every study. The optional `hf-tokenizer` extra is for legacy HF/vLLM references and was not used by the native reference/KLD run; its lockfile entries are not evidence of native-run validation. `scripts/setup.sh` automates setup and checks; inspect its options before running it.
 
 ## 1. Generate reference answers

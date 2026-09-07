@@ -101,6 +101,7 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from stats import collection_io as paired_io                 # noqa: E402
+from stats.student_t import t_ppf                           # noqa: E402
 
 # metric name -> per-token delta column extractor (B minus A)
 METRIC_COLUMNS = {
@@ -171,36 +172,13 @@ def collect_deltas(a_dir: Path, b_dir: Path, metric: str, cap: int):
         sys.exit(str(error))
 
 
-def t_ppf(p: float, df: float) -> float:
-    """Student-t quantile via the Cornish-Fisher expansion around the normal
-    quantile (Fisher 1925 / Hill 1970 form).
-
-    Sample-size planning must use t, not z: the z-based formula assumes the
-    variance is known, and at the n = 25..250 sizes this tool is used at the
-    difference is not negligible (t_.975 is 2.06 at df=25 against z = 1.96,
-    i.e. ~10% more items). Accurate to <1e-4 relative for df >= 10, which is
-    far finer than the effect-estimate uncertainty that dominates the answer;
-    planning at df < 10 is meaningless anyway. Kept local so this stays a
-    numpy-only script."""
-    if df <= 0:
-        return float("nan")
-    x = NormalDist().inv_cdf(p)
-    if df > sys.float_info.max ** 0.25:
-        return x  # All corrections are below floating-point resolution.
-    x2 = x * x
-    g1 = (x2 + 1.0) * x / 4.0
-    g2 = ((5.0 * x2 + 16.0) * x2 + 3.0) * x / 96.0
-    g3 = (((3.0 * x2 + 19.0) * x2 + 17.0) * x2 - 15.0) * x / 384.0
-    g4 = ((((79.0 * x2 + 776.0) * x2 + 1482.0) * x2 - 1920.0) * x2
-          - 945.0) * x / 92160.0
-    return x + g1 / df + g2 / df ** 2 + g3 / df ** 3 + g4 / df ** 4
-
-
 def required_n(snr: float, confidence_level: float, power_target: float):
     """Smallest n satisfying the two-sided t-quantile sample-size approximation.
 
     This is not exact noncentral-t power inversion. Return None for an
     undefined effect or a required count outside floating-point range.
+    Quantiles use the shared scipy.stats.t.ppf wrapper: https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.t.html
+    MATLAB quantile correspondence only: https://www.mathworks.com/help/stats/tinv.html
     """
     if not np.isfinite(snr) or snr <= 0.0:
         return None

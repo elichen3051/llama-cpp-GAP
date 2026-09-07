@@ -7,9 +7,10 @@ from statistics import NormalDist
 from typing import Any, Mapping, Sequence
 
 import numpy as np
+from scipy.stats import ttest_rel
 
 from stats.contracts import CI_METHODS, DEFAULT_CI_METHOD, NonFiniteMetricError
-from stats.student_t import t_ppf, t_two_sided_p
+from stats.student_t import t_two_sided_p
 
 # Paired statistics engine (ported from llm_quant_fidelity/paired_compare.py)
 # --------------------------------------------------------------------------- #
@@ -130,7 +131,11 @@ def _compute_decision(
 
 
 def _statistic_and_se(diffs: np.ndarray, weights: np.ndarray, weighting: str):
-    """Item mean and analytic SE; reject invalid arithmetic before zero-spread handling."""
+    """Item mean and analytic SE; reject invalid arithmetic before zero-spread handling.
+
+    Require normal SE^2 for nonconstant input: dividing subnormal variance before sqrt loses precision.
+    Paired t SE definition: https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.ttest_rel.html
+    """
     if weighting != "item":
         raise ValueError("paired inference requires weighting='item'; token weighting is descriptive only")
     n = diffs.size
@@ -141,7 +146,7 @@ def _statistic_and_se(diffs: np.ndarray, weights: np.ndarray, weighting: str):
         se = float(diffs.std(ddof=1) / math.sqrt(n))
     if not math.isfinite(theta) or not math.isfinite(se):
         raise NonFiniteMetricError("non-finite estimate or standard error; paired comparison aborted")
-    if se == 0.0 and np.any(diffs != diffs[0]):
+    if se < math.sqrt(np.finfo(float).tiny) and np.any(diffs != diffs[0]):
         raise NonFiniteMetricError("standard error underflow for nonconstant differences; paired comparison aborted")
     return theta, se
 
@@ -334,28 +339,26 @@ def _bootstrap_item_indices(seed: int | None, n_items: int, iters: int):
 
 def _student_t_delta(diffs: np.ndarray, weights: np.ndarray, *,
                      weighting: str, confidence_level: float) -> dict[str, Any]:
-    """The classical paired Student-t interval on the per-item deltas:
+    """SciPy paired t-test on B-A differences versus zero, with explicit zero-spread policy.
 
-        theta -+ t_{n-1, 1-alpha/2} * SE,   p = P(|T_{n-1}| >= |theta / SE|)
-
-    with theta and SE from _statistic_and_se (s/sqrt(n)). No resampling anywhere: the
-    result is a deterministic function of the deltas, independent of seed
-    and of --bootstrap-iters (recorded as 0).
-
-    Degenerate sample (every delta identical so SE == 0): the
-    interval collapses to the point [theta, theta] and p is 0 (theta != 0)
-    or 1 (theta == 0) -- the limit of the t test as SE -> 0 -- and the JSON
-    says so in `fallback`, mirroring the bootstrap methods' zero-spread
-    note."""
+    Uses ttest_rel(diffs, zeros).pvalue and confidence_interval(confidence_level).
+    SciPy API: https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.ttest_rel.html
+    MATLAB ttest(B, A, 'Alpha', 1-confidence_level): https://www.mathworks.com/help/stats/ttest.html
+    Julia OneSampleTTest(B, A): https://juliastats.org/HypothesisTests.jl/stable/parametric/#t-test
+    Constant differences use a point CI and p=1 for zero, p=0 otherwise, recorded in fallback.
+    """
+    if not 0.0 < confidence_level < 1.0:
+        raise ValueError("confidence_level must be in (0, 1)")
     n = int(diffs.size)
     df = n - 1
     delta, delta_se = _statistic_and_se(diffs, weights, weighting)
     fallback = None
     if delta_se > 0.0:
-        alpha = 1.0 - confidence_level
-        q = t_ppf(1.0 - alpha / 2.0, df)
-        lower, upper = delta - q * delta_se, delta + q * delta_se
-        p_value = _two_sided_p(None, delta, ci_method="t", delta_se=delta_se, df=df)
+        test = ttest_rel(diffs, np.zeros_like(diffs), alternative="two-sided", nan_policy="raise")
+        if not math.isfinite(test.statistic):
+            raise NonFiniteMetricError("non-finite paired t statistic; paired comparison aborted")
+        lower, upper = test.confidence_interval(confidence_level)
+        p_value = float(test.pvalue)
     else:
         lower = upper = delta
         p_value = 1.0 if delta == 0.0 else 0.0

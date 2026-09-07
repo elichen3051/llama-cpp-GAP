@@ -55,28 +55,28 @@
        "method": "paired_item_weighted_student_t",
        "ci_method": "t",
        "confidence_level": "0x1.e666666666666p-1",
-       "lower": "0x1.253c5cf18cfd0p-10",
-       "upper": "0x1.650a0ecd922b3p-6",
+       "lower": "0x1.253c5cf18cfb0p-10",
+       "upper": "0x1.650a0ecd922b5p-6",
        "standard_error": "0x1.3dd2bcd8fa469p-8",
        "degrees_of_freedom": 15,
        "bootstrap_iters": 0,
        "contains_zero": false
       },
       "bootstrap_std": null,
-      "p_value": "0x1.07115a7af27d5p-5",
+      "p_value": "0x1.07115a7af27ccp-5",
       "decision": {
        "verdict": "A closer",
        "statistically_distinguishable_from_null": true,
        "null_value": "0x0.0p+0",
        "confidence_level": "0x1.e666666666666p-1",
-       "equivalence_bound": "0x1.650a0ecd922b3p-6",
+       "equivalence_bound": "0x1.650a0ecd922b5p-6",
        "equivalence_margin": null,
        "equivalence_established": null,
        "equivalence_alpha": null,
        "reason": "95% CI [+0.001119, +0.021792] excludes 0"
       },
       "role": "exploratory",
-      "p_value_holm": "0x1.07115a7af27d5p-5",
+      "p_value_holm": "0x1.07115a7af27ccp-5",
       "holm_significant": true
      },
      "token_weighted": {
@@ -105,7 +105,7 @@
        "contains_zero": false
       },
       "bootstrap_std": null,
-      "p_value": "0x1.0177d3177907dp-62",
+      "p_value": "0x1.0177d31779073p-62",
       "decision": {
        "verdict": "A closer",
        "statistically_distinguishable_from_null": true,
@@ -145,7 +145,7 @@
        "contains_zero": false
       },
       "bootstrap_std": null,
-      "p_value": "0x1.0177d3177905ep-62",
+      "p_value": "0x1.0177d31779056p-62",
       "decision": {
        "verdict": "A closer",
        "statistically_distinguishable_from_null": true,
@@ -158,7 +158,7 @@
        "reason": "95% CI [+0.000311, +0.000334] excludes 0"
       },
       "role": "exploratory",
-      "p_value_holm": "0x1.0177d3177905ep-60",
+      "p_value_holm": "0x1.0177d31779056p-60",
       "holm_significant": true
      },
      "token_weighted": {
@@ -187,7 +187,7 @@
        "contains_zero": false
       },
       "bootstrap_std": null,
-      "p_value": "0x1.0177d3177907dp-62",
+      "p_value": "0x1.0177d31779073p-62",
       "decision": {
        "verdict": "A closer",
        "statistically_distinguishable_from_null": true,
@@ -200,7 +200,7 @@
        "reason": "95% CI [+0.000142, +0.000152] excludes 0"
       },
       "role": "exploratory",
-      "p_value_holm": "0x1.0177d3177905ep-60",
+      "p_value_holm": "0x1.0177d31779056p-60",
       "holm_significant": true
      },
      "token_weighted": {
@@ -229,7 +229,7 @@
        "contains_zero": false
       },
       "bootstrap_std": null,
-      "p_value": "0x1.360353e3567fap-83",
+      "p_value": "0x1.360353e356809p-83",
       "decision": {
        "verdict": "A closer",
        "statistically_distinguishable_from_null": true,
@@ -242,7 +242,7 @@
        "reason": "95% CI [-0.008056, -0.007843] excludes 0"
       },
       "role": "exploratory",
-      "p_value_holm": "0x1.838428dc2c1f8p-81",
+      "p_value_holm": "0x1.838428dc2c20bp-81",
       "holm_significant": true
      },
      "token_weighted": {
@@ -306,28 +306,28 @@
        "method": "paired_item_weighted_student_t",
        "ci_method": "t",
        "confidence_level": "0x1.e666666666666p-1",
-       "lower": "0x1.1f50a42eb376bp-6",
-       "upper": "0x1.cde828af1029dp-6",
+       "lower": "0x1.1f50a42eb376ap-6",
+       "upper": "0x1.cde828af1029ep-6",
        "standard_error": "0x1.47a6297a981cap-9",
        "degrees_of_freedom": 15,
        "bootstrap_iters": 0,
        "contains_zero": false
       },
       "bootstrap_std": null,
-      "p_value": "0x1.5663067a3f047p-23",
+      "p_value": "0x1.5663067a3f040p-23",
       "decision": {
        "verdict": "A closer",
        "statistically_distinguishable_from_null": true,
        "null_value": "0x0.0p+0",
        "confidence_level": "0x1.e666666666666p-1",
-       "equivalence_bound": "0x1.cde828af1029dp-6",
+       "equivalence_bound": "0x1.cde828af1029ep-6",
        "equivalence_margin": null,
        "equivalence_established": null,
        "equivalence_alpha": null,
        "reason": "95% CI [+0.017536, +0.028193] excludes 0"
       },
       "role": "exploratory",
-      "p_value_holm": "0x1.5663067a3f047p-22",
+      "p_value_holm": "0x1.5663067a3f040p-22",
       "holm_significant": true
      },
      "token_weighted": {
@@ -3341,26 +3341,26 @@
          "ci_method": "t",
          "confidence_level": "0x1.e666666666666p-1",
          "lower": "0x1.e06d4fda3109fp-12",
-         "upper": "0x1.1b07d6af10708p-11",
+         "upper": "0x1.1b07d6af10709p-11",
          "standard_error": "0x1.416986cb723b7p-16",
          "degrees_of_freedom": 15,
          "bootstrap_iters": 0,
          "contains_zero": false
         },
         "bootstrap_std": null,
-        "p_value": "0x1.2c371f52a94e1p-44",
+        "p_value": "0x1.2c371f52a94ebp-44",
         "decision": {
          "verdict": "A closer",
          "statistically_distinguishable_from_null": true,
          "null_value": "0x0.0p+0",
          "confidence_level": "0x1.e666666666666p-1",
-         "equivalence_bound": "0x1.1b07d6af10708p-11",
+         "equivalence_bound": "0x1.1b07d6af10709p-11",
          "equivalence_margin": null,
          "equivalence_established": null,
          "equivalence_alpha": null,
          "reason": "95% CI [+0.000458, +0.000540] excludes 0"
         },
-        "p_value_holm": "0x1.c252aefbfdf52p-43",
+        "p_value_holm": "0x1.c252aefbfdf60p-43",
         "holm_significant": true
        },
        {
@@ -3386,7 +3386,7 @@
          "contains_zero": false
         },
         "bootstrap_std": null,
-        "p_value": "0x1.ba973d20580f1p-39",
+        "p_value": "0x1.ba973d2058100p-39",
         "decision": {
          "verdict": "A closer",
          "statistically_distinguishable_from_null": true,
@@ -3398,7 +3398,7 @@
          "equivalence_alpha": null,
          "reason": "95% CI [+0.000492, +0.000609] excludes 0"
         },
-        "p_value_holm": "0x1.ba973d20580f1p-38",
+        "p_value_holm": "0x1.ba973d2058100p-38",
         "holm_significant": true
        },
        {
@@ -3423,7 +3423,7 @@
          "contains_zero": false
         },
         "bootstrap_std": null,
-        "p_value": "0x1.a74816019071fp-37",
+        "p_value": "0x1.a74816019070bp-37",
         "decision": {
          "verdict": "A closer",
          "statistically_distinguishable_from_null": true,
@@ -3435,7 +3435,7 @@
          "equivalence_alpha": null,
          "reason": "95% CI [+0.000494, +0.000625] excludes 0"
         },
-        "p_value_holm": "0x1.a74816019071fp-37",
+        "p_value_holm": "0x1.a74816019070bp-37",
         "holm_significant": true
        }
       ],
@@ -4334,27 +4334,27 @@
         "method": "paired_item_weighted_student_t",
         "ci_method": "t",
         "confidence_level": "0x1.e666666666666p-1",
-        "lower": "0x1.2473b2f047268p-12",
-        "upper": "0x1.3f4515e7d66eap-12",
+        "lower": "0x1.2473b2f047267p-12",
+        "upper": "0x1.3f4515e7d66ebp-12",
         "standard_error": "0x1.929fd05b2f1e7p-18",
         "degrees_of_freedom": 15,
         "bootstrap_iters": 0,
         "contains_zero": false
        },
        "bootstrap_std": null,
-       "p_value": "0x1.d7ece182abfffp-58",
+       "p_value": "0x1.d7ece182abfe9p-58",
        "decision": {
         "verdict": "A closer",
         "statistically_distinguishable_from_null": true,
         "null_value": "0x0.0p+0",
         "confidence_level": "0x1.e666666666666p-1",
-        "equivalence_bound": "0x1.3f4515e7d66eap-12",
+        "equivalence_bound": "0x1.3f4515e7d66ebp-12",
         "equivalence_margin": null,
         "equivalence_established": null,
         "equivalence_alpha": null,
         "reason": "95% CI [+0.000279, +0.000304] excludes 0"
        },
-       "p_value_holm": "0x1.d7ece182abfffp-55",
+       "p_value_holm": "0x1.d7ece182abfe9p-55",
        "holm_significant": true
       },
       {
@@ -4380,7 +4380,7 @@
         "contains_zero": false
        },
        "bootstrap_std": null,
-       "p_value": "0x1.ae56bd65214d8p-38",
+       "p_value": "0x1.ae56bd65214d3p-38",
        "decision": {
         "verdict": "A closer",
         "statistically_distinguishable_from_null": true,
@@ -4392,7 +4392,7 @@
         "equivalence_alpha": null,
         "reason": "95% CI [+0.000262, +0.000310] excludes 0"
        },
-       "p_value_holm": "0x1.788be5b87d23dp-35",
+       "p_value_holm": "0x1.788be5b87d239p-35",
        "holm_significant": true
       },
       {
@@ -4418,7 +4418,7 @@
         "contains_zero": false
        },
        "bootstrap_std": null,
-       "p_value": "0x1.0ed74a3fdc90ep-13",
+       "p_value": "0x1.0ed74a3fdc907p-13",
        "decision": {
         "verdict": "A closer",
         "statistically_distinguishable_from_null": true,
@@ -4430,7 +4430,7 @@
         "equivalence_alpha": null,
         "reason": "95% CI [+0.000313, +0.000345] excludes 0"
        },
-       "p_value_holm": "0x1.0ed74a3fdc90ep-12",
+       "p_value_holm": "0x1.0ed74a3fdc907p-12",
        "holm_significant": true
       }
      ],
@@ -4458,7 +4458,7 @@
         "contains_zero": false
        },
        "bootstrap_std": null,
-       "p_value": "0x1.db3a68b389184p-73",
+       "p_value": "0x1.db3a68b3891b2p-73",
        "decision": {
         "verdict": "A closer",
         "statistically_distinguishable_from_null": true,
@@ -4470,7 +4470,7 @@
         "equivalence_alpha": null,
         "reason": "95% CI [-0.008051, -0.007706] excludes 0"
        },
-       "p_value_holm": "0x1.0b50dae4fd1dap-69",
+       "p_value_holm": "0x1.0b50dae4fd1f4p-69",
        "holm_significant": true
       },
       {
@@ -4489,14 +4489,14 @@
         "ci_method": "t",
         "confidence_level": "0x1.e666666666666p-1",
         "lower": "-0x1.290670d37209cp-7",
-        "upper": "-0x1.f2c7cbdc19c78p-8",
+        "upper": "-0x1.f2c7cbdc19c77p-8",
         "standard_error": "0x1.5dcdff129e0adp-12",
         "degrees_of_freedom": 12,
         "bootstrap_iters": 0,
         "contains_zero": false
        },
        "bootstrap_std": null,
-       "p_value": "0x1.66d5df7a5f1b4p-37",
+       "p_value": "0x1.66d5df7a5f1a9p-37",
        "decision": {
         "verdict": "A closer",
         "statistically_distinguishable_from_null": true,
@@ -4508,7 +4508,7 @@
         "equivalence_alpha": null,
         "reason": "95% CI [-0.009064, -0.007611] excludes 0"
        },
-       "p_value_holm": "0x1.0d20679bc7547p-34",
+       "p_value_holm": "0x1.0d20679bc753fp-34",
        "holm_significant": true
       },
       {
@@ -4534,7 +4534,7 @@
         "contains_zero": false
        },
        "bootstrap_std": null,
-       "p_value": "0x1.c1f904706e094p-17",
+       "p_value": "0x1.c1f904706e098p-17",
        "decision": {
         "verdict": "A closer",
         "statistically_distinguishable_from_null": true,
@@ -4546,7 +4546,7 @@
         "equivalence_alpha": null,
         "reason": "95% CI [-0.008188, -0.007934] excludes 0"
        },
-       "p_value_holm": "0x1.517ac3545286fp-15",
+       "p_value_holm": "0x1.517ac35452872p-15",
        "holm_significant": true
       }
      ],
@@ -4574,7 +4574,7 @@
         "contains_zero": false
        },
        "bootstrap_std": null,
-       "p_value": "0x1.3878085ac358fp-35",
+       "p_value": "0x1.3878085ac358ap-35",
        "decision": {
         "verdict": "A closer",
         "statistically_distinguishable_from_null": true,
@@ -4586,7 +4586,7 @@
         "equivalence_alpha": null,
         "reason": "95% CI [-0.090773, -0.070445] excludes 0"
        },
-       "p_value_holm": "0x1.86960a71742f3p-33",
+       "p_value_holm": "0x1.86960a71742ecp-33",
        "holm_significant": true
       },
       {
@@ -4604,27 +4604,27 @@
         "method": "paired_item_weighted_student_t",
         "ci_method": "t",
         "confidence_level": "0x1.e666666666666p-1",
-        "lower": "-0x1.7b89c8342cdaap-4",
-        "upper": "-0x1.22595b26e0c8ap-4",
+        "lower": "-0x1.7b89c8342cdabp-4",
+        "upper": "-0x1.22595b26e0c89p-4",
         "standard_error": "0x1.477a5f895ef7dp-8",
         "degrees_of_freedom": 12,
         "bootstrap_iters": 0,
         "contains_zero": false
        },
        "bootstrap_std": null,
-       "p_value": "0x1.89229757fbd79p-30",
+       "p_value": "0x1.89229757fbd80p-30",
        "decision": {
         "verdict": "A closer",
         "statistically_distinguishable_from_null": true,
         "null_value": "0x0.0p+0",
         "confidence_level": "0x1.e666666666666p-1",
-        "equivalence_bound": "0x1.7b89c8342cdaap-4",
+        "equivalence_bound": "0x1.7b89c8342cdabp-4",
         "equivalence_margin": null,
         "equivalence_established": null,
         "equivalence_alpha": null,
         "reason": "95% CI [-0.092661, -0.070886] excludes 0"
        },
-       "p_value_holm": "0x1.89229757fbd79p-28",
+       "p_value_holm": "0x1.89229757fbd80p-28",
        "holm_significant": true
       },
       {
@@ -4642,27 +4642,27 @@
         "method": "paired_item_weighted_student_t",
         "ci_method": "t",
         "confidence_level": "0x1.e666666666666p-1",
-        "lower": "-0x1.a11444699b1f0p-4",
-        "upper": "-0x1.946ceb62a0720p-6",
+        "lower": "-0x1.a11444699b1f2p-4",
+        "upper": "-0x1.946ceb62a071ap-6",
         "standard_error": "0x1.25bf39869243dp-7",
         "degrees_of_freedom": 2,
         "bootstrap_iters": 0,
         "contains_zero": false
        },
        "bootstrap_std": null,
-       "p_value": "0x1.3f77cdb711aaap-6",
+       "p_value": "0x1.3f77cdb711aacp-6",
        "decision": {
         "verdict": "A closer",
         "statistically_distinguishable_from_null": true,
         "null_value": "0x0.0p+0",
         "confidence_level": "0x1.e666666666666p-1",
-        "equivalence_bound": "0x1.a11444699b1f0p-4",
+        "equivalence_bound": "0x1.a11444699b1f2p-4",
         "equivalence_margin": null,
         "equivalence_established": null,
         "equivalence_alpha": null,
         "reason": "95% CI [-0.101826, -0.024684] excludes 0"
        },
-       "p_value_holm": "0x1.3f77cdb711aaap-6",
+       "p_value_holm": "0x1.3f77cdb711aacp-6",
        "holm_significant": true
       }
      ]

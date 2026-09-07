@@ -69,9 +69,7 @@ sample range this tooling operates in. Four constructions are available:
   closed form Efron & Tibshirani (1986) cite as the case where resampling is
   unnecessary (`s/sqrt(n)` item-weighted). **No bootstrap**: the result is a
   deterministic function of the deltas — no seed, no replicate count
-  (`--bootstrap-iters` is ignored and the JSON records `0`). The t quantile
-  and tail come from `stats/student_t.py` (regularized incomplete beta,
-  machine precision, no scipy).
+  (`--bootstrap-iters` is ignored and the JSON records `0`). The paired test uses [SciPy `ttest_rel` and its confidence interval API](https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.ttest_rel.html). Shared distribution helpers use [SciPy `t.ppf` and `t.sf`](https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.t.html). See [statistical API references and independent verification](statistical-apis.md) for numerical limits and MATLAB, Julia and Wolfram correspondences.
 - **`studentized`** — the bootstrap-t interval. Every replicate is
   divided by *its own* analytic standard error, so the interval is built from
   the pivotal quantity `t* = (θ* − θ)/SE*` and inverted:

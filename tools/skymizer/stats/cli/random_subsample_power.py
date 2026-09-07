@@ -16,6 +16,7 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from stats.contracts import DEFAULT_METRICS              # noqa: E402
 from stats.engine import compare_items                   # noqa: E402
+from stats.power import wilson_interval                  # noqa: E402
 from stats import collection_io as paired_io                # noqa: E402
 
 WEIGHTINGS = ("item_weighted",)
@@ -82,21 +83,16 @@ def load_population(a_dir: Path, b_dir: Path):
         sys.exit(str(error))
 
 
-def wilson_lower(hits: int, n: int, z: float = 1.959963985) -> float:
-    """Lower end of the Wilson score interval for hits/n.
+def wilson_lower(hits: int, n: int, confidence_level: float = 0.95) -> float:
+    """Lower end of the two-sided Wilson interval for hits/n; zero before any draws.
 
-    The "smallest N" line is a FIRST CROSSING of a Monte-Carlo estimate, and
-    at --reps 100 that estimate has SE ~ 5pp, so taking the first size whose
-    point estimate clears the target systematically picks a lucky draw and
-    reports an N that is too small. Requiring the interval's lower end to
-    clear it instead makes the answer conservative."""
-    if n <= 0:
+    Delegates to stats.power.wilson_interval to account for Monte Carlo noise.
+    SciPy proportion_ci(method="wilson"): https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats._result_classes.BinomTestResult.proportion_ci.html
+    Pointwise intervals do not provide simultaneous coverage across a sample-size search.
+    """
+    if n == 0 and hits == 0:
         return 0.0
-    phat = hits / n
-    denom = 1.0 + z * z / n
-    centre = phat + z * z / (2 * n)
-    half = z * np.sqrt(phat * (1.0 - phat) / n + z * z / (4 * n * n))
-    return float(max(0.0, (centre - half) / denom))
+    return wilson_interval(hits, n, confidence_level)[0]
 
 
 def verdicts_of(result):

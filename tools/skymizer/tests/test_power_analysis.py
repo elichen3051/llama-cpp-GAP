@@ -8,7 +8,7 @@ import pytest
 
 import stats.cli.power_analysis as power_cli
 from stats.engine import compare_items
-from stats.power import build_design, paired_t_interval
+from stats.power import _batch_estimate_and_se, build_design, paired_t_interval, wilson_interval
 import lib.kld_metrics_io as kio
 from fakes import make_records, write_vlmk
 
@@ -27,6 +27,36 @@ def test_token_weighting_is_rejected_before_power_simulation(monkeypatch):
     with pytest.raises(SystemExit):
         power_cli.parse_args(["--candidate-a", "a", "--candidate-b", "b", "--token-caps", "16",
                               "--weighting", "token", "--out", "power.md"])
+
+
+@pytest.mark.parametrize("total,hits", [(1, 0), (1, 1), (16, 0), (16, 16), (16, 8), (100, 3), (100, 97)])
+def test_wilson_endpoints_solve_the_binomial_score_equation(total, hits):
+    from statistics import NormalDist
+    confidence = 2.0 * NormalDist().cdf(2.0) - 1.0
+    lower, upper = wilson_interval(hits, total, confidence)
+    proportion = hits / total
+    assert 0 <= lower <= proportion <= upper <= 1
+    for bound in (lower, upper):
+        assert total * (proportion - bound) ** 2 == pytest.approx(4.0 * bound * (1.0 - bound), abs=1e-13)
+    if hits == 0:
+        assert upper == pytest.approx(4.0 / (total + 4.0), abs=1e-14)
+    if hits == total:
+        assert lower == pytest.approx(total / (total + 4.0), abs=1e-14)
+
+
+@pytest.mark.parametrize("hits,total,confidence", [(0, 0, .95), (-1, 4, .95), (5, 4, .95),
+                                                  (1.5, 4, .95), (1, 4.5, .95), (1, 4, 1.0), (1, 4, float("nan"))])
+def test_wilson_rejects_invalid_counts_and_confidence(hits, total, confidence):
+    with pytest.raises((ValueError, TypeError)):
+        wilson_interval(hits, total, confidence)
+
+
+@pytest.mark.parametrize("values", [[1e200, -1e200, 1e200], [1e-200, -1e-200, 1e-200], [1.1e-162, 2.2e-162, 3.3e-162], [1e-161, 2e-161, 4e-161]])
+def test_planning_interval_cannot_turn_invalid_variance_into_significance(values):
+    with pytest.raises(ValueError, match="standard error"):
+        paired_t_interval(values, np.ones(3), "item", .95)
+    with pytest.raises(ValueError, match="standard error"):
+        _batch_estimate_and_se(np.array([values]), np.ones((1, 3)), "item")
 
 
 @pytest.mark.parametrize("weighting", ["item"])

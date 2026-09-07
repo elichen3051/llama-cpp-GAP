@@ -282,6 +282,35 @@ def test_t_interval_ignores_seed_and_iters():
     assert min_bootstrap_iters(0.99, "t") == 0
 
 
+@pytest.mark.parametrize("sign", [-1, 1])
+@pytest.mark.parametrize("confidence", [0.9, 0.95, 0.99])
+def test_paired_t_matches_independent_df2_formula(sign, confidence):
+    """ttest(B,A) tests B-A: https://www.mathworks.com/help/stats/ttest.html"""
+    a = np.array([10., 15., 20.])
+    b = a + sign * np.array([0., 1., 2.])
+    result = _paired_bootstrap_delta(a, b, np.array([1., 10., 100.]), weighting="item",
+                                     confidence_level=confidence, bootstrap_iters=0, seed=None, ci_method="t")
+    critical = confidence * math.sqrt(2.0 / (1.0 - confidence * confidence))
+    half_width = critical / math.sqrt(3.0)
+    assert result["estimate"] == sign
+    assert result["ci"]["degrees_of_freedom"] == 2
+    assert result["ci"]["standard_error"] == pytest.approx(1.0 / math.sqrt(3.0), rel=1e-14)
+    assert result["ci"]["lower"] == pytest.approx(sign - half_width, rel=1e-10)
+    assert result["ci"]["upper"] == pytest.approx(sign + half_width, rel=1e-10)
+    assert result["p_value"] == pytest.approx(1.0 - math.sqrt(3.0 / 5.0), rel=1e-13)
+
+
+@pytest.mark.statistical
+def test_paired_t_normal_null_has_nominal_rejection_rate():
+    rng = np.random.default_rng(482)
+    rejected = 0
+    for differences in rng.normal(size=(1000, 5)):
+        result = _paired_bootstrap_delta(np.zeros(5), differences, np.ones(5), weighting="item",
+                                         confidence_level=0.95, bootstrap_iters=0, seed=None, ci_method="t")
+        rejected += result["p_value"] < 0.05
+    assert 25 <= rejected <= 75
+
+
 def test_t_interval_is_a_point_on_a_degenerate_sample():
     """Identical deltas (SE = 0): the interval is [theta, theta] and p is the
     SE -> 0 limit of the t test -- 0 when theta != 0, 1 when theta == 0 --
@@ -404,8 +433,11 @@ def test_overflowed_standard_error_cannot_become_zero_spread(method, weighting):
 
 
 @pytest.mark.parametrize("weighting", ["item"])
-def test_underflowed_standard_error_cannot_become_zero_spread(weighting):
+@pytest.mark.parametrize("differences", [[1e-200, -1e-200, 1e-200], [1.1e-162, 2.2e-162, 3.3e-162, 4.4e-162], [1e-161, 2e-161, 4e-161]])
+def test_underflowed_standard_error_cannot_become_zero_spread(weighting, differences):
+    """Reject both fully lost variance and subnormal variance with inaccurate package SE."""
+    differences = np.array(differences)
     with pytest.raises(NonFiniteMetricError, match="standard error underflow"):
-        _paired_bootstrap_delta(np.zeros(3), np.array([1e-200, -1e-200, 1e-200]),
-                                np.ones(3), weighting=weighting, confidence_level=0.95,
+        _paired_bootstrap_delta(np.zeros_like(differences), differences,
+                                np.ones_like(differences), weighting=weighting, confidence_level=0.95,
                                 bootstrap_iters=0, seed=1, ci_method="t")

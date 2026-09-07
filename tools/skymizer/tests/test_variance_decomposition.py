@@ -20,11 +20,10 @@ import stats.cli.variance_decomposition as vd
 # --------------------------------------------------------------------------- #
 # t quantiles
 # --------------------------------------------------------------------------- #
-@pytest.mark.parametrize("df", [10, 24, 49, 99, 249, 999])
 @pytest.mark.parametrize("p", [0.8, 0.95, 0.975, 0.99])
-def test_t_ppf_matches_scipy(df, p):
-    st = pytest.importorskip("scipy.stats")
-    assert vd.t_ppf(p, df) == pytest.approx(st.t.ppf(p, df), rel=2e-4)
+def test_planning_t_quantile_matches_independent_df2_formula(p):
+    expected = (2.0 * p - 1.0) / math.sqrt(2.0 * p * (1.0 - p))
+    assert vd.t_ppf(p, 2) == pytest.approx(expected, rel=1e-10)
 
 
 def test_t_ppf_exceeds_the_normal_quantile_and_converges_to_it():

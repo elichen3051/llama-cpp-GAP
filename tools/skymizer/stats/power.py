@@ -16,7 +16,10 @@ from statistics import NormalDist
 from typing import Mapping, Sequence
 
 import numpy as np
+from scipy.stats import binomtest
 
+from stats.contracts import NonFiniteMetricError
+from stats.inference import _statistic_and_se, _student_t_delta
 from stats.student_t import t_ppf
 
 
@@ -38,53 +41,55 @@ def _arrays(values, weights):
 
 
 def estimate_and_se(values, weights, weighting: str):
-    """Production paired-t statistic and analytic SE for one item sample."""
+    """Production paired-t statistic and analytic SE for one item sample.
+
+    Mean and SE follow the paired test: https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.ttest_rel.html
+    """
     if weighting != "item":
         raise ValueError("paired-test power requires weighting='item'; token weighting is descriptive only")
     values, weights = _arrays(values, weights)
-    n = values.size
-    estimate = float(values.mean())
-    se = float(values.std(ddof=1) / math.sqrt(n))
-    return estimate, se
+    return _statistic_and_se(values, weights, weighting)
 
 
 def paired_t_interval(values, weights, weighting: str, confidence_level: float):
-    """The exact interval used by stats.inference for ``--ci-method t``."""
+    """The production item paired-t interval, including its zero-spread policy.
+
+    Delegates to _student_t_delta and scipy.stats.ttest_rel(...).confidence_interval(confidence_level).
+    SciPy API: https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.ttest_rel.html
+    MATLAB correspondence: https://www.mathworks.com/help/stats/ttest.html
+    """
     if not 0.0 < confidence_level < 1.0:
         raise ValueError("confidence_level must be in (0, 1)")
     values, weights = _arrays(values, weights)
-    estimate, se = estimate_and_se(values, weights, weighting)
-    critical = t_ppf(0.5 + confidence_level / 2.0, values.size - 1)
-    half_width = critical * se
+    result = _student_t_delta(values, weights, weighting=weighting, confidence_level=confidence_level)
+    ci = result["ci"]
     return {
-        "estimate": estimate,
-        "standard_error": se,
-        "lower": estimate - half_width,
-        "upper": estimate + half_width,
-        "degrees_of_freedom": int(values.size - 1),
+        "estimate": result["estimate"],
+        "standard_error": ci["standard_error"],
+        "lower": ci["lower"],
+        "upper": ci["upper"],
+        "degrees_of_freedom": ci["degrees_of_freedom"],
     }
 
 
 def wilson_interval(hits: int, total: int, confidence_level: float = 0.95):
-    """Wilson score interval for a Monte-Carlo rejection proportion."""
+    """Wilson interval without continuity correction.
+
+    Uses binomtest(hits, total).proportion_ci(confidence_level=..., method="wilson").
+    SciPy binomtest: https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.binomtest.html
+    SciPy proportion_ci: https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats._result_classes.BinomTestResult.proportion_ci.html
+    This is a two-sided interval; SciPy's default method is different (Clopper-Pearson).
+    """
+    if not isinstance(hits, (int, np.integer)) or not isinstance(total, (int, np.integer)):
+        raise ValueError("hits and total must be integers")
     if total <= 0:
         raise ValueError("total must be positive")
     if not 0 <= hits <= total:
         raise ValueError("hits must lie in [0, total]")
     if not 0.0 < confidence_level < 1.0:
         raise ValueError("confidence_level must be in (0, 1)")
-    z = NormalDist().inv_cdf(0.5 + confidence_level / 2.0)
-    proportion = hits / total
-    denominator = 1.0 + z * z / total
-    centre = proportion + z * z / (2.0 * total)
-    half = z * math.sqrt(
-        proportion * (1.0 - proportion) / total
-        + z * z / (4.0 * total * total)
-    )
-    return (
-        max(0.0, (centre - half) / denominator),
-        min(1.0, (centre + half) / denominator),
-    )
+    ci = binomtest(hits, total).proportion_ci(confidence_level=confidence_level, method="wilson")
+    return float(ci.low), float(ci.high)
 
 
 def _batch_estimate_and_se(values, weights, weighting: str):
@@ -92,8 +97,14 @@ def _batch_estimate_and_se(values, weights, weighting: str):
     if weighting != "item":
         raise ValueError("paired-test power requires weighting='item'; token weighting is descriptive only")
     n = values.shape[1]
-    estimate = values.mean(axis=1)
-    se = values.std(axis=1, ddof=1) / math.sqrt(n)
+    with np.errstate(over="ignore", invalid="ignore", divide="ignore"):
+        estimate = values.mean(axis=1)
+        se = values.std(axis=1, ddof=1) / math.sqrt(n)
+    if not np.all(np.isfinite(estimate)) or not np.all(np.isfinite(se)):
+        raise NonFiniteMetricError("non-finite estimate or standard error; power simulation aborted")
+    nonconstant = np.any(values != values[:, :1], axis=1)
+    if np.any((se < math.sqrt(np.finfo(float).tiny)) & nonconstant):
+        raise NonFiniteMetricError("standard error underflow for nonconstant differences; power simulation aborted")
     return estimate, se
 
 
