@@ -24,7 +24,7 @@
  },
  "results": {
   "t": {
-   "schema_version": "vlm-paired-compare-v3",
+   "schema_version": "vlm-paired-compare-v4",
    "n_items": 16,
    "confidence_level": "0x1.e666666666666p-1",
    "ci_method": "t",
@@ -35,9 +35,9 @@
      "equivalence_margin": "0x1.a36e2eb1c432dp-13"
     },
     "correction": "holm_bonferroni",
-    "family_size": 13,
+    "family_size": 6,
     "alpha": "0x1.99999999999a0p-5",
-    "policy": "One confirmatory endpoint whose interval spends the whole alpha; every other metric x weighting cell is exploratory and carries a Holm-Bonferroni-adjusted p-value over the remaining 13 cells. Holm controls the family-wise error rate under arbitrary dependence, which this family needs: the two weightings are views of the same numbers and kld/reversed_kld/js_kld are functionals of the same distribution pair."
+    "policy": "One confirmatory endpoint whose interval spends the whole alpha; every other item-weighted endpoint is exploratory and carries a Holm-Bonferroni-adjusted p-value over the remaining 6 cells. Holm controls the family-wise error rate under arbitrary dependence: kld/reversed_kld/js_kld are functionals of the same distribution pair. Token-weighted summaries are descriptive only."
    },
    "bootstrap_iters": 0,
    "seed": 20260824,
@@ -76,42 +76,15 @@
        "reason": "95% CI [+0.001119, +0.021792] excludes 0"
       },
       "role": "exploratory",
-      "p_value_holm": "0x1.07115a7af27d5p-4",
-      "holm_significant": false
+      "p_value_holm": "0x1.07115a7af27d5p-5",
+      "holm_significant": true
      },
      "token_weighted": {
       "baseline_mean": "0x1.00aada611f42cp+1",
       "candidate_mean": "0x1.01962357a6a04p+1",
       "delta_candidate_minus_baseline": "0x1.d691ed0ebaf70p-8",
-      "ci_delta": {
-       "method": "paired_token_weighted_student_t",
-       "ci_method": "t",
-       "confidence_level": "0x1.e666666666666p-1",
-       "lower": "-0x1.46c2a4e60dec8p-7",
-       "upper": "0x1.8eaa48fa6471cp-6",
-       "standard_error": "0x1.07b10cadd5686p-7",
-       "degrees_of_freedom": 15,
-       "bootstrap_iters": 0,
-       "contains_zero": true
-      },
-      "bootstrap_std": null,
-      "p_value": "0x1.8b9be7b30682ap-2",
-      "decision": {
-       "verdict": "inconclusive",
-       "statistically_distinguishable_from_null": false,
-       "null_value": "0x0.0p+0",
-       "confidence_level": "0x1.e666666666666p-1",
-       "equivalence_bound": "0x1.8eaa48fa6471cp-6",
-       "equivalence_margin": null,
-       "equivalence_established": null,
-       "equivalence_alpha": null,
-       "reason": "95% CI [-0.009972, +0.024333] contains 0; the data bound |\u0394| \u2264 0.0243326 and establish nothing tighter"
-      },
-      "role": "exploratory",
-      "p_value_holm": "0x1.8b9be7b30682ap-2",
-      "holm_significant": false
-     },
-     "weighting_consensus": "disagree"
+      "role": "descriptive"
+     }
     },
     "kld": {
      "score_direction": "lower_is_better",
@@ -150,35 +123,8 @@
       "baseline_mean": "0x1.39edce5e65599p-10",
       "candidate_mean": "0x1.87ff690899566p-10",
       "delta_candidate_minus_baseline": "0x1.38466aa8cff36p-12",
-      "ci_delta": {
-       "method": "paired_token_weighted_student_t",
-       "ci_method": "t",
-       "confidence_level": "0x1.e666666666666p-1",
-       "lower": "0x1.2adf528362aa7p-12",
-       "upper": "0x1.45ad82ce3d3c5p-12",
-       "standard_error": "0x1.926fcd622a55ep-18",
-       "degrees_of_freedom": 15,
-       "bootstrap_iters": 0,
-       "contains_zero": false
-      },
-      "bootstrap_std": null,
-      "p_value": "0x1.57e847cd7feb5p-58",
-      "decision": {
-       "verdict": "A closer",
-       "statistically_distinguishable_from_null": true,
-       "null_value": "0x0.0p+0",
-       "confidence_level": "0x1.e666666666666p-1",
-       "equivalence_bound": "0x1.45ad82ce3d3c5p-12",
-       "equivalence_margin": "0x1.a36e2eb1c432dp-13",
-       "equivalence_established": false,
-       "equivalence_alpha": "0x1.99999999999a0p-6",
-       "reason": "95% CI [+0.000285, +0.000311] excludes 0"
-      },
-      "role": "exploratory",
-      "p_value_holm": "0x1.2ceb3ed3cfe49p-55",
-      "holm_significant": true
-     },
-     "weighting_consensus": "agree"
+      "role": "descriptive"
+     }
     },
     "reversed_kld": {
      "score_direction": "lower_is_better",
@@ -212,42 +158,15 @@
        "reason": "95% CI [+0.000311, +0.000334] excludes 0"
       },
       "role": "exploratory",
-      "p_value_holm": "0x1.21a6cd7a6826ap-59",
+      "p_value_holm": "0x1.0177d3177905ep-60",
       "holm_significant": true
      },
      "token_weighted": {
       "baseline_mean": "0x1.595263016f7c2p-10",
       "candidate_mean": "0x1.af328d230f124p-10",
       "delta_candidate_minus_baseline": "0x1.5780a8867e589p-12",
-      "ci_delta": {
-       "method": "paired_token_weighted_student_t",
-       "ci_method": "t",
-       "confidence_level": "0x1.e666666666666p-1",
-       "lower": "0x1.48c2745d52eecp-12",
-       "upper": "0x1.663edcafa9c26p-12",
-       "standard_error": "0x1.baae2eb8c82a6p-18",
-       "degrees_of_freedom": 15,
-       "bootstrap_iters": 0,
-       "contains_zero": false
-      },
-      "bootstrap_std": null,
-      "p_value": "0x1.57e847cd7fe0ap-58",
-      "decision": {
-       "verdict": "A closer",
-       "statistically_distinguishable_from_null": true,
-       "null_value": "0x0.0p+0",
-       "confidence_level": "0x1.e666666666666p-1",
-       "equivalence_bound": "0x1.663edcafa9c26p-12",
-       "equivalence_margin": null,
-       "equivalence_established": null,
-       "equivalence_alpha": null,
-       "reason": "95% CI [+0.000314, +0.000342] excludes 0"
-      },
-      "role": "exploratory",
-      "p_value_holm": "0x1.2ceb3ed3cfe49p-55",
-      "holm_significant": true
-     },
-     "weighting_consensus": "agree"
+      "role": "descriptive"
+     }
     },
     "js_kld": {
      "score_direction": "lower_is_better",
@@ -281,42 +200,15 @@
        "reason": "95% CI [+0.000142, +0.000152] excludes 0"
       },
       "role": "exploratory",
-      "p_value_holm": "0x1.21a6cd7a6826ap-59",
+      "p_value_holm": "0x1.0177d3177905ep-60",
       "holm_significant": true
      },
      "token_weighted": {
       "baseline_mean": "0x1.39edce5e65599p-11",
       "candidate_mean": "0x1.87ff690899566p-11",
       "delta_candidate_minus_baseline": "0x1.38466aa8cff36p-13",
-      "ci_delta": {
-       "method": "paired_token_weighted_student_t",
-       "ci_method": "t",
-       "confidence_level": "0x1.e666666666666p-1",
-       "lower": "0x1.2adf528362aa7p-13",
-       "upper": "0x1.45ad82ce3d3c5p-13",
-       "standard_error": "0x1.926fcd622a55ep-19",
-       "degrees_of_freedom": 15,
-       "bootstrap_iters": 0,
-       "contains_zero": false
-      },
-      "bootstrap_std": null,
-      "p_value": "0x1.57e847cd7feb5p-58",
-      "decision": {
-       "verdict": "A closer",
-       "statistically_distinguishable_from_null": true,
-       "null_value": "0x0.0p+0",
-       "confidence_level": "0x1.e666666666666p-1",
-       "equivalence_bound": "0x1.45ad82ce3d3c5p-13",
-       "equivalence_margin": null,
-       "equivalence_established": null,
-       "equivalence_alpha": null,
-       "reason": "95% CI [+0.000143, +0.000155] excludes 0"
-      },
-      "role": "exploratory",
-      "p_value_holm": "0x1.2ceb3ed3cfe49p-55",
-      "holm_significant": true
-     },
-     "weighting_consensus": "agree"
+      "role": "descriptive"
+     }
     },
     "ear": {
      "score_direction": "higher_is_better",
@@ -350,42 +242,15 @@
        "reason": "95% CI [-0.008056, -0.007843] excludes 0"
       },
       "role": "exploratory",
-      "p_value_holm": "0x1.aa44935896ef8p-80",
+      "p_value_holm": "0x1.838428dc2c1f8p-81",
       "holm_significant": true
      },
      "token_weighted": {
       "baseline_mean": "0x1.f9d0510000000p-1",
       "candidate_mean": "0x1.f5bdbbf92c5f9p-1",
       "delta_candidate_minus_baseline": "-0x1.04a541b4e81bdp-7",
-      "ci_delta": {
-       "method": "paired_token_weighted_student_t",
-       "ci_method": "t",
-       "confidence_level": "0x1.e666666666666p-1",
-       "lower": "-0x1.0842fffd40ebcp-7",
-       "upper": "-0x1.0107836c8f4bep-7",
-       "standard_error": "0x1.b2536052b1428p-15",
-       "degrees_of_freedom": 15,
-       "bootstrap_iters": 0,
-       "contains_zero": false
-      },
-      "bootstrap_std": null,
-      "p_value": "0x1.079e7be438b4cp-82",
-      "decision": {
-       "verdict": "A closer",
-       "statistically_distinguishable_from_null": true,
-       "null_value": "0x0.0p+0",
-       "confidence_level": "0x1.e666666666666p-1",
-       "equivalence_bound": "0x1.0842fffd40ebcp-7",
-       "equivalence_margin": null,
-       "equivalence_established": null,
-       "equivalence_alpha": null,
-       "reason": "95% CI [-0.008065, -0.007844] excludes 0"
-      },
-      "role": "exploratory",
-      "p_value_holm": "0x1.49861add46e1fp-79",
-      "holm_significant": true
-     },
-     "weighting_consensus": "agree"
+      "role": "descriptive"
+     }
     },
     "same_top_rate": {
      "score_direction": "higher_is_better",
@@ -427,36 +292,8 @@
       "baseline_mean": "0x1.fbf0d83c65133p-1",
       "candidate_mean": "0x1.faeab35f35f89p-1",
       "delta_candidate_minus_baseline": "-0x1.0624dd2f1aa00p-9",
-      "ci_delta": {
-       "method": "paired_token_weighted_student_t",
-       "ci_method": "t",
-       "confidence_level": "0x1.e666666666666p-1",
-       "lower": "-0x1.0624dd2f1aa00p-9",
-       "upper": "-0x1.0624dd2f1aa00p-9",
-       "standard_error": "0x0.0p+0",
-       "degrees_of_freedom": 15,
-       "bootstrap_iters": 0,
-       "contains_zero": false,
-       "fallback": "the sample has no spread (identical deltas), so the t interval is the point estimate and p is its SE -> 0 limit"
-      },
-      "bootstrap_std": null,
-      "p_value": "0x0.0p+0",
-      "decision": {
-       "verdict": "A closer",
-       "statistically_distinguishable_from_null": true,
-       "null_value": "0x0.0p+0",
-       "confidence_level": "0x1.e666666666666p-1",
-       "equivalence_bound": "0x1.0624dd2f1aa00p-9",
-       "equivalence_margin": null,
-       "equivalence_established": null,
-       "equivalence_alpha": null,
-       "reason": "95% CI [-0.002000, -0.002000] excludes 0"
-      },
-      "role": "exploratory",
-      "p_value_holm": "0x0.0p+0",
-      "holm_significant": true
-     },
-     "weighting_consensus": "agree"
+      "role": "descriptive"
+     }
     },
     "mse_dp": {
      "score_direction": "lower_is_better",
@@ -490,42 +327,15 @@
        "reason": "95% CI [+0.017536, +0.028193] excludes 0"
       },
       "role": "exploratory",
-      "p_value_holm": "0x1.00ca44dbaf435p-21",
+      "p_value_holm": "0x1.5663067a3f047p-22",
       "holm_significant": true
      },
      "token_weighted": {
       "baseline_mean": "0x1.57e78ffb1029ap-3",
       "candidate_mean": "0x1.8b70abaf5bb0bp-3",
       "delta_candidate_minus_baseline": "0x1.9c48dda25c38ep-6",
-      "ci_delta": {
-       "method": "paired_token_weighted_student_t",
-       "ci_method": "t",
-       "confidence_level": "0x1.e666666666666p-1",
-       "lower": "0x1.61836873a90b8p-6",
-       "upper": "0x1.d70e52d10f664p-6",
-       "standard_error": "0x1.b92ca99deb84cp-10",
-       "degrees_of_freedom": 15,
-       "bootstrap_iters": 0,
-       "contains_zero": false
-      },
-      "bootstrap_std": null,
-      "p_value": "0x1.be89d0da9a501p-33",
-      "decision": {
-       "verdict": "A closer",
-       "statistically_distinguishable_from_null": true,
-       "null_value": "0x0.0p+0",
-       "confidence_level": "0x1.e666666666666p-1",
-       "equivalence_bound": "0x1.d70e52d10f664p-6",
-       "equivalence_margin": null,
-       "equivalence_established": null,
-       "equivalence_alpha": null,
-       "reason": "95% CI [+0.021577, +0.028751] excludes 0"
-      },
-      "role": "exploratory",
-      "p_value_holm": "0x1.be89d0da9a501p-31",
-      "holm_significant": true
-     },
-     "weighting_consensus": "agree"
+      "role": "descriptive"
+     }
     },
     "ppl": {
      "source_metric": "nll",
@@ -543,12 +353,8 @@
       "baseline_ppl": "0x1.db5f2a3a764efp+2",
       "candidate_ppl": "0x1.decc1ef2c0c62p+2",
       "delta_ppl_b_minus_a": "0x1.b67a5c253b980p-5",
-      "decision": {
-       "verdict": "(linked to nll.token_weighted above)",
-       "linked_to": "nll.token_weighted"
-      }
-     },
-     "weighting_consensus": "disagree"
+      "role": "descriptive"
+     }
     },
     "ppl_ratio": {
      "source_metric": "nll",
@@ -571,21 +377,8 @@
      },
      "token_weighted": {
       "estimate": "0x1.01d843749ad3dp+0",
-      "ci": {
-       "method": "paired_token_weighted_student_t",
-       "ci_method": "t",
-       "confidence_level": "0x1.e666666666666p-1",
-       "lower": "0x1.faeb74358d401p-1",
-       "upper": "0x1.064e385b10939p+0",
-       "bootstrap_iters": 0,
-       "contains_one": true
-      },
-      "decision": {
-       "verdict": "(linked to nll.token_weighted above)",
-       "linked_to": "nll.token_weighted"
-      }
-     },
-     "weighting_consensus": "disagree"
+      "role": "descriptive"
+     }
     },
     "rms_dp": {
      "source_metric": "mse_dp",
@@ -603,12 +396,8 @@
       "baseline_rms": "0x1.a39e2a3b4170bp-2",
       "candidate_rms": "0x1.c1f6241f26e37p-2",
       "delta_rms_b_minus_a": "0x1.e57f9e3e572c0p-6",
-      "decision": {
-       "verdict": "(linked to mse_dp.token_weighted above)",
-       "linked_to": "mse_dp.token_weighted"
-      }
-     },
-     "weighting_consensus": "agree"
+      "role": "descriptive"
+     }
     }
    },
    "candidate_metrics": {
@@ -4881,7 +4670,7 @@
    }
   },
   "studentized": {
-   "schema_version": "vlm-paired-compare-v3",
+   "schema_version": "vlm-paired-compare-v4",
    "n_items": 16,
    "confidence_level": "0x1.e666666666666p-1",
    "ci_method": "studentized",
@@ -4892,9 +4681,9 @@
      "equivalence_margin": "0x1.a36e2eb1c432dp-13"
     },
     "correction": "holm_bonferroni",
-    "family_size": 13,
+    "family_size": 6,
     "alpha": "0x1.99999999999a0p-5",
-    "policy": "One confirmatory endpoint whose interval spends the whole alpha; every other metric x weighting cell is exploratory and carries a Holm-Bonferroni-adjusted p-value over the remaining 13 cells. Holm controls the family-wise error rate under arbitrary dependence, which this family needs: the two weightings are views of the same numbers and kld/reversed_kld/js_kld are functionals of the same distribution pair."
+    "policy": "One confirmatory endpoint whose interval spends the whole alpha; every other item-weighted endpoint is exploratory and carries a Holm-Bonferroni-adjusted p-value over the remaining 6 cells. Holm controls the family-wise error rate under arbitrary dependence: kld/reversed_kld/js_kld are functionals of the same distribution pair. Token-weighted summaries are descriptive only."
    },
    "bootstrap_iters": 1000,
    "seed": 20260824,
@@ -4932,41 +4721,15 @@
        "reason": "95% CI [+0.000761, +0.020996] excludes 0"
       },
       "role": "exploratory",
-      "p_value_holm": "0x1.475a4718cea43p-4",
-      "holm_significant": false
+      "p_value_holm": "0x1.475a4718cea43p-5",
+      "holm_significant": true
      },
      "token_weighted": {
       "baseline_mean": "0x1.00aada611f42cp+1",
       "candidate_mean": "0x1.01962357a6a04p+1",
       "delta_candidate_minus_baseline": "0x1.d691ed0ebaf70p-8",
-      "ci_delta": {
-       "method": "paired_token_weighted_bootstrap_studentized",
-       "ci_method": "studentized",
-       "confidence_level": "0x1.e666666666666p-1",
-       "lower": "-0x1.d9e6202987c5ep-7",
-       "upper": "0x1.dbd1688d6d933p-6",
-       "standard_error": "0x1.07b10cadd5686p-7",
-       "bootstrap_iters": 1000,
-       "contains_zero": true
-      },
-      "bootstrap_std": "0x1.020ffccf2ebf8p-7",
-      "p_value": "0x1.b9ed132e4a2a7p-2",
-      "decision": {
-       "verdict": "inconclusive",
-       "statistically_distinguishable_from_null": false,
-       "null_value": "0x0.0p+0",
-       "confidence_level": "0x1.e666666666666p-1",
-       "equivalence_bound": "0x1.dbd1688d6d933p-6",
-       "equivalence_margin": null,
-       "equivalence_established": null,
-       "equivalence_alpha": null,
-       "reason": "95% CI [-0.014462, +0.029042] contains 0; the data bound |\u0394| \u2264 0.0290416 and establish nothing tighter"
-      },
-      "role": "exploratory",
-      "p_value_holm": "0x1.b9ed132e4a2a7p-2",
-      "holm_significant": false
-     },
-     "weighting_consensus": "disagree"
+      "role": "descriptive"
+     }
     },
     "kld": {
      "score_direction": "lower_is_better",
@@ -5004,34 +4767,8 @@
       "baseline_mean": "0x1.39edce5e65599p-10",
       "candidate_mean": "0x1.87ff690899566p-10",
       "delta_candidate_minus_baseline": "0x1.38466aa8cff36p-12",
-      "ci_delta": {
-       "method": "paired_token_weighted_bootstrap_studentized",
-       "ci_method": "studentized",
-       "confidence_level": "0x1.e666666666666p-1",
-       "lower": "0x1.29dc270939acdp-12",
-       "upper": "0x1.4cfd6b5920f29p-12",
-       "standard_error": "0x1.926fcd622a55ep-18",
-       "bootstrap_iters": 1000,
-       "contains_zero": false
-      },
-      "bootstrap_std": "0x1.8cf1927f168c4p-18",
-      "p_value": "0x1.05e1d27a3ee9cp-9",
-      "decision": {
-       "verdict": "A closer",
-       "statistically_distinguishable_from_null": true,
-       "null_value": "0x0.0p+0",
-       "confidence_level": "0x1.e666666666666p-1",
-       "equivalence_bound": "0x1.4cfd6b5920f29p-12",
-       "equivalence_margin": "0x1.a36e2eb1c432dp-13",
-       "equivalence_established": false,
-       "equivalence_alpha": "0x1.99999999999a0p-6",
-       "reason": "95% CI [+0.000284, +0.000318] excludes 0"
-      },
-      "role": "exploratory",
-      "p_value_holm": "0x1.a98ef606a63bep-6",
-      "holm_significant": true
-     },
-     "weighting_consensus": "agree"
+      "role": "descriptive"
+     }
     },
     "reversed_kld": {
      "score_direction": "lower_is_better",
@@ -5064,41 +4801,15 @@
        "reason": "95% CI [+0.000312, +0.000336] excludes 0"
       },
       "role": "exploratory",
-      "p_value_holm": "0x1.a98ef606a63bep-6",
+      "p_value_holm": "0x1.88d2bbb75e5eap-7",
       "holm_significant": true
      },
      "token_weighted": {
       "baseline_mean": "0x1.595263016f7c2p-10",
       "candidate_mean": "0x1.af328d230f124p-10",
       "delta_candidate_minus_baseline": "0x1.5780a8867e589p-12",
-      "ci_delta": {
-       "method": "paired_token_weighted_bootstrap_studentized",
-       "ci_method": "studentized",
-       "confidence_level": "0x1.e666666666666p-1",
-       "lower": "0x1.47a55e23bf719p-12",
-       "upper": "0x1.6e49f6153dd7cp-12",
-       "standard_error": "0x1.baae2eb8c82a6p-18",
-       "bootstrap_iters": 1000,
-       "contains_zero": false
-      },
-      "bootstrap_std": "0x1.b4a3545898cd6p-18",
-      "p_value": "0x1.05e1d27a3ee9cp-9",
-      "decision": {
-       "verdict": "A closer",
-       "statistically_distinguishable_from_null": true,
-       "null_value": "0x0.0p+0",
-       "confidence_level": "0x1.e666666666666p-1",
-       "equivalence_bound": "0x1.6e49f6153dd7cp-12",
-       "equivalence_margin": null,
-       "equivalence_established": null,
-       "equivalence_alpha": null,
-       "reason": "95% CI [+0.000312, +0.000349] excludes 0"
-      },
-      "role": "exploratory",
-      "p_value_holm": "0x1.a98ef606a63bep-6",
-      "holm_significant": true
-     },
-     "weighting_consensus": "agree"
+      "role": "descriptive"
+     }
     },
     "js_kld": {
      "score_direction": "lower_is_better",
@@ -5131,41 +4842,15 @@
        "reason": "95% CI [+0.000142, +0.000153] excludes 0"
       },
       "role": "exploratory",
-      "p_value_holm": "0x1.a98ef606a63bep-6",
+      "p_value_holm": "0x1.88d2bbb75e5eap-7",
       "holm_significant": true
      },
      "token_weighted": {
       "baseline_mean": "0x1.39edce5e65599p-11",
       "candidate_mean": "0x1.87ff690899566p-11",
       "delta_candidate_minus_baseline": "0x1.38466aa8cff36p-13",
-      "ci_delta": {
-       "method": "paired_token_weighted_bootstrap_studentized",
-       "ci_method": "studentized",
-       "confidence_level": "0x1.e666666666666p-1",
-       "lower": "0x1.29dc270939acdp-13",
-       "upper": "0x1.4cfd6b5920f29p-13",
-       "standard_error": "0x1.926fcd622a55ep-19",
-       "bootstrap_iters": 1000,
-       "contains_zero": false
-      },
-      "bootstrap_std": "0x1.8cf1927f168c4p-19",
-      "p_value": "0x1.05e1d27a3ee9cp-9",
-      "decision": {
-       "verdict": "A closer",
-       "statistically_distinguishable_from_null": true,
-       "null_value": "0x0.0p+0",
-       "confidence_level": "0x1.e666666666666p-1",
-       "equivalence_bound": "0x1.4cfd6b5920f29p-13",
-       "equivalence_margin": null,
-       "equivalence_established": null,
-       "equivalence_alpha": null,
-       "reason": "95% CI [+0.000142, +0.000159] excludes 0"
-      },
-      "role": "exploratory",
-      "p_value_holm": "0x1.a98ef606a63bep-6",
-      "holm_significant": true
-     },
-     "weighting_consensus": "agree"
+      "role": "descriptive"
+     }
     },
     "ear": {
      "score_direction": "higher_is_better",
@@ -5198,41 +4883,15 @@
        "reason": "95% CI [-0.008035, -0.007817] excludes 0"
       },
       "role": "exploratory",
-      "p_value_holm": "0x1.a98ef606a63bep-6",
+      "p_value_holm": "0x1.88d2bbb75e5eap-7",
       "holm_significant": true
      },
      "token_weighted": {
       "baseline_mean": "0x1.f9d0510000000p-1",
       "candidate_mean": "0x1.f5bdbbf92c5f9p-1",
       "delta_candidate_minus_baseline": "-0x1.04a541b4e81bdp-7",
-      "ci_delta": {
-       "method": "paired_token_weighted_bootstrap_studentized",
-       "ci_method": "studentized",
-       "confidence_level": "0x1.e666666666666p-1",
-       "lower": "-0x1.082627af41716p-7",
-       "upper": "-0x1.ff1ff3207cff5p-8",
-       "standard_error": "0x1.b2536052b1428p-15",
-       "bootstrap_iters": 1000,
-       "contains_zero": false
-      },
-      "bootstrap_std": "0x1.a49e6eb7f0da5p-15",
-      "p_value": "0x1.05e1d27a3ee9cp-9",
-      "decision": {
-       "verdict": "A closer",
-       "statistically_distinguishable_from_null": true,
-       "null_value": "0x0.0p+0",
-       "confidence_level": "0x1.e666666666666p-1",
-       "equivalence_bound": "0x1.082627af41716p-7",
-       "equivalence_margin": null,
-       "equivalence_established": null,
-       "equivalence_alpha": null,
-       "reason": "95% CI [-0.008061, -0.007799] excludes 0"
-      },
-      "role": "exploratory",
-      "p_value_holm": "0x1.a98ef606a63bep-6",
-      "holm_significant": true
-     },
-     "weighting_consensus": "agree"
+      "role": "descriptive"
+     }
     },
     "same_top_rate": {
      "score_direction": "higher_is_better",
@@ -5266,42 +4925,15 @@
        "reason": "95% CI [-0.002000, -0.002000] excludes 0"
       },
       "role": "exploratory",
-      "p_value_holm": "0x1.a98ef606a63bep-6",
+      "p_value_holm": "0x1.88d2bbb75e5eap-7",
       "holm_significant": true
      },
      "token_weighted": {
       "baseline_mean": "0x1.fbf0d83c65133p-1",
       "candidate_mean": "0x1.faeab35f35f89p-1",
       "delta_candidate_minus_baseline": "-0x1.0624dd2f1aa00p-9",
-      "ci_delta": {
-       "method": "paired_token_weighted_bootstrap_percentile",
-       "ci_method": "percentile",
-       "confidence_level": "0x1.e666666666666p-1",
-       "lower": "-0x1.0624dd2f1aa01p-9",
-       "upper": "-0x1.0624dd2f1a9ffp-9",
-       "standard_error": "0x0.0p+0",
-       "bootstrap_iters": 1000,
-       "contains_zero": false,
-       "fallback": "the sample has no spread, so there is no SE to studentize by; percentile interval used instead"
-      },
-      "bootstrap_std": "0x1.335a8d15ecc6bp-63",
-      "p_value": "0x1.05e1d27a3ee9cp-9",
-      "decision": {
-       "verdict": "A closer",
-       "statistically_distinguishable_from_null": true,
-       "null_value": "0x0.0p+0",
-       "confidence_level": "0x1.e666666666666p-1",
-       "equivalence_bound": "0x1.0624dd2f1aa01p-9",
-       "equivalence_margin": null,
-       "equivalence_established": null,
-       "equivalence_alpha": null,
-       "reason": "95% CI [-0.002000, -0.002000] excludes 0"
-      },
-      "role": "exploratory",
-      "p_value_holm": "0x1.a98ef606a63bep-6",
-      "holm_significant": true
-     },
-     "weighting_consensus": "agree"
+      "role": "descriptive"
+     }
     },
     "mse_dp": {
      "score_direction": "lower_is_better",
@@ -5334,41 +4966,15 @@
        "reason": "95% CI [+0.014752, +0.026801] excludes 0"
       },
       "role": "exploratory",
-      "p_value_holm": "0x1.a98ef606a63bep-6",
+      "p_value_holm": "0x1.88d2bbb75e5eap-7",
       "holm_significant": true
      },
      "token_weighted": {
       "baseline_mean": "0x1.57e78ffb1029ap-3",
       "candidate_mean": "0x1.8b70abaf5bb0bp-3",
       "delta_candidate_minus_baseline": "0x1.9c48dda25c38ep-6",
-      "ci_delta": {
-       "method": "paired_token_weighted_bootstrap_studentized",
-       "ci_method": "studentized",
-       "confidence_level": "0x1.e666666666666p-1",
-       "lower": "0x1.57fa78c28bf8fp-6",
-       "upper": "0x1.f5b1b1f58d746p-6",
-       "standard_error": "0x1.b92ca99deb84cp-10",
-       "bootstrap_iters": 1000,
-       "contains_zero": false
-      },
-      "bootstrap_std": "0x1.b2ce85f8a2615p-10",
-      "p_value": "0x1.05e1d27a3ee9cp-9",
-      "decision": {
-       "verdict": "A closer",
-       "statistically_distinguishable_from_null": true,
-       "null_value": "0x0.0p+0",
-       "confidence_level": "0x1.e666666666666p-1",
-       "equivalence_bound": "0x1.f5b1b1f58d746p-6",
-       "equivalence_margin": null,
-       "equivalence_established": null,
-       "equivalence_alpha": null,
-       "reason": "95% CI [+0.020995, +0.030621] excludes 0"
-      },
-      "role": "exploratory",
-      "p_value_holm": "0x1.a98ef606a63bep-6",
-      "holm_significant": true
-     },
-     "weighting_consensus": "agree"
+      "role": "descriptive"
+     }
     },
     "ppl": {
      "source_metric": "nll",
@@ -5386,12 +4992,8 @@
       "baseline_ppl": "0x1.db5f2a3a764efp+2",
       "candidate_ppl": "0x1.decc1ef2c0c62p+2",
       "delta_ppl_b_minus_a": "0x1.b67a5c253b980p-5",
-      "decision": {
-       "verdict": "(linked to nll.token_weighted above)",
-       "linked_to": "nll.token_weighted"
-      }
-     },
-     "weighting_consensus": "disagree"
+      "role": "descriptive"
+     }
     },
     "ppl_ratio": {
      "source_metric": "nll",
@@ -5414,21 +5016,8 @@
      },
      "token_weighted": {
       "estimate": "0x1.01d843749ad3dp+0",
-      "ci": {
-       "method": "paired_token_weighted_bootstrap_studentized",
-       "ci_method": "studentized",
-       "confidence_level": "0x1.e666666666666p-1",
-       "lower": "0x1.f8a60bb52939fp-1",
-       "upper": "0x1.078b2db608086p+0",
-       "bootstrap_iters": 1000,
-       "contains_one": true
-      },
-      "decision": {
-       "verdict": "(linked to nll.token_weighted above)",
-       "linked_to": "nll.token_weighted"
-      }
-     },
-     "weighting_consensus": "disagree"
+      "role": "descriptive"
+     }
     },
     "rms_dp": {
      "source_metric": "mse_dp",
@@ -5446,12 +5035,8 @@
       "baseline_rms": "0x1.a39e2a3b4170bp-2",
       "candidate_rms": "0x1.c1f6241f26e37p-2",
       "delta_rms_b_minus_a": "0x1.e57f9e3e572c0p-6",
-      "decision": {
-       "verdict": "(linked to mse_dp.token_weighted above)",
-       "linked_to": "mse_dp.token_weighted"
-      }
-     },
-     "weighting_consensus": "agree"
+      "role": "descriptive"
+     }
     }
    },
    "candidate_metrics": {
@@ -9712,7 +9297,7 @@
    }
   },
   "bca": {
-   "schema_version": "vlm-paired-compare-v3",
+   "schema_version": "vlm-paired-compare-v4",
    "n_items": 16,
    "confidence_level": "0x1.e666666666666p-1",
    "ci_method": "bca",
@@ -9723,9 +9308,9 @@
      "equivalence_margin": "0x1.a36e2eb1c432dp-13"
     },
     "correction": "holm_bonferroni",
-    "family_size": 13,
+    "family_size": 6,
     "alpha": "0x1.99999999999a0p-5",
-    "policy": "One confirmatory endpoint whose interval spends the whole alpha; every other metric x weighting cell is exploratory and carries a Holm-Bonferroni-adjusted p-value over the remaining 13 cells. Holm controls the family-wise error rate under arbitrary dependence, which this family needs: the two weightings are views of the same numbers and kld/reversed_kld/js_kld are functionals of the same distribution pair."
+    "policy": "One confirmatory endpoint whose interval spends the whole alpha; every other item-weighted endpoint is exploratory and carries a Holm-Bonferroni-adjusted p-value over the remaining 6 cells. Holm controls the family-wise error rate under arbitrary dependence: kld/reversed_kld/js_kld are functionals of the same distribution pair. Token-weighted summaries are descriptive only."
    },
    "bootstrap_iters": 1000,
    "seed": 20260824,
@@ -9763,41 +9348,15 @@
        "reason": "95% CI [+0.002357, +0.020460] excludes 0"
       },
       "role": "exploratory",
-      "p_value_holm": "0x1.773c7a2ae2c20p-5",
+      "p_value_holm": "0x1.7e4d48994a600p-6",
       "holm_significant": true
      },
      "token_weighted": {
       "baseline_mean": "0x1.00aada611f42cp+1",
       "candidate_mean": "0x1.01962357a6a04p+1",
       "delta_candidate_minus_baseline": "0x1.d691ed0ebaf70p-8",
-      "ci_delta": {
-       "method": "paired_token_weighted_bootstrap_bca",
-       "ci_method": "bca",
-       "confidence_level": "0x1.e666666666666p-1",
-       "lower": "-0x1.a91db8c7048f1p-8",
-       "upper": "0x1.a34fe8696f742p-6",
-       "standard_error": "0x1.07b10cadd5686p-7",
-       "bootstrap_iters": 1000,
-       "contains_zero": true
-      },
-      "bootstrap_std": "0x1.020ffccf2ebf8p-7",
-      "p_value": "0x1.1e7eb119a3cfcp-2",
-      "decision": {
-       "verdict": "inconclusive",
-       "statistically_distinguishable_from_null": false,
-       "null_value": "0x0.0p+0",
-       "confidence_level": "0x1.e666666666666p-1",
-       "equivalence_bound": "0x1.a34fe8696f742p-6",
-       "equivalence_margin": null,
-       "equivalence_established": null,
-       "equivalence_alpha": null,
-       "reason": "95% CI [-0.006487, +0.025593] contains 0; the data bound |\u0394| \u2264 0.0255928 and establish nothing tighter"
-      },
-      "role": "exploratory",
-      "p_value_holm": "0x1.1e7eb119a3cfcp-2",
-      "holm_significant": false
-     },
-     "weighting_consensus": "disagree"
+      "role": "descriptive"
+     }
     },
     "kld": {
      "score_direction": "lower_is_better",
@@ -9835,34 +9394,8 @@
       "baseline_mean": "0x1.39edce5e65599p-10",
       "candidate_mean": "0x1.87ff690899566p-10",
       "delta_candidate_minus_baseline": "0x1.38466aa8cff36p-12",
-      "ci_delta": {
-       "method": "paired_token_weighted_bootstrap_bca",
-       "ci_method": "bca",
-       "confidence_level": "0x1.e666666666666p-1",
-       "lower": "0x1.2c5669b1ac50cp-12",
-       "upper": "0x1.4458cdaa0a7d0p-12",
-       "standard_error": "0x1.926fcd622a55ep-18",
-       "bootstrap_iters": 1000,
-       "contains_zero": false
-      },
-      "bootstrap_std": "0x1.8cf1927f168c4p-18",
-      "p_value": "0x1.05e1d27a3ee9cp-9",
-      "decision": {
-       "verdict": "A closer",
-       "statistically_distinguishable_from_null": true,
-       "null_value": "0x0.0p+0",
-       "confidence_level": "0x1.e666666666666p-1",
-       "equivalence_bound": "0x1.4458cdaa0a7d0p-12",
-       "equivalence_margin": "0x1.a36e2eb1c432dp-13",
-       "equivalence_established": false,
-       "equivalence_alpha": "0x1.99999999999a0p-6",
-       "reason": "95% CI [+0.000286, +0.000309] excludes 0"
-      },
-      "role": "exploratory",
-      "p_value_holm": "0x1.a98ef606a63bep-6",
-      "holm_significant": true
-     },
-     "weighting_consensus": "agree"
+      "role": "descriptive"
+     }
     },
     "reversed_kld": {
      "score_direction": "lower_is_better",
@@ -9895,41 +9428,15 @@
        "reason": "95% CI [+0.000313, +0.000334] excludes 0"
       },
       "role": "exploratory",
-      "p_value_holm": "0x1.a98ef606a63bep-6",
+      "p_value_holm": "0x1.88d2bbb75e5eap-7",
       "holm_significant": true
      },
      "token_weighted": {
       "baseline_mean": "0x1.595263016f7c2p-10",
       "candidate_mean": "0x1.af328d230f124p-10",
       "delta_candidate_minus_baseline": "0x1.5780a8867e589p-12",
-      "ci_delta": {
-       "method": "paired_token_weighted_bootstrap_bca",
-       "ci_method": "bca",
-       "confidence_level": "0x1.e666666666666p-1",
-       "lower": "0x1.4a5f0ddd0a58dp-12",
-       "upper": "0x1.64c8156e3ebcap-12",
-       "standard_error": "0x1.baae2eb8c82a6p-18",
-       "bootstrap_iters": 1000,
-       "contains_zero": false
-      },
-      "bootstrap_std": "0x1.b4a3545898cd6p-18",
-      "p_value": "0x1.05e1d27a3ee9cp-9",
-      "decision": {
-       "verdict": "A closer",
-       "statistically_distinguishable_from_null": true,
-       "null_value": "0x0.0p+0",
-       "confidence_level": "0x1.e666666666666p-1",
-       "equivalence_bound": "0x1.64c8156e3ebcap-12",
-       "equivalence_margin": null,
-       "equivalence_established": null,
-       "equivalence_alpha": null,
-       "reason": "95% CI [+0.000315, +0.000340] excludes 0"
-      },
-      "role": "exploratory",
-      "p_value_holm": "0x1.a98ef606a63bep-6",
-      "holm_significant": true
-     },
-     "weighting_consensus": "agree"
+      "role": "descriptive"
+     }
     },
     "js_kld": {
      "score_direction": "lower_is_better",
@@ -9962,41 +9469,15 @@
        "reason": "95% CI [+0.000142, +0.000152] excludes 0"
       },
       "role": "exploratory",
-      "p_value_holm": "0x1.a98ef606a63bep-6",
+      "p_value_holm": "0x1.88d2bbb75e5eap-7",
       "holm_significant": true
      },
      "token_weighted": {
       "baseline_mean": "0x1.39edce5e65599p-11",
       "candidate_mean": "0x1.87ff690899566p-11",
       "delta_candidate_minus_baseline": "0x1.38466aa8cff36p-13",
-      "ci_delta": {
-       "method": "paired_token_weighted_bootstrap_bca",
-       "ci_method": "bca",
-       "confidence_level": "0x1.e666666666666p-1",
-       "lower": "0x1.2c5669b1ac50cp-13",
-       "upper": "0x1.4458cdaa0a7d0p-13",
-       "standard_error": "0x1.926fcd622a55ep-19",
-       "bootstrap_iters": 1000,
-       "contains_zero": false
-      },
-      "bootstrap_std": "0x1.8cf1927f168c4p-19",
-      "p_value": "0x1.05e1d27a3ee9cp-9",
-      "decision": {
-       "verdict": "A closer",
-       "statistically_distinguishable_from_null": true,
-       "null_value": "0x0.0p+0",
-       "confidence_level": "0x1.e666666666666p-1",
-       "equivalence_bound": "0x1.4458cdaa0a7d0p-13",
-       "equivalence_margin": null,
-       "equivalence_established": null,
-       "equivalence_alpha": null,
-       "reason": "95% CI [+0.000143, +0.000155] excludes 0"
-      },
-      "role": "exploratory",
-      "p_value_holm": "0x1.a98ef606a63bep-6",
-      "holm_significant": true
-     },
-     "weighting_consensus": "agree"
+      "role": "descriptive"
+     }
     },
     "ear": {
      "score_direction": "higher_is_better",
@@ -10029,41 +9510,15 @@
        "reason": "95% CI [-0.008030, -0.007836] excludes 0"
       },
       "role": "exploratory",
-      "p_value_holm": "0x1.a98ef606a63bep-6",
+      "p_value_holm": "0x1.1adf1b5d75440p-6",
       "holm_significant": true
      },
      "token_weighted": {
       "baseline_mean": "0x1.f9d0510000000p-1",
       "candidate_mean": "0x1.f5bdbbf92c5f9p-1",
       "delta_candidate_minus_baseline": "-0x1.04a541b4e81bdp-7",
-      "ci_delta": {
-       "method": "paired_token_weighted_bootstrap_bca",
-       "ci_method": "bca",
-       "confidence_level": "0x1.e666666666666p-1",
-       "lower": "-0x1.077d7cf3666e1p-7",
-       "upper": "-0x1.0106dc2b1d60ap-7",
-       "standard_error": "0x1.b2536052b1428p-15",
-       "bootstrap_iters": 1000,
-       "contains_zero": false
-      },
-      "bootstrap_std": "0x1.a49e6eb7f0da5p-15",
-      "p_value": "0x1.05e1d27a3ee9cp-9",
-      "decision": {
-       "verdict": "A closer",
-       "statistically_distinguishable_from_null": true,
-       "null_value": "0x0.0p+0",
-       "confidence_level": "0x1.e666666666666p-1",
-       "equivalence_bound": "0x1.077d7cf3666e1p-7",
-       "equivalence_margin": null,
-       "equivalence_established": null,
-       "equivalence_alpha": null,
-       "reason": "95% CI [-0.008041, -0.007844] excludes 0"
-      },
-      "role": "exploratory",
-      "p_value_holm": "0x1.a98ef606a63bep-6",
-      "holm_significant": true
-     },
-     "weighting_consensus": "agree"
+      "role": "descriptive"
+     }
     },
     "same_top_rate": {
      "score_direction": "higher_is_better",
@@ -10097,42 +9552,15 @@
        "reason": "95% CI [-0.002000, -0.002000] excludes 0"
       },
       "role": "exploratory",
-      "p_value_holm": "0x1.a98ef606a63bep-6",
+      "p_value_holm": "0x1.88d2bbb75e5eap-7",
       "holm_significant": true
      },
      "token_weighted": {
       "baseline_mean": "0x1.fbf0d83c65133p-1",
       "candidate_mean": "0x1.faeab35f35f89p-1",
       "delta_candidate_minus_baseline": "-0x1.0624dd2f1aa00p-9",
-      "ci_delta": {
-       "method": "paired_token_weighted_bootstrap_percentile",
-       "ci_method": "percentile",
-       "confidence_level": "0x1.e666666666666p-1",
-       "lower": "-0x1.0624dd2f1aa01p-9",
-       "upper": "-0x1.0624dd2f1a9ffp-9",
-       "standard_error": "0x0.0p+0",
-       "bootstrap_iters": 1000,
-       "contains_zero": false,
-       "fallback": "degenerate sample (no usable bias correction or acceleration); percentile interval used instead"
-      },
-      "bootstrap_std": "0x1.335a8d15ecc6bp-63",
-      "p_value": "0x1.05e1d27a3ee9cp-9",
-      "decision": {
-       "verdict": "A closer",
-       "statistically_distinguishable_from_null": true,
-       "null_value": "0x0.0p+0",
-       "confidence_level": "0x1.e666666666666p-1",
-       "equivalence_bound": "0x1.0624dd2f1aa01p-9",
-       "equivalence_margin": null,
-       "equivalence_established": null,
-       "equivalence_alpha": null,
-       "reason": "95% CI [-0.002000, -0.002000] excludes 0"
-      },
-      "role": "exploratory",
-      "p_value_holm": "0x1.a98ef606a63bep-6",
-      "holm_significant": true
-     },
-     "weighting_consensus": "agree"
+      "role": "descriptive"
+     }
     },
     "mse_dp": {
      "score_direction": "lower_is_better",
@@ -10165,41 +9593,15 @@
        "reason": "95% CI [+0.015394, +0.026436] excludes 0"
       },
       "role": "exploratory",
-      "p_value_holm": "0x1.1eb9f672f7c80p-5",
+      "p_value_holm": "0x1.7e4d48994a600p-6",
       "holm_significant": true
      },
      "token_weighted": {
       "baseline_mean": "0x1.57e78ffb1029ap-3",
       "candidate_mean": "0x1.8b70abaf5bb0bp-3",
       "delta_candidate_minus_baseline": "0x1.9c48dda25c38ep-6",
-      "ci_delta": {
-       "method": "paired_token_weighted_bootstrap_bca",
-       "ci_method": "bca",
-       "confidence_level": "0x1.e666666666666p-1",
-       "lower": "0x1.6d071e420faadp-6",
-       "upper": "0x1.d9cdb08b8ff30p-6",
-       "standard_error": "0x1.b92ca99deb84cp-10",
-       "bootstrap_iters": 1000,
-       "contains_zero": false
-      },
-      "bootstrap_std": "0x1.b2ce85f8a2615p-10",
-      "p_value": "0x1.05e1d27a3ee9cp-9",
-      "decision": {
-       "verdict": "A closer",
-       "statistically_distinguishable_from_null": true,
-       "null_value": "0x0.0p+0",
-       "confidence_level": "0x1.e666666666666p-1",
-       "equivalence_bound": "0x1.d9cdb08b8ff30p-6",
-       "equivalence_margin": null,
-       "equivalence_established": null,
-       "equivalence_alpha": null,
-       "reason": "95% CI [+0.022280, +0.028919] excludes 0"
-      },
-      "role": "exploratory",
-      "p_value_holm": "0x1.a98ef606a63bep-6",
-      "holm_significant": true
-     },
-     "weighting_consensus": "agree"
+      "role": "descriptive"
+     }
     },
     "ppl": {
      "source_metric": "nll",
@@ -10217,12 +9619,8 @@
       "baseline_ppl": "0x1.db5f2a3a764efp+2",
       "candidate_ppl": "0x1.decc1ef2c0c62p+2",
       "delta_ppl_b_minus_a": "0x1.b67a5c253b980p-5",
-      "decision": {
-       "verdict": "(linked to nll.token_weighted above)",
-       "linked_to": "nll.token_weighted"
-      }
-     },
-     "weighting_consensus": "disagree"
+      "role": "descriptive"
+     }
     },
     "ppl_ratio": {
      "source_metric": "nll",
@@ -10245,21 +9643,8 @@
      },
      "token_weighted": {
       "estimate": "0x1.01d843749ad3dp+0",
-      "ci": {
-       "method": "paired_token_weighted_bootstrap_bca",
-       "ci_method": "bca",
-       "confidence_level": "0x1.e666666666666p-1",
-       "lower": "0x1.fcb084fc01c5dp-1",
-       "upper": "0x1.06a2e543a075ap+0",
-       "bootstrap_iters": 1000,
-       "contains_one": true
-      },
-      "decision": {
-       "verdict": "(linked to nll.token_weighted above)",
-       "linked_to": "nll.token_weighted"
-      }
-     },
-     "weighting_consensus": "disagree"
+      "role": "descriptive"
+     }
     },
     "rms_dp": {
      "source_metric": "mse_dp",
@@ -10277,12 +9662,8 @@
       "baseline_rms": "0x1.a39e2a3b4170bp-2",
       "candidate_rms": "0x1.c1f6241f26e37p-2",
       "delta_rms_b_minus_a": "0x1.e57f9e3e572c0p-6",
-      "decision": {
-       "verdict": "(linked to mse_dp.token_weighted above)",
-       "linked_to": "mse_dp.token_weighted"
-      }
-     },
-     "weighting_consensus": "agree"
+      "role": "descriptive"
+     }
     }
    },
    "candidate_metrics": {
@@ -14543,7 +13924,7 @@
    }
   },
   "percentile": {
-   "schema_version": "vlm-paired-compare-v3",
+   "schema_version": "vlm-paired-compare-v4",
    "n_items": 16,
    "confidence_level": "0x1.e666666666666p-1",
    "ci_method": "percentile",
@@ -14554,9 +13935,9 @@
      "equivalence_margin": "0x1.a36e2eb1c432dp-13"
     },
     "correction": "holm_bonferroni",
-    "family_size": 13,
+    "family_size": 6,
     "alpha": "0x1.99999999999a0p-5",
-    "policy": "One confirmatory endpoint whose interval spends the whole alpha; every other metric x weighting cell is exploratory and carries a Holm-Bonferroni-adjusted p-value over the remaining 13 cells. Holm controls the family-wise error rate under arbitrary dependence, which this family needs: the two weightings are views of the same numbers and kld/reversed_kld/js_kld are functionals of the same distribution pair."
+    "policy": "One confirmatory endpoint whose interval spends the whole alpha; every other item-weighted endpoint is exploratory and carries a Holm-Bonferroni-adjusted p-value over the remaining 6 cells. Holm controls the family-wise error rate under arbitrary dependence: kld/reversed_kld/js_kld are functionals of the same distribution pair. Token-weighted summaries are descriptive only."
    },
    "bootstrap_iters": 1000,
    "seed": 20260824,
@@ -14594,41 +13975,15 @@
        "reason": "95% CI [+0.002366, +0.020595] excludes 0"
       },
       "role": "exploratory",
-      "p_value_holm": "0x1.6816816816817p-5",
+      "p_value_holm": "0x1.6816816816817p-6",
       "holm_significant": true
      },
      "token_weighted": {
       "baseline_mean": "0x1.00aada611f42cp+1",
       "candidate_mean": "0x1.01962357a6a04p+1",
       "delta_candidate_minus_baseline": "0x1.d691ed0ebaf70p-8",
-      "ci_delta": {
-       "method": "paired_token_weighted_bootstrap_percentile",
-       "ci_method": "percentile",
-       "confidence_level": "0x1.e666666666666p-1",
-       "lower": "-0x1.dd1304e2cd39ep-8",
-       "upper": "0x1.7cb4080e602bep-6",
-       "standard_error": "0x1.07b10cadd5686p-7",
-       "bootstrap_iters": 1000,
-       "contains_zero": true
-      },
-      "bootstrap_std": "0x1.020ffccf2ebf8p-7",
-      "p_value": "0x1.6c2e08b1ff7d1p-2",
-      "decision": {
-       "verdict": "inconclusive",
-       "statistically_distinguishable_from_null": false,
-       "null_value": "0x0.0p+0",
-       "confidence_level": "0x1.e666666666666p-1",
-       "equivalence_bound": "0x1.7cb4080e602bep-6",
-       "equivalence_margin": null,
-       "equivalence_established": null,
-       "equivalence_alpha": null,
-       "reason": "95% CI [-0.007280, +0.023236] contains 0; the data bound |\u0394| \u2264 0.0232363 and establish nothing tighter"
-      },
-      "role": "exploratory",
-      "p_value_holm": "0x1.6c2e08b1ff7d1p-2",
-      "holm_significant": false
-     },
-     "weighting_consensus": "disagree"
+      "role": "descriptive"
+     }
     },
     "kld": {
      "score_direction": "lower_is_better",
@@ -14666,34 +14021,8 @@
       "baseline_mean": "0x1.39edce5e65599p-10",
       "candidate_mean": "0x1.87ff690899566p-10",
       "delta_candidate_minus_baseline": "0x1.38466aa8cff36p-12",
-      "ci_delta": {
-       "method": "paired_token_weighted_bootstrap_percentile",
-       "ci_method": "percentile",
-       "confidence_level": "0x1.e666666666666p-1",
-       "lower": "0x1.2b5d23cd87b47p-12",
-       "upper": "0x1.4356ed171bfd3p-12",
-       "standard_error": "0x1.926fcd622a55ep-18",
-       "bootstrap_iters": 1000,
-       "contains_zero": false
-      },
-      "bootstrap_std": "0x1.8cf1927f168c4p-18",
-      "p_value": "0x1.05e1d27a3ee9cp-9",
-      "decision": {
-       "verdict": "A closer",
-       "statistically_distinguishable_from_null": true,
-       "null_value": "0x0.0p+0",
-       "confidence_level": "0x1.e666666666666p-1",
-       "equivalence_bound": "0x1.4356ed171bfd3p-12",
-       "equivalence_margin": "0x1.a36e2eb1c432dp-13",
-       "equivalence_established": false,
-       "equivalence_alpha": "0x1.99999999999a0p-6",
-       "reason": "95% CI [+0.000285, +0.000308] excludes 0"
-      },
-      "role": "exploratory",
-      "p_value_holm": "0x1.a98ef606a63bep-6",
-      "holm_significant": true
-     },
-     "weighting_consensus": "agree"
+      "role": "descriptive"
+     }
     },
     "reversed_kld": {
      "score_direction": "lower_is_better",
@@ -14726,41 +14055,15 @@
        "reason": "95% CI [+0.000312, +0.000333] excludes 0"
       },
       "role": "exploratory",
-      "p_value_holm": "0x1.a98ef606a63bep-6",
+      "p_value_holm": "0x1.88d2bbb75e5eap-7",
       "holm_significant": true
      },
      "token_weighted": {
       "baseline_mean": "0x1.595263016f7c2p-10",
       "candidate_mean": "0x1.af328d230f124p-10",
       "delta_candidate_minus_baseline": "0x1.5780a8867e589p-12",
-      "ci_delta": {
-       "method": "paired_token_weighted_bootstrap_percentile",
-       "ci_method": "percentile",
-       "confidence_level": "0x1.e666666666666p-1",
-       "lower": "0x1.494cda954879bp-12",
-       "upper": "0x1.63ac6b3305302p-12",
-       "standard_error": "0x1.baae2eb8c82a6p-18",
-       "bootstrap_iters": 1000,
-       "contains_zero": false
-      },
-      "bootstrap_std": "0x1.b4a3545898cd6p-18",
-      "p_value": "0x1.05e1d27a3ee9cp-9",
-      "decision": {
-       "verdict": "A closer",
-       "statistically_distinguishable_from_null": true,
-       "null_value": "0x0.0p+0",
-       "confidence_level": "0x1.e666666666666p-1",
-       "equivalence_bound": "0x1.63ac6b3305302p-12",
-       "equivalence_margin": null,
-       "equivalence_established": null,
-       "equivalence_alpha": null,
-       "reason": "95% CI [+0.000314, +0.000339] excludes 0"
-      },
-      "role": "exploratory",
-      "p_value_holm": "0x1.a98ef606a63bep-6",
-      "holm_significant": true
-     },
-     "weighting_consensus": "agree"
+      "role": "descriptive"
+     }
     },
     "js_kld": {
      "score_direction": "lower_is_better",
@@ -14793,41 +14096,15 @@
        "reason": "95% CI [+0.000142, +0.000151] excludes 0"
       },
       "role": "exploratory",
-      "p_value_holm": "0x1.a98ef606a63bep-6",
+      "p_value_holm": "0x1.88d2bbb75e5eap-7",
       "holm_significant": true
      },
      "token_weighted": {
       "baseline_mean": "0x1.39edce5e65599p-11",
       "candidate_mean": "0x1.87ff690899566p-11",
       "delta_candidate_minus_baseline": "0x1.38466aa8cff36p-13",
-      "ci_delta": {
-       "method": "paired_token_weighted_bootstrap_percentile",
-       "ci_method": "percentile",
-       "confidence_level": "0x1.e666666666666p-1",
-       "lower": "0x1.2b5d23cd87b47p-13",
-       "upper": "0x1.4356ed171bfd3p-13",
-       "standard_error": "0x1.926fcd622a55ep-19",
-       "bootstrap_iters": 1000,
-       "contains_zero": false
-      },
-      "bootstrap_std": "0x1.8cf1927f168c4p-19",
-      "p_value": "0x1.05e1d27a3ee9cp-9",
-      "decision": {
-       "verdict": "A closer",
-       "statistically_distinguishable_from_null": true,
-       "null_value": "0x0.0p+0",
-       "confidence_level": "0x1.e666666666666p-1",
-       "equivalence_bound": "0x1.4356ed171bfd3p-13",
-       "equivalence_margin": null,
-       "equivalence_established": null,
-       "equivalence_alpha": null,
-       "reason": "95% CI [+0.000143, +0.000154] excludes 0"
-      },
-      "role": "exploratory",
-      "p_value_holm": "0x1.a98ef606a63bep-6",
-      "holm_significant": true
-     },
-     "weighting_consensus": "agree"
+      "role": "descriptive"
+     }
     },
     "ear": {
      "score_direction": "higher_is_better",
@@ -14860,41 +14137,15 @@
        "reason": "95% CI [-0.008042, -0.007854] excludes 0"
       },
       "role": "exploratory",
-      "p_value_holm": "0x1.a98ef606a63bep-6",
+      "p_value_holm": "0x1.88d2bbb75e5eap-7",
       "holm_significant": true
      },
      "token_weighted": {
       "baseline_mean": "0x1.f9d0510000000p-1",
       "candidate_mean": "0x1.f5bdbbf92c5f9p-1",
       "delta_candidate_minus_baseline": "-0x1.04a541b4e81bdp-7",
-      "ci_delta": {
-       "method": "paired_token_weighted_bootstrap_percentile",
-       "ci_method": "percentile",
-       "confidence_level": "0x1.e666666666666p-1",
-       "lower": "-0x1.07a0db75d2f54p-7",
-       "upper": "-0x1.013394a9968a3p-7",
-       "standard_error": "0x1.b2536052b1428p-15",
-       "bootstrap_iters": 1000,
-       "contains_zero": false
-      },
-      "bootstrap_std": "0x1.a49e6eb7f0da5p-15",
-      "p_value": "0x1.05e1d27a3ee9cp-9",
-      "decision": {
-       "verdict": "A closer",
-       "statistically_distinguishable_from_null": true,
-       "null_value": "0x0.0p+0",
-       "confidence_level": "0x1.e666666666666p-1",
-       "equivalence_bound": "0x1.07a0db75d2f54p-7",
-       "equivalence_margin": null,
-       "equivalence_established": null,
-       "equivalence_alpha": null,
-       "reason": "95% CI [-0.008045, -0.007849] excludes 0"
-      },
-      "role": "exploratory",
-      "p_value_holm": "0x1.a98ef606a63bep-6",
-      "holm_significant": true
-     },
-     "weighting_consensus": "agree"
+      "role": "descriptive"
+     }
     },
     "same_top_rate": {
      "score_direction": "higher_is_better",
@@ -14927,41 +14178,15 @@
        "reason": "95% CI [-0.002000, -0.002000] excludes 0"
       },
       "role": "exploratory",
-      "p_value_holm": "0x1.a98ef606a63bep-6",
+      "p_value_holm": "0x1.88d2bbb75e5eap-7",
       "holm_significant": true
      },
      "token_weighted": {
       "baseline_mean": "0x1.fbf0d83c65133p-1",
       "candidate_mean": "0x1.faeab35f35f89p-1",
       "delta_candidate_minus_baseline": "-0x1.0624dd2f1aa00p-9",
-      "ci_delta": {
-       "method": "paired_token_weighted_bootstrap_percentile",
-       "ci_method": "percentile",
-       "confidence_level": "0x1.e666666666666p-1",
-       "lower": "-0x1.0624dd2f1aa01p-9",
-       "upper": "-0x1.0624dd2f1a9ffp-9",
-       "standard_error": "0x0.0p+0",
-       "bootstrap_iters": 1000,
-       "contains_zero": false
-      },
-      "bootstrap_std": "0x1.335a8d15ecc6bp-63",
-      "p_value": "0x1.05e1d27a3ee9cp-9",
-      "decision": {
-       "verdict": "A closer",
-       "statistically_distinguishable_from_null": true,
-       "null_value": "0x0.0p+0",
-       "confidence_level": "0x1.e666666666666p-1",
-       "equivalence_bound": "0x1.0624dd2f1aa01p-9",
-       "equivalence_margin": null,
-       "equivalence_established": null,
-       "equivalence_alpha": null,
-       "reason": "95% CI [-0.002000, -0.002000] excludes 0"
-      },
-      "role": "exploratory",
-      "p_value_holm": "0x1.a98ef606a63bep-6",
-      "holm_significant": true
-     },
-     "weighting_consensus": "agree"
+      "role": "descriptive"
+     }
     },
     "mse_dp": {
      "score_direction": "lower_is_better",
@@ -14994,41 +14219,15 @@
        "reason": "95% CI [+0.017637, +0.027025] excludes 0"
       },
       "role": "exploratory",
-      "p_value_holm": "0x1.a98ef606a63bep-6",
+      "p_value_holm": "0x1.88d2bbb75e5eap-7",
       "holm_significant": true
      },
      "token_weighted": {
       "baseline_mean": "0x1.57e78ffb1029ap-3",
       "candidate_mean": "0x1.8b70abaf5bb0bp-3",
       "delta_candidate_minus_baseline": "0x1.9c48dda25c38ep-6",
-      "ci_delta": {
-       "method": "paired_token_weighted_bootstrap_percentile",
-       "ci_method": "percentile",
-       "confidence_level": "0x1.e666666666666p-1",
-       "lower": "0x1.656a95bb134b8p-6",
-       "upper": "0x1.cfd9f5ef8ff40p-6",
-       "standard_error": "0x1.b92ca99deb84cp-10",
-       "bootstrap_iters": 1000,
-       "contains_zero": false
-      },
-      "bootstrap_std": "0x1.b2ce85f8a2615p-10",
-      "p_value": "0x1.05e1d27a3ee9cp-9",
-      "decision": {
-       "verdict": "A closer",
-       "statistically_distinguishable_from_null": true,
-       "null_value": "0x0.0p+0",
-       "confidence_level": "0x1.e666666666666p-1",
-       "equivalence_bound": "0x1.cfd9f5ef8ff40p-6",
-       "equivalence_margin": null,
-       "equivalence_established": null,
-       "equivalence_alpha": null,
-       "reason": "95% CI [+0.021815, +0.028311] excludes 0"
-      },
-      "role": "exploratory",
-      "p_value_holm": "0x1.a98ef606a63bep-6",
-      "holm_significant": true
-     },
-     "weighting_consensus": "agree"
+      "role": "descriptive"
+     }
     },
     "ppl": {
      "source_metric": "nll",
@@ -15046,12 +14245,8 @@
       "baseline_ppl": "0x1.db5f2a3a764efp+2",
       "candidate_ppl": "0x1.decc1ef2c0c62p+2",
       "delta_ppl_b_minus_a": "0x1.b67a5c253b980p-5",
-      "decision": {
-       "verdict": "(linked to nll.token_weighted above)",
-       "linked_to": "nll.token_weighted"
-      }
-     },
-     "weighting_consensus": "disagree"
+      "role": "descriptive"
+     }
     },
     "ppl_ratio": {
      "source_metric": "nll",
@@ -15074,21 +14269,8 @@
      },
      "token_weighted": {
       "estimate": "0x1.01d843749ad3dp+0",
-      "ci": {
-       "method": "paired_token_weighted_bootstrap_percentile",
-       "ci_method": "percentile",
-       "confidence_level": "0x1.e666666666666p-1",
-       "lower": "0x1.fc4950ded6107p-1",
-       "upper": "0x1.0604a4a101ceep+0",
-       "bootstrap_iters": 1000,
-       "contains_one": true
-      },
-      "decision": {
-       "verdict": "(linked to nll.token_weighted above)",
-       "linked_to": "nll.token_weighted"
-      }
-     },
-     "weighting_consensus": "disagree"
+      "role": "descriptive"
+     }
     },
     "rms_dp": {
      "source_metric": "mse_dp",
@@ -15106,12 +14288,8 @@
       "baseline_rms": "0x1.a39e2a3b4170bp-2",
       "candidate_rms": "0x1.c1f6241f26e37p-2",
       "delta_rms_b_minus_a": "0x1.e57f9e3e572c0p-6",
-      "decision": {
-       "verdict": "(linked to mse_dp.token_weighted above)",
-       "linked_to": "mse_dp.token_weighted"
-      }
-     },
-     "weighting_consensus": "agree"
+      "role": "descriptive"
+     }
     }
    },
    "candidate_metrics": {
@@ -19373,6 +18551,6 @@
   }
  },
  "markdown": {
-  "default": "# Paired comparison: A (a) vs B (b)\n\n- Items compared: 16   |   95% CI via paired Student-t (df = n - 1, no bootstrap)\n- Protocol: teacher-forced on the dataset's stored model-generated answer trajectory; KLD/JSD/EAR over full vocab; answer positions only.\n\n- Reference (FP teacher): F16\n\n## Reference corpus likelihood (F16)\n\n| weighting | mean nll_ref (nats) | PPL(reference) |\n| --------- | ------------------: | -------------: |\n| item      |            1.962383 |       7.116268 |\n| token     |            1.985214 |       7.280605 |\n\nReference likelihood on the same stored target tokens, using uncompressed VLMK NLL values. The reference is evaluated in each collection; the JSON's `max_abs_side_difference` (0) records the observed agreement.\n\n## Verdict summary\n\n| endpoint              | verdict  | inference scope             |\n| --------------------- | -------- | --------------------------- |\n| kld (item)            | A closer | primary (confirmatory)      |\n| kld (token)           | A closer | exploratory (survives Holm) |\n| reversed_kld (item)   | A closer | exploratory (survives Holm) |\n| reversed_kld (token)  | A closer | exploratory (survives Holm) |\n| js_kld (item)         | A closer | exploratory (survives Holm) |\n| js_kld (token)        | A closer | exploratory (survives Holm) |\n| ear (item)            | A closer | exploratory (survives Holm) |\n| ear (token)           | A closer | exploratory (survives Holm) |\n| same_top_rate (item)  | A closer | exploratory (survives Holm) |\n| same_top_rate (token) | A closer | exploratory (survives Holm) |\n| mse_dp (item)         | A closer | exploratory (survives Holm) |\n| mse_dp (token)        | A closer | exploratory (survives Holm) |\n\nEverything that is not listed here is either inconclusive or did not survive the family-wise correction; the full grid is below.\n\n## Results\n\nverdict reads the paired CI of (b \u2212 a); do NOT compare per-model means independently.\n\n**\u2605 = the one confirmatory endpoint** (`kld`, item-weighted). Its 95% CI is the report's claim and spends the whole \u03b1. Every other row is **exploratory**: its `p (Holm)` is the Holm\u2013Bonferroni-adjusted p-value across the other 13 cells (`\u2713` = survives at \u03b1, `\u00b7` = does not), and only a `\u2713` row supports a claim of its own. Reading the raw per-cell verdicts as 14 independent tests is what produced a measured family-wise false-positive rate of 0.35 on exchangeable A/B data.\n\n| metric                   | weighting |    a mean |    b mean | b \u2212 a (or b \u00f7 a) | 95% CI                 |            p (Holm) | verdict                              |\n| ------------------------ | --------- | --------: | --------: | ---------------: | ---------------------- | ------------------: | ------------------------------------ |\n| nll                      | item      |  1.982383 |  1.993839 |        +0.011455 | [+0.001119, +0.021792] |           0.06423 \u00b7 | A closer                             |\n| nll                      | token     |  2.005214 |  2.012394 |        +0.007180 | [-0.009972, +0.024333] |            0.3863 \u00b7 | inconclusive                         |\n| entropy (nats)           | item      |  1.797208 |  1.807208 |                \u2014 | \u2014                      |                   \u2014 | candidate-only; not compared         |\n| entropy (nats)           | token     |  1.800418 |  1.810418 |                \u2014 | \u2014                      |                   \u2014 | candidate-only; not compared         |\n| mean_dp (pp, signed)     | item      | -0.050021 | -0.128701 |                \u2014 | \u2014                      |                   \u2014 | candidate-only; not compared         |\n| mean_dp (pp, signed)     | token     | -0.050419 | -0.127583 |                \u2014 | \u2014                      |                   \u2014 | candidate-only; not compared         |\n| \u2605 kld                    | item      |  0.001179 |  0.001472 |        +0.000293 | [+0.000283, +0.000304] | 2.181e-19 (primary) | A closer                             |\n| kld                      | token     |  0.001198 |  0.001495 |        +0.000298 | [+0.000285, +0.000311] |         3.263e-17 \u2713 | A closer                             |\n| reversed_kld             | item      |  0.001297 |  0.001620 |        +0.000323 | [+0.000311, +0.000334] |         1.963e-18 \u2713 | A closer                             |\n| reversed_kld             | token     |  0.001317 |  0.001645 |        +0.000328 | [+0.000314, +0.000342] |         3.263e-17 \u2713 | A closer                             |\n| js_kld                   | item      |  0.000590 |  0.000736 |        +0.000147 | [+0.000142, +0.000152] |         1.963e-18 \u2713 | A closer                             |\n| js_kld                   | token     |  0.000599 |  0.000748 |        +0.000149 | [+0.000143, +0.000155] |         3.263e-17 \u2713 | A closer                             |\n| ear                      | item      |  0.987985 |  0.980035 |        -0.007950 | [-0.008056, -0.007843] |         1.377e-24 \u2713 | A closer                             |\n| ear                      | token     |  0.987917 |  0.979963 |        -0.007954 | [-0.008065, -0.007844] |         2.129e-24 \u2713 | A closer                             |\n| same_top_rate            | item      |  0.992669 |  0.990669 |        -0.002000 | [-0.002000, -0.002000] |                 0 \u2713 | A closer                             |\n| same_top_rate            | token     |  0.992072 |  0.990072 |        -0.002000 | [-0.002000, -0.002000] |                 0 \u2713 | A closer                             |\n| mse_dp                   | item      |  0.170461 |  0.193325 |        +0.022864 | [+0.017536, +0.028193] |         4.783e-07 \u2713 | A closer                             |\n| mse_dp                   | token     |  0.167922 |  0.193086 |        +0.025164 | [+0.021577, +0.028751] |         8.122e-10 \u2713 | A closer                             |\n| ppl (a, b = exp(nll))    | item      |  7.260026 |  7.343670 |        +0.083644 | (see ppl_ratio)        |                   \u2014 | (linked to nll.item_weighted above)  |\n| ppl (a, b = exp(nll))    | token     |  7.427683 |  7.481209 |        +0.053525 | (see ppl_ratio)        |                   \u2014 | (linked to nll.token_weighted above) |\n| ppl_ratio (\u2261 exp(nll \u0394)) | item      |         \u2014 |         \u2014 |       \u00d7 1.011521 | [\u00d7 1.001119, 1.022031] |                   \u2014 | (linked to nll.item_weighted above)  |\n| ppl_ratio (\u2261 exp(nll \u0394)) | token     |         \u2014 |         \u2014 |       \u00d7 1.007206 | [\u00d7 0.990078, 1.024631] |                   \u2014 | (linked to nll.token_weighted above) |\n\nnote: weighting verdicts disagree on 1 metric(s):\n  - nll: item = A closer, token = inconclusive\nnote: small sample (n_items = 16 < 30). No interval construction reaches its nominal coverage on right-skewed per-item deltas at this size (measured ~0.90 for a nominal 0.95 at n = 25, skew 6, for the t and bootstrap-t intervals alike), and the misses sit on one side: the interval tends to understate the damage of rare catastrophic items. The real \u03b1 is above the stated one.\nnote: `inconclusive` means the interval contains 0 \u2014 NOT that the two candidates are equivalent. Each such row's `reason` carries the tightest margin its own interval does rule out; pass --equivalence-margin to have the primary metric tested for equivalence at a margin you choose (interval-inclusion TOST).\nnote: mse_dp is in pp\u00b2 (percentage-points squared); rms_dp (pp) is shown with --show-diagnostic-metrics.\nnote: ppl = exp(mean nll) per model (item/token-weighted); its tested change is ppl_ratio (b \u00f7 a), not the raw \u0394PPL.\nnote: ear = Expected Acceptance Rate (arXiv:2605.02404): per position \u03a3_v min(p_ref, p_cand) = 1 \u2212 TV distance over the full vocab; EAR 0.99 \u21d2 the two models emit the same token 99% of the time under optimal coupling. Higher is better.\n\n## Answer-position strata (exploratory)\n\nPer-item means restricted to each answer-position range, tested with the same paired ITEM bootstrap (an item contributes the mean of its own positions in the bucket; items that never reach a bucket are dropped from it).\n\nThis exists because the effect is not spread evenly over the answer: the mmproj F16-vs-Q8_0 signal measured on this data sits in the **first ~32 answer tokens** and decays more than 10\u00d7 after, while the default eval cap is 1024 \u2014 so a single item-mean over all positions dilutes a vision effect by roughly 30\u00d7. Capping the run shorter throws the rest of the data away; stratifying keeps it.\n\nThe strata were chosen from prior measurements on this data, so every row here is **exploratory**: `p (Holm)` is adjusted within this family only, and these rows never carry the confirmatory endpoint's \u03b1.\n\n| metric | positions | items |     a = A |     b = B |     b \u2212 a | 95% CI                 |    p (Holm) | verdict  |\n| ------ | --------- | ----: | --------: | --------: | --------: | ---------------------- | ----------: | -------- |\n| kld    | 0-32      |    16 |  0.001177 |  0.001468 | +0.000292 | [+0.000279, +0.000304] | 5.117e-17 \u2713 | A closer |\n| kld    | 32-256    |    13 |  0.001134 |  0.001420 | +0.000286 | [+0.000262, +0.000310] | 4.281e-11 \u2713 | A closer |\n| kld    | 256+      |     3 |  0.001205 |  0.001534 | +0.000329 | [+0.000313, +0.000345] | 0.0002583 \u2713 | A closer |\n| ear    | 0-32      |    16 |  0.988169 |  0.980290 | -0.007878 | [-0.008051, -0.007706] | 1.769e-21 \u2713 | A closer |\n| ear    | 32-256    |    13 |  0.988229 |  0.979891 | -0.008338 | [-0.009064, -0.007611] | 6.119e-11 \u2713 | A closer |\n| ear    | 256+      |     3 |  0.987624 |  0.979564 | -0.008061 | [-0.008188, -0.007934] | 4.023e-05 \u2713 | A closer |\n| dp     | 0-32      |    16 | -0.028239 | -0.108848 | -0.080609 | [-0.090773, -0.070445] | 1.776e-10 \u2713 | A closer |\n| dp     | 32-256    |    13 | -0.084576 | -0.166349 | -0.081773 | [-0.092661, -0.070886] | 5.721e-09 \u2713 | A closer |\n| dp     | 256+      |     3 | -0.095805 | -0.159060 | -0.063255 | [-0.101826, -0.024684] |    0.0195 \u2713 | A closer |\n\n## Per-item KLD tails (exploratory \u2014 own Holm family)\n\nEach item's OWN p99 / p99.9 / maximum of its per-token KLD, with the answer position (and target token id) it occurred at, so a bad tail can be traced to the token that produced it. The quantile convention is the pooled ladder's (linear interpolation between neighbouring order statistics) applied to one item at a time; `max` is exact.\n\nAcross items each level is a per-item scalar and is tested with the same paired statistics as the mean metrics (unit: the item), but these rows are **exploratory**: a per-item maximum is a single-token statistic, far heavier-tailed than a mean, so its interval reaches nominal coverage later; `p (Holm)` is adjusted within this family only and never borrows the confirmatory endpoint's \u03b1. `on top-2` counts the items too short for that level to interpolate anywhere but between their two largest tokens (p99 needs > 100 positions, p99.9 > 1000) \u2014 for them the level is the max in all but name.\n\n| metric | level | items | on top-2 |    a = A |    b = B |     b \u2212 a | 95% CI                 |    p (Holm) | verdict  |\n| ------ | ----- | ----: | -------: | -------: | -------: | --------: | ---------------------- | ----------: | -------- |\n| kld    | p99   |    16 |        9 | 0.002021 | 0.002520 | +0.000499 | [+0.000458, +0.000540] |     2e-13 \u2713 | A closer |\n| kld    | p99.9 |    16 |       16 | 0.002167 | 0.002718 | +0.000550 | [+0.000492, +0.000609] |  6.29e-12 \u2713 | A closer |\n| kld    | max   |    16 |        \u2014 | 0.002181 | 0.002741 | +0.000560 | [+0.000494, +0.000625] | 1.203e-11 \u2713 | A closer |\n\nWorst 10 of 16 items by per-item max `kld` (either candidate); every item is in the JSON under `per_item_tails`:\n\n| item       | positions | a max @pos    | b max @pos    | b \u2212 a (max) | a p99 @pos    | b p99 @pos    |\n| ---------- | --------: | ------------- | ------------- | ----------: | ------------- | ------------- |\n| 013_item13 |       300 | 0.002826 @194 | 0.003699 @194 |   +0.000873 | 0.002265 @108 | 0.002914 @266 |\n| 009_item9  |       200 | 0.002575 @154 | 0.00319 @154  |   +0.000614 | 0.002243 @69  | 0.002766 @62  |\n| 012_item12 |       280 | 0.002485 @138 | 0.003176 @138 |   +0.000691 | 0.002299 @111 | 0.002866 @130 |\n| 006_item6  |        90 | 0.002582 @65  | 0.003142 @65  |   +0.000560 | 0.002045 @58  | 0.002576 @58  |\n| 010_item10 |       240 | 0.002249 @137 | 0.002913 @31  |   +0.000663 | 0.002099 @34  | 0.00258 @59   |\n| 007_item7  |       120 | 0.002197 @6   | 0.002766 @6   |   +0.000569 | 0.002001 @28  | 0.00243 @28   |\n| 001_item1  |        18 | 0.002059 @4   | 0.002671 @13  |   +0.000612 | 0.002044 @4   | 0.002661 @13  |\n| 005_item5  |        64 | 0.002041 @60  | 0.002669 @60  |   +0.000627 | 0.001929 @10  | 0.002537 @10  |\n| 003_item3  |        33 | 0.002195 @8   | 0.002588 @8   |   +0.000393 | 0.002142 @8   | 0.002567 @8   |\n| 011_item11 |       260 | 0.002055 @231 | 0.002585 @231 |   +0.000530 | 0.001871 @107 | 0.002355 @233 |\n\n## Per-token distributions (pooled tokens \u2014 NO bootstrap, NO CI)\n\n1950 token(s) from 16 item(s), flattened across items into ONE multiset \u2014 the llama-perplexity `--kl-divergence` scale and convention (linear interpolation between neighbouring order statistics).\n\nThese rows are **descriptive statistics with no confidence interval, no bootstrap and no verdict**. The pooled maximum has no consistent nonparametric bootstrap \u2014 a resample can only contain a subset of the observed items, so its replicate distribution is degenerate (measured coverage 0.86\u20130.89 against a nominal 0.95, and *worsening* as items are added) \u2014 and the far quantiles rest on too few tokens to support one either. Confirmatory inference lives on the mean metrics above; the bold rows are the degradation tail.\n\n`witness` names the pooled token whose value the (interpolated) quantile is nearest to, as `item@position`; `position` is 0-based among that item's scored answer positions, after any compare-time `--num-eval-tokens` cap. Ties resolve to the earliest item/position, so witnesses are reproducible across runs and `--jobs`.\n\n### KLD\n\nforward KL(p_ref \u2016 p_cand) at each scored answer position, nats. Lower is better, so the degradation tail is the HIGH end: 99.0% / 99.9% / Maximum. At the BOTTOM of the ladder the values are at the floating-point noise floor \u2014 where the two distributions are all but identical the double-precision sum of signed per-slot terms can land a few ulp below zero, and the float32 store keeps it there. A tiny negative minimum is that floor, not a broken metric; it is left unclamped because clamping would hide it.\n\n| level       |       a = A | witness (a)    |       b = B | witness (b)    |     b \u2212 a |\n| ----------- | ----------: | -------------- | ----------: | -------------- | --------: |\n| **Maximum** |  0.00282637 | 013_item13@194 |  0.00369914 | 013_item13@194 | +0.000873 |\n| **99.9%**   |  0.00257581 | 009_item9@154  |  0.00319036 | 009_item9@154  | +0.000615 |\n| **99.0%**   |  0.00219691 | 007_item7@6    |  0.00270823 | 013_item13@223 | +0.000511 |\n| 95.0%       |  0.00188309 | 010_item10@17  |  0.00235827 | 013_item13@193 | +0.000475 |\n| 90.0%       |  0.00171309 | 013_item13@189 |  0.00217277 | 006_item6@82   |  +0.00046 |\n| Median      |  0.00118867 | 011_item11@130 |  0.00149115 | 012_item12@9   | +0.000302 |\n| 10.0%       | 0.000675487 | 007_item7@13   | 0.000835378 | 012_item12@24  |  +0.00016 |\n| 5.0%        | 0.000544668 | 013_item13@157 | 0.000677111 | 014_item14@14  | +0.000132 |\n| 1.0%        | 0.000261311 | 009_item9@58   | 0.000305513 | 009_item9@63   | +4.42e-05 |\n| 0.1%        | 9.65887e-05 | 012_item12@101 |  7.7014e-05 | 013_item13@252 | -1.96e-05 |\n| Minimum     | 2.62735e-05 | 013_item13@252 | 2.23883e-06 | 008_item8@125  |  -2.4e-05 |\n\n**kld tail composition** \u2014 items holding tokens at or beyond each candidate's own quantile (top 5 per side; the JSON holds every sample and every token position).\n\n| level | candidate | item       | tail tokens | of item | item max kld | worst ear there |\n| ----- | --------- | ---------- | ----------: | ------: | -----------: | --------------: |\n| 99.0% | A         | 013_item13 |           6 |    2.0% |   0.00282637 |        0.981477 |\n| 99.0% | A         | 009_item9  |           5 |    2.5% |   0.00257548 |        0.981113 |\n| 99.0% | A         | 012_item12 |           5 |    1.8% |   0.00248479 |        0.981869 |\n| 99.0% | A         | 010_item10 |           2 |    0.8% |    0.0022492 |        0.981458 |\n| 99.0% | A         | 006_item6  |           1 |    1.1% |   0.00258202 |        0.990102 |\n| 99.0% | B         | 013_item13 |           7 |    2.3% |   0.00369914 |        0.970477 |\n| 99.0% | B         | 012_item12 |           6 |    2.1% |   0.00317581 |        0.971676 |\n| 99.0% | B         | 009_item9  |           3 |    1.5% |   0.00318976 |        0.970843 |\n| 99.0% | B         | 010_item10 |           2 |    0.8% |   0.00291263 |         0.97698 |\n| 99.0% | B         | 006_item6  |           1 |    1.1% |   0.00314202 |        0.982314 |\n| 99.9% | A         | 013_item13 |           1 |    0.3% |   0.00282637 |        0.985919 |\n| 99.9% | A         | 006_item6  |           1 |    1.1% |   0.00258202 |        0.990102 |\n| 99.9% | B         | 013_item13 |           2 |    0.7% |   0.00369914 |        0.970477 |\n\n### EAR\n\n\u03a3_v min(p_ref, p_cand) = 1 \u2212 TV at each scored answer position. HIGHER is better, so the degradation tail is the LOW end: 1.0% / 0.1% / Minimum \u2014 a literal \"maximum EAR\" sits at ~1.0 for any candidate worth measuring and carries no information.\n\n| level       |    a = A | witness (a)    |    b = B | witness (b)    |    b \u2212 a |\n| ----------- | -------: | -------------- | -------: | -------------- | -------: |\n| Maximum     | 0.999468 | 012_item12@9   | 0.997492 | 013_item13@260 | -0.00198 |\n| 99.9%       | 0.998864 | 010_item10@48  | 0.994332 | 015_item15@60  | -0.00453 |\n| 99.0%       | 0.997113 | 010_item10@5   |  0.99125 | 008_item8@4    | -0.00586 |\n| 95.0%       | 0.994414 | 014_item14@19  | 0.987802 | 013_item13@146 | -0.00661 |\n| 90.0%       | 0.992894 | 012_item12@21  | 0.986409 | 003_item3@28   | -0.00649 |\n| Median      | 0.987927 | 011_item11@41  | 0.980022 | 012_item12@240 | -0.00791 |\n| 10.0%       | 0.982775 | 012_item12@163 |  0.97362 | 014_item14@34  | -0.00915 |\n| 5.0%        | 0.981585 | 005_item5@32   | 0.971846 | 011_item11@258 | -0.00974 |\n| **1.0%**    | 0.979349 | 009_item9@107  | 0.968878 | 011_item11@121 |  -0.0105 |\n| **0.1%**    | 0.977285 | 011_item11@229 | 0.965972 | 014_item14@43  |  -0.0113 |\n| **Minimum** | 0.976329 | 012_item12@158 | 0.965143 | 006_item6@83   |  -0.0112 |\n\n**ear tail composition** \u2014 items holding tokens at or beyond each candidate's own quantile (top 5 per side; the JSON holds every sample and every token position).\n\n| level | candidate | item       | tail tokens | of item | item min ear |\n| ----- | --------- | ---------- | ----------: | ------: | -----------: |\n| 1.0%  | A         | 012_item12 |           4 |    1.4% |     0.976329 |\n| 1.0%  | A         | 009_item9  |           3 |    1.5% |     0.978297 |\n| 1.0%  | A         | 013_item13 |           3 |    1.0% |     0.977797 |\n| 1.0%  | A         | 011_item11 |           3 |    1.2% |     0.977306 |\n| 1.0%  | A         | 006_item6  |           3 |    3.3% |     0.976902 |\n| 1.0%  | B         | 009_item9  |           5 |    2.5% |     0.967518 |\n| 1.0%  | B         | 012_item12 |           5 |    1.8% |     0.965813 |\n| 1.0%  | B         | 013_item13 |           3 |    1.0% |     0.965981 |\n| 1.0%  | B         | 011_item11 |           2 |    0.8% |     0.967607 |\n| 1.0%  | B         | 010_item10 |           1 |    0.4% |     0.967581 |\n| 0.1%  | A         | 006_item6  |           1 |    1.1% |     0.976902 |\n| 0.1%  | A         | 012_item12 |           1 |    0.4% |     0.976329 |\n| 0.1%  | B         | 012_item12 |           1 |    0.4% |     0.965813 |\n| 0.1%  | B         | 006_item6  |           1 |    1.1% |     0.965143 |\n\n### \u0394p at the target token\n\np_cand(target) \u2212 p_ref(target) in percentage points, SIGNED. The full ladder including the MEDIAN is what shows a systematic over- or under-confidence; `mse_dp` and `rms_dp` are unsigned by construction and cannot. This is llama-perplexity's \u0394p table.\n\n| level       |      a = A | witness (a)    |     b = B | witness (b)    |     b \u2212 a |\n| ----------- | ---------: | -------------- | --------: | -------------- | --------: |\n| **Maximum** |    1.45991 | 013_item13@109 |   1.43935 | 008_item8@133  |   -0.0206 |\n| **99.9%**   |    1.36065 | 012_item12@156 |   1.36126 | 012_item12@156 | +0.000605 |\n| 99.0%       |   0.891972 | 009_item9@141  |  0.849244 | 015_item15@66  |   -0.0427 |\n| 95.0%       |    0.60572 | 013_item13@195 |  0.557082 | 010_item10@7   |   -0.0486 |\n| 90.0%       |   0.482522 | 010_item10@27  |  0.419347 | 013_item13@21  |   -0.0632 |\n| **Median**  | -0.0575671 | 012_item12@245 | -0.131395 | 010_item10@218 |   -0.0738 |\n| 10.0%       |  -0.564397 | 006_item6@73   | -0.663331 | 003_item3@21   |   -0.0989 |\n| 5.0%        |  -0.699557 | 010_item10@143 | -0.802534 | 010_item10@161 |    -0.103 |\n| 1.0%        |  -0.948022 | 009_item9@197  |  -1.06582 | 010_item10@17  |    -0.118 |\n| **0.1%**    |   -1.19105 | 013_item13@277 |  -1.35383 | 010_item10@111 |    -0.163 |\n| **Minimum** |   -1.30525 | 010_item10@111 |  -1.43954 | 012_item12@11  |    -0.134 |\n"
+  "default": "# Paired comparison: A (a) vs B (b)\n\n- Items compared: 16   |   95% CI via paired Student-t (df = n - 1, no bootstrap)\n- Protocol: teacher-forced on the dataset's stored model-generated answer trajectory; KLD/JSD/EAR over full vocab; answer positions only.\n- Paired inference is item-weighted only; token-weighted rows are descriptive.\n\n- Reference (FP teacher): F16\n\n## Reference corpus likelihood (F16)\n\n| weighting | mean nll_ref (nats) | PPL(reference) |\n| --------- | ------------------: | -------------: |\n| item      |            1.962383 |       7.116268 |\n| token     |            1.985214 |       7.280605 |\n\nReference likelihood on the same stored target tokens, using uncompressed VLMK NLL values. The reference is evaluated in each collection; the JSON's `max_abs_side_difference` (0) records the observed agreement.\n\n## Verdict summary\n\n| endpoint             | verdict  | inference scope             |\n| -------------------- | -------- | --------------------------- |\n| nll (item)           | A closer | exploratory (survives Holm) |\n| kld (item)           | A closer | primary (confirmatory)      |\n| reversed_kld (item)  | A closer | exploratory (survives Holm) |\n| js_kld (item)        | A closer | exploratory (survives Holm) |\n| ear (item)           | A closer | exploratory (survives Holm) |\n| same_top_rate (item) | A closer | exploratory (survives Holm) |\n| mse_dp (item)        | A closer | exploratory (survives Holm) |\n\nItem-weighted endpoints not listed here are either inconclusive or did not survive the family-wise correction; the full grid is below.\n\n## Results\n\nverdict reads the paired CI of (b \u2212 a); do NOT compare per-model means independently.\n\n**\u2605 = the one confirmatory endpoint** (`kld`, item-weighted). Its 95% CI is the report's claim and spends the whole alpha. Other item-weighted endpoints are **exploratory**: its `p (Holm)` is the Holm\u2013Bonferroni-adjusted p-value across the other 6 cells (`\u2713` = survives at \u03b1, `\u00b7` = does not), and only a `\u2713` row supports a claim of its own. Reading the raw per-cell verdicts as 7 independent tests is what produced a measured family-wise false-positive rate of 0.35 on exchangeable A/B data.\n\nToken-weighted rows show descriptive means and differences only, without a CI, p-value or paired-test verdict.\n\n| metric                   | weighting |    a mean |    b mean | b \u2212 a (or b \u00f7 a) | 95% CI                 |            p (Holm) | verdict                             |\n| ------------------------ | --------- | --------: | --------: | ---------------: | ---------------------- | ------------------: | ----------------------------------- |\n| nll                      | item      |  1.982383 |  1.993839 |        +0.011455 | [+0.001119, +0.021792] |           0.03211 \u2713 | A closer                            |\n| nll                      | token     |  2.005214 |  2.012394 |        +0.007180 | -                      |                   - | descriptive only                    |\n| entropy (nats)           | item      |  1.797208 |  1.807208 |                \u2014 | \u2014                      |                   \u2014 | candidate-only; not compared        |\n| entropy (nats)           | token     |  1.800418 |  1.810418 |                \u2014 | \u2014                      |                   \u2014 | candidate-only; not compared        |\n| mean_dp (pp, signed)     | item      | -0.050021 | -0.128701 |                \u2014 | \u2014                      |                   \u2014 | candidate-only; not compared        |\n| mean_dp (pp, signed)     | token     | -0.050419 | -0.127583 |                \u2014 | \u2014                      |                   \u2014 | candidate-only; not compared        |\n| \u2605 kld                    | item      |  0.001179 |  0.001472 |        +0.000293 | [+0.000283, +0.000304] | 2.181e-19 (primary) | A closer                            |\n| kld                      | token     |  0.001198 |  0.001495 |        +0.000298 | -                      |                   - | descriptive only                    |\n| reversed_kld             | item      |  0.001297 |  0.001620 |        +0.000323 | [+0.000311, +0.000334] |         8.723e-19 \u2713 | A closer                            |\n| reversed_kld             | token     |  0.001317 |  0.001645 |        +0.000328 | -                      |                   - | descriptive only                    |\n| js_kld                   | item      |  0.000590 |  0.000736 |        +0.000147 | [+0.000142, +0.000152] |         8.723e-19 \u2713 | A closer                            |\n| js_kld                   | token     |  0.000599 |  0.000748 |        +0.000149 | -                      |                   - | descriptive only                    |\n| ear                      | item      |  0.987985 |  0.980035 |        -0.007950 | [-0.008056, -0.007843] |         6.261e-25 \u2713 | A closer                            |\n| ear                      | token     |  0.987917 |  0.979963 |        -0.007954 | -                      |                   - | descriptive only                    |\n| same_top_rate            | item      |  0.992669 |  0.990669 |        -0.002000 | [-0.002000, -0.002000] |                 0 \u2713 | A closer                            |\n| same_top_rate            | token     |  0.992072 |  0.990072 |        -0.002000 | -                      |                   - | descriptive only                    |\n| mse_dp                   | item      |  0.170461 |  0.193325 |        +0.022864 | [+0.017536, +0.028193] |         3.189e-07 \u2713 | A closer                            |\n| mse_dp                   | token     |  0.167922 |  0.193086 |        +0.025164 | -                      |                   - | descriptive only                    |\n| ppl (a, b = exp(nll))    | item      |  7.260026 |  7.343670 |        +0.083644 | (see ppl_ratio)        |                   \u2014 | (linked to nll.item_weighted above) |\n| ppl (a, b = exp(nll))    | token     |  7.427683 |  7.481209 |        +0.053525 | -                      |                   - | descriptive only                    |\n| ppl_ratio (\u2261 exp(nll \u0394)) | item      |         \u2014 |         \u2014 |       \u00d7 1.011521 | [\u00d7 1.001119, 1.022031] |                   \u2014 | (linked to nll.item_weighted above) |\n| ppl_ratio (\u2261 exp(nll \u0394)) | token     |         \u2014 |         \u2014 |       \u00d7 1.007206 | -                      |                   - | descriptive only                    |\n\nnote: small sample (n_items = 16 < 30). No interval construction reaches its nominal coverage on right-skewed per-item deltas at this size (measured ~0.90 for a nominal 0.95 at n = 25, skew 6, for the t and bootstrap-t intervals alike), and the misses sit on one side: the interval tends to understate the damage of rare catastrophic items. The real \u03b1 is above the stated one.\nnote: `inconclusive` means the interval contains 0 \u2014 NOT that the two candidates are equivalent. Each such row's `reason` carries the tightest margin its own interval does rule out; pass --equivalence-margin to have the primary metric tested for equivalence at a margin you choose (interval-inclusion TOST).\nnote: mse_dp is in pp\u00b2 (percentage-points squared); rms_dp (pp) is shown with --show-diagnostic-metrics.\nnote: ppl = exp(mean nll) per model (item/token-weighted); only the item-weighted ppl_ratio has a paired-test interval.\nnote: ear = Expected Acceptance Rate (arXiv:2605.02404): per position \u03a3_v min(p_ref, p_cand) = 1 \u2212 TV distance over the full vocab; EAR 0.99 \u21d2 the two models emit the same token 99% of the time under optimal coupling. Higher is better.\n\n## Answer-position strata (exploratory)\n\nPer-item means restricted to each answer-position range, tested with the same paired ITEM bootstrap (an item contributes the mean of its own positions in the bucket; items that never reach a bucket are dropped from it).\n\nThis exists because the effect is not spread evenly over the answer: the mmproj F16-vs-Q8_0 signal measured on this data sits in the **first ~32 answer tokens** and decays more than 10\u00d7 after, while the default eval cap is 1024 \u2014 so a single item-mean over all positions dilutes a vision effect by roughly 30\u00d7. Capping the run shorter throws the rest of the data away; stratifying keeps it.\n\nThe strata were chosen from prior measurements on this data, so every row here is **exploratory**: `p (Holm)` is adjusted within this family only, and these rows never carry the confirmatory endpoint's \u03b1.\n\n| metric | positions | items |     a = A |     b = B |     b \u2212 a | 95% CI                 |    p (Holm) | verdict  |\n| ------ | --------- | ----: | --------: | --------: | --------: | ---------------------- | ----------: | -------- |\n| kld    | 0-32      |    16 |  0.001177 |  0.001468 | +0.000292 | [+0.000279, +0.000304] | 5.117e-17 \u2713 | A closer |\n| kld    | 32-256    |    13 |  0.001134 |  0.001420 | +0.000286 | [+0.000262, +0.000310] | 4.281e-11 \u2713 | A closer |\n| kld    | 256+      |     3 |  0.001205 |  0.001534 | +0.000329 | [+0.000313, +0.000345] | 0.0002583 \u2713 | A closer |\n| ear    | 0-32      |    16 |  0.988169 |  0.980290 | -0.007878 | [-0.008051, -0.007706] | 1.769e-21 \u2713 | A closer |\n| ear    | 32-256    |    13 |  0.988229 |  0.979891 | -0.008338 | [-0.009064, -0.007611] | 6.119e-11 \u2713 | A closer |\n| ear    | 256+      |     3 |  0.987624 |  0.979564 | -0.008061 | [-0.008188, -0.007934] | 4.023e-05 \u2713 | A closer |\n| dp     | 0-32      |    16 | -0.028239 | -0.108848 | -0.080609 | [-0.090773, -0.070445] | 1.776e-10 \u2713 | A closer |\n| dp     | 32-256    |    13 | -0.084576 | -0.166349 | -0.081773 | [-0.092661, -0.070886] | 5.721e-09 \u2713 | A closer |\n| dp     | 256+      |     3 | -0.095805 | -0.159060 | -0.063255 | [-0.101826, -0.024684] |    0.0195 \u2713 | A closer |\n\n## Per-item KLD tails (exploratory \u2014 own Holm family)\n\nEach item's OWN p99 / p99.9 / maximum of its per-token KLD, with the answer position (and target token id) it occurred at, so a bad tail can be traced to the token that produced it. The quantile convention is the pooled ladder's (linear interpolation between neighbouring order statistics) applied to one item at a time; `max` is exact.\n\nAcross items each level is a per-item scalar and is tested with the same paired statistics as the mean metrics (unit: the item), but these rows are **exploratory**: a per-item maximum is a single-token statistic, far heavier-tailed than a mean, so its interval reaches nominal coverage later; `p (Holm)` is adjusted within this family only and never borrows the confirmatory endpoint's \u03b1. `on top-2` counts the items too short for that level to interpolate anywhere but between their two largest tokens (p99 needs > 100 positions, p99.9 > 1000) \u2014 for them the level is the max in all but name.\n\n| metric | level | items | on top-2 |    a = A |    b = B |     b \u2212 a | 95% CI                 |    p (Holm) | verdict  |\n| ------ | ----- | ----: | -------: | -------: | -------: | --------: | ---------------------- | ----------: | -------- |\n| kld    | p99   |    16 |        9 | 0.002021 | 0.002520 | +0.000499 | [+0.000458, +0.000540] |     2e-13 \u2713 | A closer |\n| kld    | p99.9 |    16 |       16 | 0.002167 | 0.002718 | +0.000550 | [+0.000492, +0.000609] |  6.29e-12 \u2713 | A closer |\n| kld    | max   |    16 |        \u2014 | 0.002181 | 0.002741 | +0.000560 | [+0.000494, +0.000625] | 1.203e-11 \u2713 | A closer |\n\nWorst 10 of 16 items by per-item max `kld` (either candidate); every item is in the JSON under `per_item_tails`:\n\n| item       | positions | a max @pos    | b max @pos    | b \u2212 a (max) | a p99 @pos    | b p99 @pos    |\n| ---------- | --------: | ------------- | ------------- | ----------: | ------------- | ------------- |\n| 013_item13 |       300 | 0.002826 @194 | 0.003699 @194 |   +0.000873 | 0.002265 @108 | 0.002914 @266 |\n| 009_item9  |       200 | 0.002575 @154 | 0.00319 @154  |   +0.000614 | 0.002243 @69  | 0.002766 @62  |\n| 012_item12 |       280 | 0.002485 @138 | 0.003176 @138 |   +0.000691 | 0.002299 @111 | 0.002866 @130 |\n| 006_item6  |        90 | 0.002582 @65  | 0.003142 @65  |   +0.000560 | 0.002045 @58  | 0.002576 @58  |\n| 010_item10 |       240 | 0.002249 @137 | 0.002913 @31  |   +0.000663 | 0.002099 @34  | 0.00258 @59   |\n| 007_item7  |       120 | 0.002197 @6   | 0.002766 @6   |   +0.000569 | 0.002001 @28  | 0.00243 @28   |\n| 001_item1  |        18 | 0.002059 @4   | 0.002671 @13  |   +0.000612 | 0.002044 @4   | 0.002661 @13  |\n| 005_item5  |        64 | 0.002041 @60  | 0.002669 @60  |   +0.000627 | 0.001929 @10  | 0.002537 @10  |\n| 003_item3  |        33 | 0.002195 @8   | 0.002588 @8   |   +0.000393 | 0.002142 @8   | 0.002567 @8   |\n| 011_item11 |       260 | 0.002055 @231 | 0.002585 @231 |   +0.000530 | 0.001871 @107 | 0.002355 @233 |\n\n## Per-token distributions (pooled tokens \u2014 NO bootstrap, NO CI)\n\n1950 token(s) from 16 item(s), flattened across items into ONE multiset \u2014 the llama-perplexity `--kl-divergence` scale and convention (linear interpolation between neighbouring order statistics).\n\nThese rows are **descriptive statistics with no confidence interval, no bootstrap and no verdict**. The pooled maximum has no consistent nonparametric bootstrap \u2014 a resample can only contain a subset of the observed items, so its replicate distribution is degenerate (measured coverage 0.86\u20130.89 against a nominal 0.95, and *worsening* as items are added) \u2014 and the far quantiles rest on too few tokens to support one either. Confirmatory inference lives on the mean metrics above; the bold rows are the degradation tail.\n\n`witness` names the pooled token whose value the (interpolated) quantile is nearest to, as `item@position`; `position` is 0-based among that item's scored answer positions, after any compare-time `--num-eval-tokens` cap. Ties resolve to the earliest item/position, so witnesses are reproducible across runs and `--jobs`.\n\n### KLD\n\nforward KL(p_ref \u2016 p_cand) at each scored answer position, nats. Lower is better, so the degradation tail is the HIGH end: 99.0% / 99.9% / Maximum. At the BOTTOM of the ladder the values are at the floating-point noise floor \u2014 where the two distributions are all but identical the double-precision sum of signed per-slot terms can land a few ulp below zero, and the float32 store keeps it there. A tiny negative minimum is that floor, not a broken metric; it is left unclamped because clamping would hide it.\n\n| level       |       a = A | witness (a)    |       b = B | witness (b)    |     b \u2212 a |\n| ----------- | ----------: | -------------- | ----------: | -------------- | --------: |\n| **Maximum** |  0.00282637 | 013_item13@194 |  0.00369914 | 013_item13@194 | +0.000873 |\n| **99.9%**   |  0.00257581 | 009_item9@154  |  0.00319036 | 009_item9@154  | +0.000615 |\n| **99.0%**   |  0.00219691 | 007_item7@6    |  0.00270823 | 013_item13@223 | +0.000511 |\n| 95.0%       |  0.00188309 | 010_item10@17  |  0.00235827 | 013_item13@193 | +0.000475 |\n| 90.0%       |  0.00171309 | 013_item13@189 |  0.00217277 | 006_item6@82   |  +0.00046 |\n| Median      |  0.00118867 | 011_item11@130 |  0.00149115 | 012_item12@9   | +0.000302 |\n| 10.0%       | 0.000675487 | 007_item7@13   | 0.000835378 | 012_item12@24  |  +0.00016 |\n| 5.0%        | 0.000544668 | 013_item13@157 | 0.000677111 | 014_item14@14  | +0.000132 |\n| 1.0%        | 0.000261311 | 009_item9@58   | 0.000305513 | 009_item9@63   | +4.42e-05 |\n| 0.1%        | 9.65887e-05 | 012_item12@101 |  7.7014e-05 | 013_item13@252 | -1.96e-05 |\n| Minimum     | 2.62735e-05 | 013_item13@252 | 2.23883e-06 | 008_item8@125  |  -2.4e-05 |\n\n**kld tail composition** \u2014 items holding tokens at or beyond each candidate's own quantile (top 5 per side; the JSON holds every sample and every token position).\n\n| level | candidate | item       | tail tokens | of item | item max kld | worst ear there |\n| ----- | --------- | ---------- | ----------: | ------: | -----------: | --------------: |\n| 99.0% | A         | 013_item13 |           6 |    2.0% |   0.00282637 |        0.981477 |\n| 99.0% | A         | 009_item9  |           5 |    2.5% |   0.00257548 |        0.981113 |\n| 99.0% | A         | 012_item12 |           5 |    1.8% |   0.00248479 |        0.981869 |\n| 99.0% | A         | 010_item10 |           2 |    0.8% |    0.0022492 |        0.981458 |\n| 99.0% | A         | 006_item6  |           1 |    1.1% |   0.00258202 |        0.990102 |\n| 99.0% | B         | 013_item13 |           7 |    2.3% |   0.00369914 |        0.970477 |\n| 99.0% | B         | 012_item12 |           6 |    2.1% |   0.00317581 |        0.971676 |\n| 99.0% | B         | 009_item9  |           3 |    1.5% |   0.00318976 |        0.970843 |\n| 99.0% | B         | 010_item10 |           2 |    0.8% |   0.00291263 |         0.97698 |\n| 99.0% | B         | 006_item6  |           1 |    1.1% |   0.00314202 |        0.982314 |\n| 99.9% | A         | 013_item13 |           1 |    0.3% |   0.00282637 |        0.985919 |\n| 99.9% | A         | 006_item6  |           1 |    1.1% |   0.00258202 |        0.990102 |\n| 99.9% | B         | 013_item13 |           2 |    0.7% |   0.00369914 |        0.970477 |\n\n### EAR\n\n\u03a3_v min(p_ref, p_cand) = 1 \u2212 TV at each scored answer position. HIGHER is better, so the degradation tail is the LOW end: 1.0% / 0.1% / Minimum \u2014 a literal \"maximum EAR\" sits at ~1.0 for any candidate worth measuring and carries no information.\n\n| level       |    a = A | witness (a)    |    b = B | witness (b)    |    b \u2212 a |\n| ----------- | -------: | -------------- | -------: | -------------- | -------: |\n| Maximum     | 0.999468 | 012_item12@9   | 0.997492 | 013_item13@260 | -0.00198 |\n| 99.9%       | 0.998864 | 010_item10@48  | 0.994332 | 015_item15@60  | -0.00453 |\n| 99.0%       | 0.997113 | 010_item10@5   |  0.99125 | 008_item8@4    | -0.00586 |\n| 95.0%       | 0.994414 | 014_item14@19  | 0.987802 | 013_item13@146 | -0.00661 |\n| 90.0%       | 0.992894 | 012_item12@21  | 0.986409 | 003_item3@28   | -0.00649 |\n| Median      | 0.987927 | 011_item11@41  | 0.980022 | 012_item12@240 | -0.00791 |\n| 10.0%       | 0.982775 | 012_item12@163 |  0.97362 | 014_item14@34  | -0.00915 |\n| 5.0%        | 0.981585 | 005_item5@32   | 0.971846 | 011_item11@258 | -0.00974 |\n| **1.0%**    | 0.979349 | 009_item9@107  | 0.968878 | 011_item11@121 |  -0.0105 |\n| **0.1%**    | 0.977285 | 011_item11@229 | 0.965972 | 014_item14@43  |  -0.0113 |\n| **Minimum** | 0.976329 | 012_item12@158 | 0.965143 | 006_item6@83   |  -0.0112 |\n\n**ear tail composition** \u2014 items holding tokens at or beyond each candidate's own quantile (top 5 per side; the JSON holds every sample and every token position).\n\n| level | candidate | item       | tail tokens | of item | item min ear |\n| ----- | --------- | ---------- | ----------: | ------: | -----------: |\n| 1.0%  | A         | 012_item12 |           4 |    1.4% |     0.976329 |\n| 1.0%  | A         | 009_item9  |           3 |    1.5% |     0.978297 |\n| 1.0%  | A         | 013_item13 |           3 |    1.0% |     0.977797 |\n| 1.0%  | A         | 011_item11 |           3 |    1.2% |     0.977306 |\n| 1.0%  | A         | 006_item6  |           3 |    3.3% |     0.976902 |\n| 1.0%  | B         | 009_item9  |           5 |    2.5% |     0.967518 |\n| 1.0%  | B         | 012_item12 |           5 |    1.8% |     0.965813 |\n| 1.0%  | B         | 013_item13 |           3 |    1.0% |     0.965981 |\n| 1.0%  | B         | 011_item11 |           2 |    0.8% |     0.967607 |\n| 1.0%  | B         | 010_item10 |           1 |    0.4% |     0.967581 |\n| 0.1%  | A         | 006_item6  |           1 |    1.1% |     0.976902 |\n| 0.1%  | A         | 012_item12 |           1 |    0.4% |     0.976329 |\n| 0.1%  | B         | 012_item12 |           1 |    0.4% |     0.965813 |\n| 0.1%  | B         | 006_item6  |           1 |    1.1% |     0.965143 |\n\n### \u0394p at the target token\n\np_cand(target) \u2212 p_ref(target) in percentage points, SIGNED. The full ladder including the MEDIAN is what shows a systematic over- or under-confidence; `mse_dp` and `rms_dp` are unsigned by construction and cannot. This is llama-perplexity's \u0394p table.\n\n| level       |      a = A | witness (a)    |     b = B | witness (b)    |     b \u2212 a |\n| ----------- | ---------: | -------------- | --------: | -------------- | --------: |\n| **Maximum** |    1.45991 | 013_item13@109 |   1.43935 | 008_item8@133  |   -0.0206 |\n| **99.9%**   |    1.36065 | 012_item12@156 |   1.36126 | 012_item12@156 | +0.000605 |\n| 99.0%       |   0.891972 | 009_item9@141  |  0.849244 | 015_item15@66  |   -0.0427 |\n| 95.0%       |    0.60572 | 013_item13@195 |  0.557082 | 010_item10@7   |   -0.0486 |\n| 90.0%       |   0.482522 | 010_item10@27  |  0.419347 | 013_item13@21  |   -0.0632 |\n| **Median**  | -0.0575671 | 012_item12@245 | -0.131395 | 010_item10@218 |   -0.0738 |\n| 10.0%       |  -0.564397 | 006_item6@73   | -0.663331 | 003_item3@21   |   -0.0989 |\n| 5.0%        |  -0.699557 | 010_item10@143 | -0.802534 | 010_item10@161 |    -0.103 |\n| 1.0%        |  -0.948022 | 009_item9@197  |  -1.06582 | 010_item10@17  |    -0.118 |\n| **0.1%**    |   -1.19105 | 013_item13@277 |  -1.35383 | 010_item10@111 |    -0.163 |\n| **Minimum** |   -1.30525 | 010_item10@111 |  -1.43954 | 012_item12@11  |    -0.134 |\n"
  }
 }

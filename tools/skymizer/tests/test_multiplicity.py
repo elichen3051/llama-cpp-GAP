@@ -75,7 +75,7 @@ def test_holm_adjust_empty():
 # --------------------------------------------------------------------------- #
 # policy wiring
 # --------------------------------------------------------------------------- #
-def test_exactly_one_primary_and_everything_else_exploratory():
+def test_exactly_one_primary_and_only_item_endpoints_exploratory():
     res = _compare()
     mult = res["multiplicity"]
     assert mult["primary_endpoint"]["metric"] == "kld"
@@ -93,6 +93,12 @@ def test_exactly_one_primary_and_everything_else_exploratory():
     assert list(roles.values()).count("primary") == 1
     assert roles[("kld", "item_weighted")] == "primary"
     assert mult["family_size"] == len(roles) - 1
+    assert mult["family_size"] == len(DEFAULT_METRICS) - 1
+    for mres in res["metrics"].values():
+        token = mres["token_weighted"]
+        assert token["role"] == "descriptive"
+        assert not ({"ci", "ci_delta", "p_value", "p_value_holm", "holm_significant", "decision", "bootstrap_std"} & token.keys())
+        assert "weighting_consensus" not in mres
     # the primary is NOT adjusted; every exploratory cell is
     assert "p_value_holm" not in res["metrics"]["kld"]["item_weighted"]
     for (name, key), role in roles.items():
@@ -116,20 +122,19 @@ def test_holm_values_equal_holm_adjust_of_the_family():
 
 
 def test_primary_endpoint_is_selectable():
-    """The default is kld/item: the item is the exchangeable unit the
-    bootstrap actually resamples, so the confirmatory CI generalizes to
-    unseen items; --primary-weighting token switches to llama-perplexity's
-    corpus aggregation when cross-tool comparability matters more."""
+    """The primary metric is selectable; its weighting must remain item."""
     assert DEFAULT_PRIMARY_WEIGHTING == "item"
     res = _compare(primary_metric="ear", primary_weighting="item")
     assert res["multiplicity"]["primary_endpoint"]["metric"] == "ear"
     assert res["multiplicity"]["primary_endpoint"]["weighting"] == "item"
     assert res["metrics"]["ear"]["item_weighted"]["role"] == "primary"
-    assert res["metrics"]["kld"]["token_weighted"]["role"] == "exploratory"
+    assert res["metrics"]["kld"]["token_weighted"]["role"] == "descriptive"
     with pytest.raises(ValueError, match="primary_metric"):
         _compare(primary_metric="nonesuch")
     with pytest.raises(ValueError, match="primary_weighting"):
         _compare(primary_weighting="sideways")
+    with pytest.raises(ValueError, match="primary_weighting"):
+        _compare(primary_weighting="token")
 
 
 @pytest.mark.statistical
@@ -171,14 +176,30 @@ def test_verdict_summary_honours_the_weighting_flag():
     for w in ("both", "item", "token"):
         md = format_comparison_table(res, reference_label="F16",
                                         display_weighting=w)
+        if "## Verdict summary" not in md:
+            seen[w] = []
+            continue
         section = md.split("## Verdict summary")[1].split("## Results")[0]
         seen[w] = sorted({row.split("|")[1].strip().split(" ")[-1]
                           for row in section.splitlines()
                           if row.startswith("| ")
                           and not row.startswith("| ---")} - {"endpoint"})
     assert seen["item"] == ["(item)"]
-    assert seen["token"] == ["(token)"]
-    assert seen["both"] == ["(item)", "(token)"]
+    assert seen["token"] == []
+    assert seen["both"] == ["(item)"]
+
+
+def test_token_rows_never_render_test_results_including_derived_metrics():
+    res = _compare(effect=0.08)
+    md = format_comparison_table(res, reference_label="F16", display_weighting="token",
+                                 show_diagnostic_metrics=True)
+    rows = [[cell.strip() for cell in row.split("|")[1:-1]]
+            for row in md.splitlines() if row.startswith("| ")]
+    token_rows = [row for row in rows if len(row) == 8 and row[1] == "token"]
+    assert len(token_rows) >= len(DEFAULT_METRICS) + 3
+    for row in token_rows:
+        assert row[5:8] == ["-", "-", "descriptive only"]
+    assert "## Verdict summary" not in md
 
 
 def test_report_marks_the_primary_and_shows_the_holm_column():

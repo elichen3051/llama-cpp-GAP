@@ -102,8 +102,8 @@ def test_cells_are_their_own_exploratory_holm_family():
         assert c["n_items_used"] == 12
     assert holm_adjust([c["p_value"] for c in cells]) == pytest.approx(
         [c["p_value_holm"] for c in cells])
-    # the main family did not grow: 2 metrics x 2 weightings - 1 primary
-    assert main_family == 3
+    # Two item-weighted endpoints minus the primary; tails have their own family.
+    assert main_family == 1
     assert res["per_item_tails"]["role"] == "exploratory"
     assert "holm" in res["per_item_tails"]["correction"]
 

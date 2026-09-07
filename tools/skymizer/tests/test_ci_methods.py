@@ -75,7 +75,7 @@ def test_default_ci_method_is_t():
     assert set(BOOTSTRAP_CI_METHODS) == {"studentized", "bca", "percentile"}
 
 
-@pytest.mark.parametrize("weighting", ["item", "token"])
+@pytest.mark.parametrize("weighting", ["item"])
 def test_bca_endpoints_match_the_textbook_formula(weighting):
     """And the closed-form jackknife must equal the brute-force leave-one-out
     recomputation of the SAME statistic — that shortcut is the easiest thing
@@ -183,27 +183,14 @@ def test_ci_method_is_recorded_and_rejected_when_unknown():
 # --------------------------------------------------------------------------- #
 # studentized (bootstrap-t)
 # --------------------------------------------------------------------------- #
-@pytest.mark.parametrize("weighting", ["item", "token"])
+@pytest.mark.parametrize("weighting", ["item"])
 def test_statistic_and_se_matches_a_direct_computation(weighting):
-    """The token-weighted statistic is a RATIO of two item means, so its SE
-    comes from the ratio linearization, not from a naive weighted variance."""
-    rng = np.random.default_rng(15)
-    d = rng.normal(0.3, 1.2, size=60)
-    w = rng.integers(5, 400, size=60).astype(float)
+    """The independent units determine the unweighted mean's standard error."""
+    d = np.array([-2., -1., 0., 1., 2.])
+    w = np.array([1., 2., 3., 4., 1000.])
     theta, se = _statistic_and_se(d, w, weighting)
-    n = d.size
-    if weighting == "item":
-        assert theta == pytest.approx(d.mean())
-        assert se == pytest.approx(d.std(ddof=1) / math.sqrt(n))
-    else:
-        assert theta == pytest.approx((w * d).sum() / w.sum())
-        u = w * (d - theta)
-        assert se == pytest.approx(
-            math.sqrt(n * (u ** 2).sum() / (n - 1)) / w.sum())
-        # sanity: equal weights must reduce to the unweighted SE
-        eq = np.ones(n)
-        _, se_eq = _statistic_and_se(d, eq, "token")
-        assert se_eq == pytest.approx(d.std(ddof=1) / math.sqrt(n), rel=1e-12)
+    assert theta == 0.0
+    assert se == pytest.approx(math.sqrt(0.5))
 
 
 def test_studentized_interval_is_the_crossed_bootstrap_t_form():
@@ -243,10 +230,10 @@ def test_studentized_falls_back_when_there_is_no_spread():
 # --------------------------------------------------------------------------- #
 # t (classical paired Student-t, no bootstrap)
 # --------------------------------------------------------------------------- #
-@pytest.mark.parametrize("weighting", ["item", "token"])
+@pytest.mark.parametrize("weighting", ["item"])
 def test_t_interval_is_the_textbook_paired_t(weighting):
     """theta -+ t_{n-1, 0.975} * SE with the SAME SE the studentized method
-    uses (s/sqrt(n) item-weighted; the ratio linearization token-weighted),
+    uses (s/sqrt(n) item-weighted),
     and p = P(|T_{n-1}| >= |theta/SE|). scipy is the oracle when present;
     the closed form below is checked regardless."""
     d = _skewed(37, 0.9, 4)
@@ -328,7 +315,7 @@ def test_t_interval_plumbs_through_compare_items():
                            model_a_label="A", model_b_label="B", ci_method="t")
     assert res["ci_method"] == "t"
     assert res["bootstrap_iters"] == 0
-    for weighting in ("item_weighted", "token_weighted"):
+    for weighting in ("item_weighted",):
         cell = res["metrics"]["kld"][weighting]
         assert cell["ci_delta"]["ci_method"] == "t"
         assert cell["ci_delta"]["degrees_of_freedom"] == 8
@@ -342,7 +329,7 @@ def test_t_interval_plumbs_through_compare_items():
 # p-values must invert the interval that was actually built
 # --------------------------------------------------------------------------- #
 @pytest.mark.parametrize("method", ["t", "percentile", "bca", "studentized"])
-@pytest.mark.parametrize("weighting", ["item", "token"])
+@pytest.mark.parametrize("weighting", ["item"])
 def test_p_value_agrees_with_its_own_interval(method, weighting):
     """"p <= alpha" and "the CI excludes 0" must not be able to disagree,
     which is what lets the Holm column sit beside the CI column."""
@@ -408,7 +395,7 @@ def test_bca_p_value_reduces_to_the_percentile_form_without_correction():
 
 
 @pytest.mark.parametrize("method", CI_METHODS)
-@pytest.mark.parametrize("weighting", ["item", "token"])
+@pytest.mark.parametrize("weighting", ["item"])
 def test_overflowed_standard_error_cannot_become_zero_spread(method, weighting):
     with pytest.raises(NonFiniteMetricError, match="non-finite.*standard error"):
         _paired_bootstrap_delta(np.zeros(3), np.array([1e200, -1e200, 1e200]),
@@ -416,7 +403,7 @@ def test_overflowed_standard_error_cannot_become_zero_spread(method, weighting):
                                 bootstrap_iters=1000, seed=1, ci_method=method)
 
 
-@pytest.mark.parametrize("weighting", ["item", "token"])
+@pytest.mark.parametrize("weighting", ["item"])
 def test_underflowed_standard_error_cannot_become_zero_spread(weighting):
     with pytest.raises(NonFiniteMetricError, match="standard error underflow"):
         _paired_bootstrap_delta(np.zeros(3), np.array([1e-200, -1e-200, 1e-200]),

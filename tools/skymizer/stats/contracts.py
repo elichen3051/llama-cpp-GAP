@@ -10,7 +10,8 @@ import math
 # `execution.args.kld_mode` are gone from the JSON (the markdown "Logits
 # format" line is kind-aware now, but that is renderer-only). Numeric metric
 # blocks are unchanged from v1.
-SCHEMA_VERSION = "vlm-paired-compare-v3"
+# v4: token-weighted blocks are descriptive; no inference fields or weighting consensus.
+SCHEMA_VERSION = "vlm-paired-compare-v4"
 
 DEFAULT_METRICS = ("nll", "kld", "reversed_kld", "js_kld", "ear",
                    "ear_20", "ear_10", "ear_5",
@@ -18,29 +19,8 @@ DEFAULT_METRICS = ("nll", "kld", "reversed_kld", "js_kld", "ear",
                    "ear_64", "ear_64_normalized",
                    "same_top_rate", "mse_dp")
 
-# Multiplicity policy. Every base metric is reported item- AND token-weighted,
-# so a complete v5 run emits 30 nominal 95% verdicts (26 for v4).
-# In the original 14-cell grid, exchangeable A/B data (identical distributions,
-# shared per-item latent, n=50) gave an uncorrected family-wise false-positive rate of 0.35.
-#
-# So exactly ONE cell is confirmatory: its interval is the report's claim and
-# spends the whole alpha. Every other cell is EXPLORATORY and carries a
-# Holm-Bonferroni-adjusted p-value across the rest of the family.
-#
-# The default primary is forward KLD, ITEM-weighted. Forward KLD is the
-# quantity the tool exists to measure; the ITEM is the exchangeable unit --
-# what was independently drawn when the dataset was built, and what the
-# bootstrap actually resamples -- so the item-weighted mean is the estimand
-# whose CI licenses inference to UNSEEN items from the same population. The
-# ~1k tokens inside one answer share that item's image/topic/prefix: they are
-# correlated evidence, not fresh observations. See docs/compare.md for the policy.
-#
-# The token-weighted row is always reported: it is llama-perplexity's corpus
-# aggregation (a VLM arm and a wikitext2 arm state one estimand), but as a
-# confirmatory endpoint it is the weaker story -- a RATIO estimator whose
-# weights are themselves random under resampling, where one 2,000-token
-# answer outvotes twenty 100-token answers. --primary-weighting token
-# switches which one is confirmatory.
+# Only item-weighted endpoints support inference: one primary, Holm over the rest.
+# Token-weighted rows retain corpus aggregation as descriptive statistics.
 DEFAULT_PRIMARY_METRIC = "kld"
 DEFAULT_PRIMARY_WEIGHTING = "item"
 
@@ -75,8 +55,7 @@ POOLED_TAIL_ROWS = {"kld": ("p99", "p999", "max"),
 
 
 # "t" (default) is the classical paired Student-t interval on the per-item
-# deltas (mean +- t_{n-1, 1-alpha/2} * s/sqrt(n); the token weighting uses
-# the same ratio-linearized SE the studentized method does). It is the one
+# deltas (mean +- t_{n-1, 1-alpha/2} * s/sqrt(n)). It is the one
 # method with NO bootstrap: deterministic, seed-free, and the SE it uses is
 # the closed form Efron & Tibshirani (1986) cite as the case where
 # resampling is unnecessary. On the right-skewed per-item deltas this tool

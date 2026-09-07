@@ -130,29 +130,15 @@ def _compute_decision(
 
 
 def _statistic_and_se(diffs: np.ndarray, weights: np.ndarray, weighting: str):
-    """(statistic, analytic standard error) for one item sample.
-
-    item weighting:  theta = mean(d),  SE = s / sqrt(n).
-    token weighting: theta = sum(w d) / sum(w) is a RATIO of two item means,
-    so its SE comes from the standard linearization -- influence
-    u_i = w_i (d_i - theta), Var(theta) ~= n * sum(u^2) / ((n-1) * (sum w)^2).
-    (u has mean exactly 0 by construction, which is why the sum of squares
-    needs no re-centring.)
-
-    A constant sample returns SE = 0.0; the caller treats it as not
-    studentizable. Invalid arithmetic cannot use that fallback."""
+    """Item mean and analytic SE; reject invalid arithmetic before zero-spread handling."""
+    if weighting != "item":
+        raise ValueError("paired inference requires weighting='item'; token weighting is descriptive only")
     n = diffs.size
     if n < 2:
         raise ValueError("paired comparison requires at least two items")
     with np.errstate(over="ignore", invalid="ignore", divide="ignore"):
-        if weighting == "item":
-            theta = float(diffs.mean())
-            se = float(diffs.std(ddof=1) / math.sqrt(n))
-        else:
-            wsum = float(weights.sum())
-            theta = float((weights * diffs).sum() / wsum)
-            u = weights * (diffs - theta)
-            se = float(math.sqrt(n * float((u * u).sum()) / (n - 1)) / wsum)
+        theta = float(diffs.mean())
+        se = float(diffs.std(ddof=1) / math.sqrt(n))
     if not math.isfinite(theta) or not math.isfinite(se):
         raise NonFiniteMetricError("non-finite estimate or standard error; paired comparison aborted")
     if se == 0.0 and np.any(diffs != diffs[0]):
@@ -313,8 +299,7 @@ def holm_adjust(p_values: Sequence[float]) -> list[float]:
     """Holm-Bonferroni step-down adjustment, returned in input order.
 
     Controls the FAMILY-WISE error rate under ARBITRARY dependence, which is
-    what this family needs: a metric's item- and token-weighted cells are two
-    views of the same numbers, and kld / reversed_kld / js_kld are three
+    what this family needs: kld / reversed_kld / js_kld are three
     functionals of the same pair of distributions. Nothing here is
     independent, so Benjamini-Hochberg's assumptions do not hold and
     Holm's do.
@@ -353,9 +338,7 @@ def _student_t_delta(diffs: np.ndarray, weights: np.ndarray, *,
 
         theta -+ t_{n-1, 1-alpha/2} * SE,   p = P(|T_{n-1}| >= |theta / SE|)
 
-    with theta and SE from _statistic_and_se (s/sqrt(n) for the item
-    weighting; the ratio-linearized SE for the token weighting, whose
-    statistic is a ratio of two item means). No resampling anywhere: the
+    with theta and SE from _statistic_and_se (s/sqrt(n)). No resampling anywhere: the
     result is a deterministic function of the deltas, independent of seed
     and of --bootstrap-iters (recorded as 0).
 
@@ -411,10 +394,7 @@ def _paired_bootstrap_delta(
 ) -> dict[str, Any]:
     """Estimate candidate-minus-baseline mean delta and its CI.
 
-    `weighting` is "item" (uniform mean of per-item diffs) or "token"
-    (token-weighted: sum(T*D)/sum(T)). The bootstrap unit is the item index
-    in both modes -- resampling tokens directly would underestimate SE
-    because tokens within a sequence are correlated.
+    Only item weighting supports paired inference. The bootstrap unit is the item index.
 
     `ci_method`:
       "t" -- the classical paired Student-t interval (see _student_t_delta):
@@ -435,6 +415,8 @@ def _paired_bootstrap_delta(
     Both corrected methods fall back to percentile on a degenerate sample and
     say so in ci["method"] / ci["ci_method"] / ci["fallback"].
     """
+    if weighting != "item":
+        raise ValueError("paired inference requires weighting='item'; token weighting is descriptive only")
     if ci_method not in CI_METHODS:
         raise ValueError(f"ci_method must be one of {CI_METHODS}; got {ci_method!r}")
     if baseline_values.shape != candidate_values.shape:
@@ -449,8 +431,6 @@ def _paired_bootstrap_delta(
         raise ValueError("confidence_level must be in (0, 1)")
     if not isinstance(bootstrap_iters, (int, np.integer)) or bootstrap_iters < (0 if ci_method == "t" else 2):
         raise ValueError("bootstrap_iters must be a nonnegative integer, with at least two draws for bootstrap intervals")
-    if weighting not in ("item", "token"):
-        raise ValueError(f"weighting must be 'item' or 'token'; got {weighting!r}")
 
     with np.errstate(over="ignore", invalid="ignore"):
         diffs = candidate_values - baseline_values
@@ -469,10 +449,7 @@ def _paired_bootstrap_delta(
     boot_se = np.empty(bootstrap_iters, dtype=float) if ci_method == "studentized" else None
     for i, idx in enumerate(_bootstrap_item_indices(seed, diffs.size, bootstrap_iters)):
         if boot_se is None:
-            if weighting == "item":
-                boot[i] = diffs[idx].mean()
-            else:
-                boot[i] = (weights[idx] * diffs[idx]).sum() / weights[idx].sum()
+            boot[i] = diffs[idx].mean()
         else:
             boot[i], boot_se[i] = _statistic_and_se(diffs[idx], weights[idx],
                                                     weighting)
@@ -514,17 +491,8 @@ def _paired_bootstrap_delta(
         # estimated on it too). Both forms are closed-form here, so this costs
         # one vector op rather than n re-evaluations.
         n = diffs.size
-        if weighting == "item":
-            total = diffs.sum()
-            jack = (total - diffs) / (n - 1) if n > 1 else np.empty(0)
-        else:
-            num = (weights * diffs).sum()
-            den = weights.sum()
-            keep = den - weights
-            with np.errstate(divide="ignore", invalid="ignore"):
-                jack = np.where(keep > 0.0, (num - weights * diffs) / keep, np.nan)
-            if not np.all(np.isfinite(jack)):
-                raise NonFiniteMetricError("non-finite BCa jackknife estimates; paired comparison aborted")
+        total = diffs.sum()
+        jack = (total - diffs) / (n - 1)
         jack = np.asarray(jack, dtype=float)
         bca_shape = _bca_shape(boot, delta, jack)
         endpoints = _bca_endpoints(boot, delta, jack, confidence_level)
@@ -582,17 +550,31 @@ def _build_weighting_block(
     ci_method: str = DEFAULT_CI_METHOD,
     equivalence_margin: float | None = None,
 ) -> dict[str, Any]:
+    if weighting == "token":
+        if baseline_values.ndim != 1 or baseline_values.size == 0 or baseline_values.shape != candidate_values.shape:
+            raise ValueError("scores must be nonempty, aligned 1-D arrays")
+        if weights.shape != baseline_values.shape or not np.all(np.isfinite(weights)) or np.any(weights <= 0.0):
+            raise ValueError("weights must align with scores and contain finite positive values")
+        with np.errstate(over="ignore", invalid="ignore", divide="ignore"):
+            weight_sum = float(weights.sum())
+            baseline_mean = float((weights * baseline_values).sum() / weight_sum)
+            candidate_mean = float((weights * candidate_values).sum() / weight_sum)
+            delta = float((weights * (candidate_values - baseline_values)).sum() / weight_sum)
+        if not all(math.isfinite(v) for v in (weight_sum, baseline_mean, candidate_mean, delta)):
+            raise NonFiniteMetricError("non-finite token-weighted descriptive statistic; comparison aborted")
+        return {
+            "baseline_mean": baseline_mean,
+            "candidate_mean": candidate_mean,
+            "delta_candidate_minus_baseline": delta,
+            "role": "descriptive",
+        }
     delta_result = _paired_bootstrap_delta(
         baseline_values, candidate_values, weights,
         weighting=weighting, confidence_level=confidence_level,
         bootstrap_iters=bootstrap_iters, seed=seed, ci_method=ci_method,
     )
-    if weighting == "item":
-        baseline_mean = float(baseline_values.mean())
-        candidate_mean = float(candidate_values.mean())
-    else:
-        baseline_mean = float((weights * baseline_values).sum() / weights.sum())
-        candidate_mean = float((weights * candidate_values).sum() / weights.sum())
+    baseline_mean = float(baseline_values.mean())
+    candidate_mean = float(candidate_values.mean())
     if not math.isfinite(baseline_mean) or not math.isfinite(candidate_mean):
         raise NonFiniteMetricError("non-finite metric mean; paired comparison aborted")
 
@@ -615,19 +597,6 @@ def _build_weighting_block(
     }
 
 
-def _classify_consensus(
-    item_decision: Mapping[str, Any], token_decision: Mapping[str, Any]
-) -> str:
-    item_v = item_decision["verdict"]
-    token_v = token_decision["verdict"]
-    if item_v == token_v:
-        return "agree"
-    significant = {"A closer", "B closer"}
-    if item_v in significant and token_v in significant:
-        return "direction_reversal"
-    return "disagree"
-
-
 def _exp_nll(value: float) -> float:
     try:
         result = math.exp(value)
@@ -640,6 +609,8 @@ def _exp_nll(value: float) -> float:
 
 def _ppl_ratio_block(nll_weighting_block: Mapping[str, Any], linked_to: str) -> dict[str, Any]:
     delta = nll_weighting_block["delta_candidate_minus_baseline"]
+    if nll_weighting_block.get("role") == "descriptive":
+        return {"estimate": _exp_nll(delta), "role": "descriptive"}
     nll_ci = nll_weighting_block["ci_delta"]
     return {
         "estimate": _exp_nll(delta),
@@ -667,7 +638,8 @@ def _ppl_block(nll_weighting_block: Mapping[str, Any], linked_to: str) -> dict[s
         "baseline_ppl": baseline_ppl,
         "candidate_ppl": candidate_ppl,
         "delta_ppl_b_minus_a": candidate_ppl - baseline_ppl,
-        "decision": {"verdict": f"(linked to {linked_to} above)", "linked_to": linked_to},
+        **({"role": "descriptive"} if nll_weighting_block.get("role") == "descriptive" else
+           {"decision": {"verdict": f"(linked to {linked_to} above)", "linked_to": linked_to}}),
     }
 
 
@@ -678,7 +650,8 @@ def _rms_dp_block(mse_weighting_block: Mapping[str, Any], linked_to: str) -> dic
         "baseline_rms": baseline_rms,
         "candidate_rms": candidate_rms,
         "delta_rms_b_minus_a": candidate_rms - baseline_rms,
-        "decision": {"verdict": f"(linked to {linked_to} above)", "linked_to": linked_to},
+        **({"role": "descriptive"} if mse_weighting_block.get("role") == "descriptive" else
+           {"decision": {"verdict": f"(linked to {linked_to} above)", "linked_to": linked_to}}),
     }
 
 

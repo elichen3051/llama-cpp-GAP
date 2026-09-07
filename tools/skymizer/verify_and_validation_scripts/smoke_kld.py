@@ -118,16 +118,21 @@ def main():
             for metric_name, metric in result["metrics"].items():
                 for weighting in ("item_weighted", "token_weighted"):
                     block = metric[weighting]
+                    if weighting == "token_weighted":
+                        assert block["role"] == "descriptive"
+                        assert not ({"ci", "ci_delta", "p_value", "p_value_holm", "decision", "bootstrap_std"} & block.keys())
                     if metric_name == "ppl_ratio":
                         assert block["estimate"] == 1
-                        assert block["ci"]["lower"] == block["ci"]["upper"] == 1
+                        if weighting == "item_weighted":
+                            assert block["ci"]["lower"] == block["ci"]["upper"] == 1
                     elif metric_name == "ppl":
                         assert block["delta_ppl_b_minus_a"] == 0
                     elif metric_name == "rms_dp":
                         assert block["delta_rms_b_minus_a"] == 0
                     else:
                         assert block["delta_candidate_minus_baseline"] == 0
-                        assert block["ci_delta"]["lower"] == block["ci_delta"]["upper"] == 0
+                        if weighting == "item_weighted":
+                            assert block["ci_delta"]["lower"] == block["ci_delta"]["upper"] == 0
     summary = {"lane": args.lane, "rows": args.rows, "repeat_bit_exact": True,
                "paired_reference_drift": 0, "self_paired_zero_deltas": True, "collections": {}}
     for name, items in collections.items():

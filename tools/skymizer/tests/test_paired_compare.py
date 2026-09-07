@@ -26,7 +26,6 @@ from stats.contracts import (
 from stats.engine import compare_items
 from stats.inference import (
     _build_weighting_block,
-    _classify_consensus,
     _compute_decision,
     _paired_bootstrap_delta,
 )
@@ -84,7 +83,7 @@ def _result_for_render(*, with_inputs: bool = True):
 # Task 1: scaffold
 # --------------------------------------------------------------------------- #
 def test_constants_and_imports():
-    assert SCHEMA_VERSION == "vlm-paired-compare-v3"
+    assert SCHEMA_VERSION == "vlm-paired-compare-v4"
     assert DEFAULT_METRICS == (
         "nll", "kld", "reversed_kld", "js_kld", "ear", "ear_20", "ear_10", "ear_5",
         "ear_20_normalized", "ear_10_normalized", "ear_5_normalized",
@@ -184,25 +183,57 @@ def test_bootstrap_item_weighted_constant_diff():
     assert not r["ci"]["contains_zero"]
 
 
-def test_bootstrap_token_weighted_matches_hand_calc():
-    a = np.array([0.0, 0.0], dtype=float)
-    b = np.array([0.10, 0.01], dtype=float)
-    w = np.array([20.0, 400.0], dtype=float)
-    r = _paired_bootstrap_delta(a, b, w, weighting="token",
-                                   confidence_level=0.95, bootstrap_iters=10, seed=1)
-    assert r["estimate"] == pytest.approx(6.0 / 420.0, rel=1e-9)
+@pytest.mark.parametrize("ci_method", ["t", "percentile", "bca", "studentized"])
+def test_token_weighting_is_descriptive_and_cannot_run_paired_inference(ci_method, monkeypatch):
+    a = np.array([0., 0.])
+    b = np.array([0.10, 0.01])
+    w = np.array([20., 400.])
+    kwargs = dict(confidence_level=0.95, bootstrap_iters=1000, seed=1, ci_method=ci_method)
+    with pytest.raises(ValueError, match="descriptive only"):
+        _paired_bootstrap_delta(a, b, w, weighting="token", **kwargs)
+
+    def forbidden(*args, **kwargs):
+        raise AssertionError("descriptive output must not invoke paired inference")
+
+    monkeypatch.setattr("stats.inference._paired_bootstrap_delta", forbidden)
+    block = _build_weighting_block(a, b, w, weighting="token", score_direction="lower_is_better", **kwargs)
+    assert set(block) == {"baseline_mean", "candidate_mean", "delta_candidate_minus_baseline", "role"}
+    assert block["role"] == "descriptive"
+    assert block["baseline_mean"] == 0.0
+    assert block["candidate_mean"] == pytest.approx(6.0 / 420.0)
+    assert block["delta_candidate_minus_baseline"] == pytest.approx(6.0 / 420.0)
 
 
 def test_bootstrap_shared_seed_same_indices():
-    a = np.array([1.0, 2.0, 3.0, 4.0, 5.0], dtype=float)
-    b = np.array([1.1, 2.2, 2.9, 4.3, 4.8], dtype=float)
-    w = np.ones_like(a)
-    ri = _paired_bootstrap_delta(a, b, w, weighting="item",
-                                    confidence_level=0.9, bootstrap_iters=500, seed=99)
-    rt = _paired_bootstrap_delta(a, b, w, weighting="token",
-                                    confidence_level=0.9, bootstrap_iters=500, seed=99)
-    assert ri["ci"]["lower"] == pytest.approx(rt["ci"]["lower"])
-    assert ri["ci"]["upper"] == pytest.approx(rt["ci"]["upper"])
+    a = np.arange(1., 6.)
+    b = np.array([1.1, 2.2, 2.9, 4.3, 4.8])
+    result = _paired_bootstrap_delta(a, b, np.ones_like(a), weighting="item",
+                                    confidence_level=0.9, bootstrap_iters=500, seed=99,
+                                    ci_method="percentile")
+    rng = np.random.default_rng(99)
+    draws = np.array([(b-a)[rng.integers(0, 5, size=5)].mean() for _ in range(500)])
+    assert result["ci"]["lower"] == pytest.approx(np.quantile(draws, 0.05))
+    assert result["ci"]["upper"] == pytest.approx(np.quantile(draws, 0.95))
+
+
+def test_primary_weighting_token_is_rejected_by_cli():
+    args = ["--candidate-a", "a", "--candidate-b", "b", "--out", "report.md"]
+    assert smpc.parse_args(args + ["--primary-weighting", "item"]).primary_weighting == "item"
+    with pytest.raises(SystemExit) as error:
+        smpc.parse_args(args + ["--primary-weighting", "token"])
+    assert error.value.code == 2
+
+
+@pytest.mark.parametrize("ci_method", ["t", "percentile", "bca", "studentized"])
+def test_item_inference_is_independent_of_token_counts(ci_method):
+    a = [{"kld": 1.0} for _ in range(5)]
+    b = [{"kld": value} for value in (0.5, 0.7, 1.0, 1.1, 1.4)]
+    kwargs = dict(metrics=["kld"], confidence_level=0.95, bootstrap_iters=1000,
+                  seed=7, model_a_label="A", model_b_label="B", ci_method=ci_method)
+    uniform = compare_items(a, b, [1] * 5, **kwargs)["metrics"]["kld"]
+    skewed = compare_items(a, b, [1, 1, 1, 1, 1000], **kwargs)["metrics"]["kld"]
+    assert uniform["item_weighted"] == skewed["item_weighted"]
+    assert uniform["token_weighted"]["candidate_mean"] != skewed["token_weighted"]["candidate_mean"]
 
 
 # --------------------------------------------------------------------------- #
@@ -220,11 +251,6 @@ def test_weighting_block_means_and_decision():
     assert blk["delta_candidate_minus_baseline"] == pytest.approx(0.2)
     assert blk["decision"]["verdict"] == "A closer"   # b larger, lower is better
 
-
-def test_classify_consensus():
-    assert _classify_consensus({"verdict": "B closer"}, {"verdict": "B closer"}) == "agree"
-    assert _classify_consensus({"verdict": "A closer"}, {"verdict": "B closer"}) == "direction_reversal"
-    assert _classify_consensus({"verdict": "B closer"}, {"verdict": "no sig. diff."}) == "disagree"
 
 
 # --------------------------------------------------------------------------- #
@@ -321,7 +347,7 @@ def test_render_ppl_note_explains_exp_and_points_to_ratio():
     out = format_comparison_table(_result_for_render(),
                                      reference_label="F16", display_weighting="item")
     assert "ppl = exp(mean nll) per model" in out
-    assert "tested change is ppl_ratio" in out
+    assert "only the item-weighted ppl_ratio has a paired-test interval" in out
 
 
 def test_render_inputs_missing_meta_path():
@@ -523,7 +549,7 @@ def test_report_never_contradicts_its_own_confidence_level(level, label):
                                   confidence_level=level, bootstrap_iters=500,
                                   seed=1, model_a_label="A", model_b_label="B",
                                   ci_method=ci_method)
-        for weighting in ("item_weighted", "token_weighted"):
+        for weighting in ("item_weighted",):
             decision = result["metrics"]["kld"][weighting]["decision"]
             assert decision["reason"].startswith(f"{label} CI ")
             assert decision["confidence_level"] == level

@@ -18,7 +18,7 @@ from stats.contracts import DEFAULT_METRICS              # noqa: E402
 from stats.engine import compare_items                   # noqa: E402
 from stats import collection_io as paired_io                # noqa: E402
 
-WEIGHTINGS = ("item_weighted", "token_weighted")
+WEIGHTINGS = ("item_weighted",)
 
 
 # Verdicts that mean "the interval contains the null": the tool used to say

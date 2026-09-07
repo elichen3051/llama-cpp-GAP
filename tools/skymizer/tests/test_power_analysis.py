@@ -13,7 +13,23 @@ import lib.kld_metrics_io as kio
 from fakes import make_records, write_vlmk
 
 
-@pytest.mark.parametrize("weighting", ["item", "token"])
+def test_token_weighting_is_rejected_before_power_simulation(monkeypatch):
+    def forbidden(*args, **kwargs):
+        raise AssertionError("token-weighted power must not simulate")
+
+    monkeypatch.setattr("stats.power._simulate_t_surface", forbidden)
+    values = np.array([-0.1, 0.2, 0.3])
+    weights = np.array([1., 10., 100.])
+    with pytest.raises(ValueError, match="descriptive only"):
+        build_design({16: values}, {16: weights}, [25], weighting="token", sesoi=0.1)
+    with pytest.raises(ValueError, match="descriptive only"):
+        paired_t_interval(values, weights, "token", 0.95)
+    with pytest.raises(SystemExit):
+        power_cli.parse_args(["--candidate-a", "a", "--candidate-b", "b", "--token-caps", "16",
+                              "--weighting", "token", "--out", "power.md"])
+
+
+@pytest.mark.parametrize("weighting", ["item"])
 def test_paired_t_interval_matches_production_compare(weighting):
     differences = np.array([-0.4, -0.1, 0.2, 0.5, 0.9], dtype=float)
     weights = np.array([3, 5, 7, 11, 13], dtype=float)
@@ -53,7 +69,7 @@ def test_precision_only_never_substitutes_the_observed_effect():
                for row in design["required_n_by_cap"])
 
 
-@pytest.mark.parametrize("weighting", ["item", "token"])
+@pytest.mark.parametrize("weighting", ["item"])
 def test_duplicating_within_item_tokens_does_not_create_power(weighting):
     """A longer cap with identical item summaries is correlated evidence,
     not more independent observations."""

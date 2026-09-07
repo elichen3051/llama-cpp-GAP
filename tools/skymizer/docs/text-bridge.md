@@ -67,7 +67,7 @@ The wrapper's `text` lane finds the two completed collections under `TEXT_WORK`.
 
 ```bash
 tools/skymizer/scripts/05_compare.sh text \
-  --unit article --metrics kld nll --primary-metric kld --primary-weighting token
+  --unit article --metrics kld nll --primary-metric kld --primary-weighting item
 ```
 
 Use `--unit window` for windows or `--unit block --block-windows 8` for fixed contiguous blocks. Article/block modes require every original window and stored target. They validate paired windows first, then merge full per-token records without retokenization, BOS insertion or additional scoring. Cross-article windows assign each target to its article; articles with no scored targets contribute no group. The final shorter block is retained. Grouping precedes t statistics/bootstrap, so group count determines degrees of freedom and resampling.

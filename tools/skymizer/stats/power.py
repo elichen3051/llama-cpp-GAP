@@ -39,21 +39,12 @@ def _arrays(values, weights):
 
 def estimate_and_se(values, weights, weighting: str):
     """Production paired-t statistic and analytic SE for one item sample."""
+    if weighting != "item":
+        raise ValueError("paired-test power requires weighting='item'; token weighting is descriptive only")
     values, weights = _arrays(values, weights)
     n = values.size
-    if weighting == "item":
-        estimate = float(values.mean())
-        se = float(values.std(ddof=1) / math.sqrt(n))
-    elif weighting == "token":
-        weight_sum = float(weights.sum())
-        estimate = float((weights * values).sum() / weight_sum)
-        influence = weights * (values - estimate)
-        se = float(
-            math.sqrt(n * float((influence * influence).sum()) / (n - 1))
-            / weight_sum
-        )
-    else:
-        raise ValueError(f"weighting must be 'item' or 'token'; got {weighting!r}")
+    estimate = float(values.mean())
+    se = float(values.std(ddof=1) / math.sqrt(n))
     return estimate, se
 
 
@@ -98,17 +89,11 @@ def wilson_interval(hits: int, total: int, confidence_level: float = 0.95):
 
 def _batch_estimate_and_se(values, weights, weighting: str):
     """Vectorized counterpart of :func:`estimate_and_se` for MC draws."""
+    if weighting != "item":
+        raise ValueError("paired-test power requires weighting='item'; token weighting is descriptive only")
     n = values.shape[1]
-    if weighting == "item":
-        estimate = values.mean(axis=1)
-        se = values.std(axis=1, ddof=1) / math.sqrt(n)
-        return estimate, se
-    if weighting != "token":
-        raise ValueError(f"weighting must be 'item' or 'token'; got {weighting!r}")
-    weight_sum = weights.sum(axis=1)
-    estimate = (weights * values).sum(axis=1) / weight_sum
-    influence = weights * (values - estimate[:, None])
-    se = np.sqrt(n * (influence * influence).sum(axis=1) / (n - 1)) / weight_sum
+    estimate = values.mean(axis=1)
+    se = values.std(axis=1, ddof=1) / math.sqrt(n)
     return estimate, se
 
 
@@ -244,11 +229,10 @@ def _simulate_t_surface(
 
 
 def _effective_sd(values, weights, weighting: str):
+    if weighting != "item":
+        raise ValueError("paired-test power requires weighting='item'; token weighting is descriptive only")
     values, weights = _arrays(values, weights)
-    if weighting == "item":
-        return float(values.std(ddof=1))
-    _, se = estimate_and_se(values, weights, weighting)
-    return float(se * math.sqrt(values.size))
+    return float(values.std(ddof=1))
 
 
 def _bootstrap_effective_sd(
@@ -320,8 +304,8 @@ def build_design(
     sizes = tuple(sorted({int(n) for n in sample_sizes}))
     if not sizes or any(n < 2 for n in sizes):
         raise ValueError("sample sizes must all be >= 2")
-    if weighting not in ("item", "token"):
-        raise ValueError("weighting must be 'item' or 'token'")
+    if weighting != "item":
+        raise ValueError("paired-test power requires weighting='item'; token weighting is descriptive only")
     if not 0.0 < confidence_level < 1.0:
         raise ValueError("confidence_level must be in (0, 1)")
     if not 0.5 < target_power < 1.0:

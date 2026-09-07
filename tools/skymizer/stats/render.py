@@ -311,6 +311,7 @@ def _section_title(a_label, b_label, n_items, iters, conf_pct, num_eval_tokens,
         "- Protocol: teacher-forced on the dataset's stored model-generated "
         "answer trajectory; KLD/JSD/EAR over full vocab; answer positions only.",
     ]
+    lines.append("- Paired inference is item-weighted only; token-weighted rows are descriptive.")
     if sampling:
         lines[2] = f"- Paired {sampling['unit']} units: {n_items} from {sampling['n_windows']} corpus windows   |   {how}"
         protocol = sampling["protocol"]
@@ -471,7 +472,7 @@ def _section_verdict_summary(result, weightings) -> list[str]:
                                    summary_rows,
                                    aligns=["left", "left", "left"]))
         lines.append("")
-        lines.append("Everything that is not listed here is either "
+        lines.append("Item-weighted endpoints not listed here are either "
                      "inconclusive or did not survive the family-wise "
                      "correction; the full grid is below.")
         lines.append("")
@@ -487,7 +488,7 @@ def _section_results_intro(primary, multiplicity, conf_pct, conditional=False) -
         lines.append(
             f"**★ = the one confirmatory endpoint** (`{primary['metric']}`, "
             f"{primary['weighting']}-weighted). Its {conf_pct}CI is the "
-            "report's claim and spends the whole α. Every other row is "
+            "report's claim and spends the whole alpha. Other item-weighted endpoints are "
             "**exploratory**: its `p (Holm)` is the Holm–Bonferroni-adjusted "
             f"p-value across the other {multiplicity.get('family_size', 0)} "
             "cells (`✓` = survives at α, `·` = does not), and only a `✓` row "
@@ -495,6 +496,8 @@ def _section_results_intro(primary, multiplicity, conf_pct, conditional=False) -
             f"{multiplicity.get('family_size', 0) + 1} independent tests is "
             "what produced a measured family-wise false-positive rate of 0.35 "
             "on exchangeable A/B data.")
+    lines.append("")
+    lines.append("Token-weighted rows show descriptive means and differences only, without a CI, p-value or paired-test verdict.")
     lines.append("")
     if conditional:
         lines = [line.replace("the one confirmatory endpoint", "the one primary endpoint, conditional on the corpus assumptions") for line in lines]
@@ -538,20 +541,21 @@ def _results_rows(result, metrics_to_show, weightings, primary_cell) -> list[lis
             block = mres.get(block_key)
             if block is None:
                 continue
-            decision = block["decision"]
-            verdict = _verdict_text(decision)
+            descriptive = block.get("role") == "descriptive"
+            decision = block.get("decision", {})
+            verdict = "descriptive only" if descriptive else _verdict_text(decision)
             if "delta_candidate_minus_baseline" in block:
                 ci = block.get("ci_delta", {})
                 estimate_str = _fmt_signed(block["delta_candidate_minus_baseline"])
                 ci_str = _fmt_signed_ci(ci)
                 a_mean, b_mean, label = block.get("baseline_mean"), block.get("candidate_mean"), name
-            elif "linked_to" in decision and name in _DERIVED_METRIC_LABELS:
+            elif name in _DERIVED_METRIC_LABELS and (descriptive or "linked_to" in decision):
                 label = _DERIVED_METRIC_LABELS[name]
                 if name == "ppl_ratio":
                     a_mean = b_mean = None
                     ci = block.get("ci", {})
                     estimate_str = _fmt_ratio_value(block["estimate"])
-                    ci_str = _fmt_ratio_ci(ci)
+                    ci_str = "-" if descriptive else _fmt_ratio_ci(ci)
                 elif name == "ppl":
                     a_mean, b_mean = block.get("baseline_ppl"), block.get("candidate_ppl")
                     estimate_str = _fmt_signed(block.get("delta_ppl_b_minus_a"))
@@ -575,6 +579,8 @@ def _results_rows(result, metrics_to_show, weightings, primary_cell) -> list[lis
                 p_str = f"{block['p_value_holm']:.4g} {mark}"
             else:
                 p_str = "—"
+            if descriptive:
+                ci_str = p_str = "-"
             rows.append([label, short_name, _fmt_plain(a_mean), _fmt_plain(b_mean),
                          estimate_str, ci_str, p_str, verdict])
         if name == "nll":
@@ -585,20 +591,7 @@ def _results_rows(result, metrics_to_show, weightings, primary_cell) -> list[lis
 
 
 def _section_notes(metrics_to_show, n_items, result_metrics) -> list[str]:
-    disagreements: list[str] = []
-    for name, mres in metrics_to_show:
-        if "source_metric" in mres:
-            continue
-        consensus = mres.get("weighting_consensus")
-        if consensus and consensus != "agree":
-            iv = mres["item_weighted"]["decision"]["verdict"]
-            tv = mres["token_weighted"]["decision"]["verdict"]
-            mark = " (direction reversal)" if consensus == "direction_reversal" else ""
-            disagreements.append(f"  - {name}: item = {iv}, token = {tv}{mark}")
     note_lines = []
-    if disagreements:
-        note_lines.append(f"note: weighting verdicts disagree on {len(disagreements)} metric(s):")
-        note_lines.extend(disagreements)
     if n_items is not None and n_items < 30:
         note_lines.append(
             f"note: small sample (n_items = {n_items} < 30). No interval "
@@ -616,8 +609,7 @@ def _section_notes(metrics_to_show, n_items, result_metrics) -> list[str]:
         "equivalence at a margin you choose (interval-inclusion TOST).")
     note_lines.append("note: mse_dp is in pp² (percentage-points squared); rms_dp (pp) "
                       "is shown with --show-diagnostic-metrics.")
-    note_lines.append("note: ppl = exp(mean nll) per model (item/token-weighted); its "
-                      "tested change is ppl_ratio (b ÷ a), not the raw ΔPPL.")
+    note_lines.append("note: ppl = exp(mean nll) per model (item/token-weighted); only the item-weighted ppl_ratio has a paired-test interval.")
     if "ear" in result_metrics:
         note_lines.append(
             "note: ear = Expected Acceptance Rate (arXiv:2605.02404): per position "

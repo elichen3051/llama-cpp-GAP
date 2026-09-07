@@ -102,6 +102,7 @@ def test_power_mode_resamples_with_replacement_and_may_exceed_the_pool(
     assert payload["ci_method"] == "t"
     assert payload["bootstrap_iters_used"] == 0
     assert payload["sizes"] == [20, 60]        # 60 > the 30-item pool
+    assert all(key.endswith("/item_weighted") for key in payload["full_population_verdicts"])
     report = out.read_text()
     assert "WITH replacement" in report
     assert "paired Student-t" in report

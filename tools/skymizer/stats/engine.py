@@ -20,7 +20,6 @@ from stats.contracts import (
 )
 from stats.inference import (
     _build_weighting_block,
-    _classify_consensus,
     _exp_nll,
     _ppl_block,
     _ppl_ratio_block,
@@ -148,10 +147,7 @@ def _validate_compare_inputs(scores_a, scores_b, weights, token_metrics_a,
 def _metric_blocks(scores_a, scores_b, w, metrics, resolved_primary,
                    equivalence_margin, confidence_level, bootstrap_iters,
                    seed, ci_method) -> dict[str, dict[str, Any]]:
-    """One {item_weighted, token_weighted} pair per requested metric, in
-    request order; item before token per metric (each call re-seeds the
-    bootstrap from `seed`, so the draws are order-independent, but the
-    order is kept regardless -- NUMERICAL_CONTRACT.md #5)."""
+    """Item inference and token-weighted descriptions in metric request order."""
     metric_results: dict[str, dict[str, Any]] = {}
     for metric in metrics:
         margin = equivalence_margin if metric == resolved_primary else None
@@ -165,14 +161,12 @@ def _metric_blocks(scores_a, scores_b, w, metrics, resolved_primary,
         token_block = _build_weighting_block(
             a_vals, b_vals, w, weighting="token", score_direction=score_direction,
             confidence_level=confidence_level, bootstrap_iters=bootstrap_iters,
-            seed=seed, ci_method=ci_method, equivalence_margin=margin)
+            seed=seed, ci_method=ci_method)
         metric_results[metric] = {
             "score_direction": score_direction,
             "n_items_used": int(a_vals.size),
             "item_weighted": item_block,
             "token_weighted": token_block,
-            "weighting_consensus": _classify_consensus(
-                item_block["decision"], token_block["decision"]),
         }
     return metric_results
 
@@ -186,13 +180,11 @@ def _add_derived_blocks(metric_results: dict[str, dict[str, Any]]) -> None:
             "source_metric": "nll", "score_direction": "lower_is_better",
             "item_weighted": _ppl_block(nll_r["item_weighted"], "nll.item_weighted"),
             "token_weighted": _ppl_block(nll_r["token_weighted"], "nll.token_weighted"),
-            "weighting_consensus": nll_r["weighting_consensus"],
         }
         metric_results["ppl_ratio"] = {
             "source_metric": "nll", "score_direction": "lower_is_better",
             "item_weighted": _ppl_ratio_block(nll_r["item_weighted"], "nll.item_weighted"),
             "token_weighted": _ppl_ratio_block(nll_r["token_weighted"], "nll.token_weighted"),
-            "weighting_consensus": nll_r["weighting_consensus"],
         }
     if "mse_dp" in metric_results:
         mse_r = metric_results["mse_dp"]
@@ -200,7 +192,6 @@ def _add_derived_blocks(metric_results: dict[str, dict[str, Any]]) -> None:
             "source_metric": "mse_dp", "score_direction": "lower_is_better",
             "item_weighted": _rms_dp_block(mse_r["item_weighted"], "mse_dp.item_weighted"),
             "token_weighted": _rms_dp_block(mse_r["token_weighted"], "mse_dp.token_weighted"),
-            "weighting_consensus": mse_r["weighting_consensus"],
         }
 
 
@@ -245,14 +236,9 @@ def _side_metrics(scores_a, scores_b, w, model_a_label, model_b_label):
 
 def _apply_multiplicity(metric_results, metrics, primary_metric, primary_weighting,
                         confidence_level, equivalence_margin) -> dict[str, Any]:
-    """One confirmatory endpoint, Holm over the rest. Marks every cell's
-    role in place, attaches p_value_holm / holm_significant to the
-    exploratory family (in `metrics` request order, item before token --
-    holm_adjust's tie-break is input index), and returns the multiplicity
-    block."""
-    if primary_weighting not in ("item", "token"):
-        raise ValueError("primary_weighting must be 'item' or 'token'; got "
-                         f"{primary_weighting!r}")
+    """One item-weighted primary endpoint; Holm over the remaining item endpoints."""
+    if primary_weighting != "item":
+        raise ValueError("primary_weighting must be 'item'; token weighting is descriptive only")
     primary_key = f"{primary_weighting}_weighted"
     if primary_metric is None:
         # Auto: the standing default when it is being compared, else the
@@ -271,7 +257,7 @@ def _apply_multiplicity(metric_results, metrics, primary_metric, primary_weighti
         mres = metric_results.get(name)
         if not mres:
             continue
-        for weighting_key in ("item_weighted", "token_weighted"):
+        for weighting_key in ("item_weighted",):
             block = mres.get(weighting_key)
             if not isinstance(block, dict) or block.get("p_value") is None:
                 continue
@@ -295,12 +281,11 @@ def _apply_multiplicity(metric_results, metrics, primary_metric, primary_weighti
         "alpha": alpha,
         "policy": (
             "One confirmatory endpoint whose interval spends the whole alpha; "
-            "every other metric x weighting cell is exploratory and carries a "
+            "every other item-weighted endpoint is exploratory and carries a "
             "Holm-Bonferroni-adjusted p-value over the remaining "
             f"{len(family)} cells. Holm controls the family-wise error rate "
-            "under arbitrary dependence, which this family needs: the two "
-            "weightings are views of the same numbers and kld/reversed_kld/"
-            "js_kld are functionals of the same distribution pair."),
+            "under arbitrary dependence: kld/reversed_kld/js_kld are functionals "
+            "of the same distribution pair. Token-weighted summaries are descriptive only."),
     }
 
 
@@ -413,6 +398,8 @@ def compare_items(
     Pipeline (each stage is a helper above, in this order): validate ->
     per-metric weighting blocks -> derived blocks -> side metrics ->
     multiplicity -> token-level blocks -> assemble."""
+    if primary_weighting != "item":
+        raise ValueError("primary_weighting must be 'item'; token weighting is descriptive only")
     _validate_compare_inputs(scores_a, scores_b, weights, token_metrics_a,
                              token_metrics_b, item_keys, seed)
 
@@ -420,7 +407,7 @@ def compare_items(
     # The equivalence margin is in the PRIMARY metric's own units (nats for
     # kld, pp^2 for mse_dp, ...), so it is applied to that metric only --
     # one number cannot be a meaningful margin for all of them at once. It
-    # is resolved here so both weightings of the primary metric use it.
+    # is resolved here for the item-weighted primary metric.
     resolved_primary = primary_metric
     if resolved_primary is None:
         resolved_primary = (DEFAULT_PRIMARY_METRIC

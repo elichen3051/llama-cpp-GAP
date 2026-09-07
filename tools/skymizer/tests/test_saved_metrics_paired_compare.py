@@ -1109,7 +1109,7 @@ def test_ear64_report_uses_saved_prefix_means_and_higher_is_better(tmp_path):
     rc, md, js = _run_main(a, b, tmp_path, "--num-eval-tokens", "3")
     assert rc == 0
     result = json.loads(js.read_text())
-    assert result["multiplicity"]["family_size"] == 29
+    assert result["multiplicity"]["family_size"] == 14
     for key in ("ear_64", "ear_64_normalized"):
         block = result["metrics"][key]
         assert block["score_direction"] == "higher_is_better"
@@ -1279,3 +1279,25 @@ def test_perplexity_header_checks_size_before_allocating_tokens(tmp_path, monkey
     monkeypatch.setattr(np, "fromfile", forbidden_read)
     with pytest.raises(ValueError, match="incomplete or has trailing"):
         read_ppl_header(path)
+
+
+def test_self_paired_smoke_consumes_descriptive_token_schema(tmp_path, monkeypatch):
+    from verify_and_validation_scripts import smoke_kld
+
+    a, _ = _make_pair(tmp_path, npos_list=[2, 3, 4])
+    rc, _, report_path = _run_main(a, a, tmp_path)
+    assert rc == 0
+    report = json.loads(report_path.read_text())
+    for name in ("paired", "self-paired"):
+        (tmp_path / f"{name}.json").write_text(json.dumps(report))
+    collection = {"sample.npz": {"npos": np.array(3), "kld": np.zeros(3)}}
+    monkeypatch.setattr(smoke_kld, "read_collection", lambda *args: collection)
+    monkeypatch.setattr("sys.argv", ["smoke_kld.py", "--verify-only", "--lane", "llm",
+                                    "--ref-model", "ref", "--cand-a-model", "a", "--cand-b-model", "b",
+                                    "--dataset", "dataset", "--out", str(tmp_path)])
+    smoke_kld.main()
+    assert json.loads((tmp_path / "summary.json").read_text())["self_paired_zero_deltas"] is True
+    report["metrics"]["kld"]["token_weighted"]["p_value"] = 0.5
+    (tmp_path / "self-paired.json").write_text(json.dumps(report))
+    with pytest.raises(AssertionError):
+        smoke_kld.main()

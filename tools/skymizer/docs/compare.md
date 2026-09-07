@@ -29,7 +29,9 @@ uniformly to both dirs; the stored files are unchanged). `-1`
 collection-time `num_eval_tokens` guard, which still requires the two
 dirs to have been *collected* with the same cap.
 
-For each base metric the report shows both candidate means, the item-weighted and token-weighted delta `b - a`, and a paired CI using `--ci-method` at `--confidence-level`. The default is a Student-t interval without bootstrap resampling. Bootstrap methods share the seed across weightings and resample the same paired item indices. The directional verdict is `A closer`, `B closer` or `inconclusive`.
+For each base metric the report shows both candidate means and the item-weighted and token-weighted delta `b - a`. Only item-weighted endpoints have a paired CI, p-value, directional verdict or equivalence decision. Token-weighted blocks are descriptive only, including derived PPL and RMS values. The default item interval is Student-t without bootstrap resampling; optional bootstrap methods resample the same paired item indices across metrics.
+
+JSON schema `vlm-paired-compare-v4` removes inference fields from token-weighted blocks and removes `weighting_consensus`. Descriptive blocks have `role: descriptive`. `--weighting token` controls display only and does not enable token-weighted inference.
 
 > [!IMPORTANT]
 > `inconclusive` means *the interval contains 0* — **not** that the two
@@ -49,10 +51,10 @@ The same entry point accepts full-window `collect_llm_kld.py` results prepared b
 For G groups, paired differences d_g and target counts w_g:
 
 - Equal-group estimate: `mean(d_g)`; standard error: `sd(d_g, ddof=1)/sqrt(G)`.
-- Token-weighted estimate: `theta=sum(w_g*d_g)/sum(w_g)`; with `u_g=w_g*(d_g-theta)`, squared standard error is `G*sum(u_g**2)/((G-1)*sum(w_g)**2)`.
+- Token-weighted descriptive estimate: `sum(w_g*d_g)/sum(w_g)`; no paired inference.
 - Pooled PPL is `exp(pooled mean NLL)`, never the arithmetic mean of per-group PPL values.
 
-The token-weighted standard error is a ratio linearization; its t calibration is approximate. Fixed WikiText/PG windows and adjacent articles or blocks can remain dependent. CI and test calculations treat groups as independent sampling units; residual dependence can invalidate coverage and p-values. Grouping does not prove independence, and these are conditional comparisons of a fixed corpus, not automatically confirmatory inference to a population of independently sampled questions. Choose grouping, block size, primary metric and weighting before inspecting outcomes. Position buckets are disabled after article/block concatenation because a concatenated group position is not an original answer position.
+Fixed WikiText/PG windows and adjacent articles or blocks can remain dependent. CI and test calculations treat groups as independent sampling units; residual dependence can invalidate coverage and p-values. Grouping does not prove independence, and these are conditional comparisons of a fixed corpus, not automatically confirmatory inference to a population of independently sampled questions. Choose grouping, block size and the item-weighted primary metric before inspecting outcomes. Position buckets are disabled after article/block concatenation because a concatenated group position is not an original answer position.
 
 The engine rejects fewer than two groups, nonfinite scores, invalid weights and unrepresentable derived PPL values instead of producing a verdict. The legacy random-subsampling and variance loaders use the main collection/runtime/pairing guards and refuse failed or nonfinite rows. Their planning results remain conditional on the observed panel. The variance decomposition omits token autocovariance; its sample-size calculation is a t-quantile approximation, not exact noncentral-t power inversion. Zero effect with zero variance has no defined SNR or finite detection sample size.
 
@@ -65,8 +67,7 @@ sample range this tooling operates in. Four constructions are available:
 - **`t`** (default) — the classical paired Student-t interval on the per-item deltas,
   `θ ± t_{n−1, 1−α/2}·SE`, with `p = P(|T_{n−1}| ≥ |θ/SE|)`. The SE is the
   closed form Efron & Tibshirani (1986) cite as the case where resampling is
-  unnecessary (`s/√n` item-weighted; the same ratio linearization as
-  `studentized` token-weighted). **No bootstrap**: the result is a
+  unnecessary (`s/sqrt(n)` item-weighted). **No bootstrap**: the result is a
   deterministic function of the deltas — no seed, no replicate count
   (`--bootstrap-iters` is ignored and the JSON records `0`). The t quantile
   and tail come from `stats/student_t.py` (regularized incomplete beta,
@@ -74,9 +75,7 @@ sample range this tooling operates in. Four constructions are available:
 - **`studentized`** — the bootstrap-t interval. Every replicate is
   divided by *its own* analytic standard error, so the interval is built from
   the pivotal quantity `t* = (θ* − θ)/SE*` and inverted:
-  `[θ − t*_(1−α/2)·SE, θ − t*_(α/2)·SE]`. For the token weighting the
-  statistic is a **ratio** of two item means, so its SE comes from the
-  standard ratio linearization rather than a naive weighted variance.
+  `[θ − t*_(1−α/2)·SE, θ − t*_(α/2)·SE]`. Only item weighting is supported.
 - **`bca`** — bias-corrected and accelerated: corrects the median bias of the
   bootstrap distribution (`z0`) and its skew (the acceleration `a`, from the
   leave-one-**item**-out jackknife — the same exchangeable unit the bootstrap
@@ -142,22 +141,9 @@ collapses to the point estimate and records the same key.
 
 #### Multiplicity: one confirmatory endpoint, Holm over the rest
 
-Every base metric is reported item- **and** token-weighted, so a default run
-emits 30 verdicts at nominal alpha = 0.05 when all VLMK v5 metrics are
-available (26 for v4). In the original 14-cell grid, exchangeable A/B data
-(identical distributions, a shared per-item latent, n=50) gave an uncorrected
-**family-wise false-positive rate of 0.35**.
+Every base metric has an item-weighted inference endpoint and a token-weighted descriptive summary. A complete VLMK v5 report has 15 tested endpoints: one primary and 14 exploratory endpoints (13 and 12 for v4).
 
-So the report designates exactly one **confirmatory endpoint**, marked `★`:
-`--primary-metric` (default `kld`) at `--primary-weighting` (default `item`).
-Its interval is the report's claim and spends the whole α. Every other cell is
-**exploratory** and carries `p (Holm)` — the Holm–Bonferroni-adjusted p-value
-across the remaining 29 cells (25 for the v4 metric set), with `✓` when it survives at α and `·` when it
-does not. Holm is the right correction here rather than Benjamini–Hochberg:
-it controls the family-wise rate under *arbitrary* dependence, and nothing in
-this family is independent (the two weightings are views of the same numbers;
-`kld` / `reversed_kld` / `js_kld` are three functionals of the same
-distribution pair).
+The report designates exactly one primary endpoint with `--primary-metric` (default `kld`). `--primary-weighting` accepts only `item`. The other item-weighted endpoints carry Holm-Bonferroni-adjusted p-values across their family. Token-weighted summaries do not enter that family. The metric endpoints share observations and can be dependent; Holm controls family-wise error under arbitrary dependence when the input p-values are valid.
 
 Adding EAR_64 to the default report expands the exploratory Holm family, so
 adjusted p-values can change. Existing metric values, means, raw p-values and
@@ -171,7 +157,7 @@ Each p-value is obtained by **inverting the interval that was actually built**
 
 **Weighting and the sampling unit.** Item weighting gives equal weight to each selected item or corpus group. Token weighting estimates the ratio of total metric sum to total target count, so longer groups contribute more. Under an appropriate sampling design, these estimate different population quantities: the expected group-average difference and the expected group-total difference divided by expected group size. Token weighting also reproduces corpus-pooled NLL/PPL aggregation. Neither weighting guarantees generalization or CI coverage.
 
-Tokens within an answer are correlated, and questions may share images or source material. The t calculation and bootstrap treat the selected items or groups as independent units; that assumption must be assessed for the study. A fixed corpus or a pilot overlapping the final cohort does not become an independent validation set through resampling. Select the unit, weighting and primary endpoint before inspecting candidate results. `--primary-weighting token` changes the confirmatory endpoint; the requested weighting rows remain available for interpretation.
+Tokens within an answer are correlated, and questions may share images or source material. The t calculation and bootstrap treat the selected items or groups as independent units; that assumption must be assessed for the study. A fixed corpus or a pilot overlapping the final cohort does not become an independent validation set through resampling. Select the unit and item-weighted primary endpoint before inspecting candidate results. `--primary-weighting token` is rejected; token-weighted rows remain available for descriptive interpretation.
 
 The report opens with a **`## Verdict summary`** listing just the confirmatory
 endpoint and the exploratory cells that survive Holm, and a

@@ -59,7 +59,8 @@ def parse_args(argv=None):
         help="future item counts N to evaluate (default: 25 50 75 100 150 200 300 500)",
     )
     p.add_argument("--metric", choices=DEFAULT_METRICS, default="kld")
-    p.add_argument("--weighting", choices=("item", "token"), default="item")
+    p.add_argument("--weighting", choices=("item",), default="item",
+                   help="paired-test power is item-weighted only")
     p.add_argument(
         "--sesoi", type=float, default=None,
         help="signed smallest effect of interest in candidate-B minus candidate-A units; "

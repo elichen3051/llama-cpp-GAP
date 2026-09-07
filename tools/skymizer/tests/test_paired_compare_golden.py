@@ -49,12 +49,16 @@ def test_paired_compare_matches_producer_golden_fixture():
     assert result["n_items"] == expected["n_items"]
     for metric, metric_expected in expected["metrics"].items():
         got = result["metrics"][metric]
-        assert got["weighting_consensus"] == metric_expected["weighting_consensus"]
+        assert "weighting_consensus" not in got
         for weighting in ("item_weighted", "token_weighted"):
             block = got[weighting]
             want = metric_expected[weighting]
             assert block["delta_candidate_minus_baseline"] == pytest.approx(
                 want["estimate"], abs=1e-12
             )
+            if weighting == "token_weighted":
+                assert block["role"] == "descriptive"
+                assert "ci_delta" not in block and "decision" not in block
+                continue
             assert block["ci_delta"]["lower"] == pytest.approx(want["ci"]["lower"], abs=1e-12)
             assert block["ci_delta"]["upper"] == pytest.approx(want["ci"]["upper"], abs=1e-12)

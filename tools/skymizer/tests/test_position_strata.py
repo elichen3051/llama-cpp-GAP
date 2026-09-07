@@ -149,7 +149,7 @@ def test_strata_are_exploratory_with_their_own_holm_family():
     want = holm_adjust([c["p_value"] for c in cells])
     assert [c["p_value_holm"] for c in cells] == pytest.approx(want)
     # ... and the primary endpoint's own family is untouched by them
-    assert res["multiplicity"]["family_size"] == 3   # 2 metrics x 2 weightings - primary
+    assert res["multiplicity"]["family_size"] == 1   # Two item-weighted endpoints minus the primary.
 
 
 def test_position_buckets_can_be_collapsed_to_one():

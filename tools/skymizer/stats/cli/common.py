@@ -61,14 +61,11 @@ def add_shared_paired_args(p, *, num_eval_tokens_help: str, end_help: str) -> No
                    choices=list(DEFAULT_METRICS),
                    help="the ONE confirmatory endpoint (default: kld). Its "
                         "interval spends the whole alpha; every other "
-                        "metric x weighting cell is reported as exploratory "
+                        "item-weighted metric is reported as exploratory "
                         "with a Holm-adjusted p-value.")
     p.add_argument("--primary-weighting", default=DEFAULT_PRIMARY_WEIGHTING,
-                   choices=["item", "token"],
-                   help="weighting of the confirmatory endpoint (default: item). "
-                        "Item weighting gives equal weight to each selected unit; "
-                        "token weighting reproduces corpus aggregation. Inference "
-                        "requires independent sampling units under either weighting.")
+                   choices=["item"],
+                   help="paired inference is item-weighted only; token weighting is descriptive")
     p.add_argument("--ci-method", choices=CI_METHODS, default=DEFAULT_CI_METHOD,
                    help="interval construction. 't' (default) is the classical "
                         "paired Student-t interval on the per-item deltas "

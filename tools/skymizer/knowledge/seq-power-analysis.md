@@ -63,15 +63,9 @@ item prefix score：
 
 items 是抽樣單位。tokens 可以在 item 內任意相關、異方差、非平穩。
 
-### 2.2 Token weighting
+### 2.2 Token weighting (descriptive only)
 
-token-weighted corpus estimand 是 ratio：
-
-    θ_K,tok = E[L_i(K) D_i(K)] / E[L_i(K)]
-
-它不是將所有 tokens 視為 IID。模擬時仍重抽 items，並在每個 replicate
-重新計算 numerator 和 denominator。工具使用正式 comparator 的
-ratio-linearized Student-t SE。
+The observed token-weighted corpus summary is `sum(L_i(K) * D_i(K)) / sum(L_i(K))`. It has no paired-test CI, p-value, equivalence decision or power estimate. The earlier ratio-linearized Student-t proposal is superseded by the item-only inference policy in [the comparison guide](../docs/compare.md).
 
 ### 2.3 為什麼 variance 不服從 1/K
 

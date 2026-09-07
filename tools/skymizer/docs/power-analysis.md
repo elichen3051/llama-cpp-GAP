@@ -17,7 +17,7 @@ Run examples from the repository root after setting `SKYMIZER_PYTHON`, `A`, `B` 
 
 SESOI is the smallest effect of scientific interest, expressed as candidate B minus A in the metric's units. Choose it independently of the observed pilot difference. For KLD, a negative value describes a lower candidate-B KLD. Without `--sesoi`, the tool reports precision and minimum detectable effect (MDE), not power under an assumed alternative.
 
-The planner resamples whole paired items, preserving within-item prefix dependence. It evaluates the production paired Student-t endpoint across the requested sample-size and token-cap grid. `--effect-profile flat` is the default; `--effect-profile pilot` uses the pilot effect shape and requires an explicit `--reference-cap` present in `--token-caps`.
+Only `--weighting item` is accepted for paired-test power. Token-weighted summaries are descriptive and have no power calculation. The planner resamples whole paired items, preserving within-item prefix dependence. It evaluates the production paired Student-t endpoint across the requested sample-size and token-cap grid. `--effect-profile flat` is the default; `--effect-profile pilot` uses the pilot effect shape and requires an explicit `--reference-cap` present in `--token-caps`.
 
 Caps must be positive and supported by the saved collection horizon. A short answer contributes only its available prefix; it is not padded with zeros. Sample sizes describe a hypothetical future sample and may exceed the pilot size, subject to the pilot representativeness assumption.
 
