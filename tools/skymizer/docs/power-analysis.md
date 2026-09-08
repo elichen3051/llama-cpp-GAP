@@ -21,7 +21,7 @@ Only `--weighting item` is accepted for paired-test power. Token-weighted summar
 
 Caps must be positive and supported by the saved collection horizon. A short answer contributes only its available prefix; it is not padded with zeros. Sample sizes describe a hypothetical future sample and may exceed the pilot size, subject to the pilot representativeness assumption.
 
-Reports include null-calibration diagnostics, Monte Carlo Wilson intervals and outer pilot-bootstrap sensitivity. These are distinct sources of uncertainty. Current outputs are exploratory design aids: null-calibration diagnostics do not automatically veto a design, zero-variance cells require inspection, outer intervals do not provide simultaneous guarantees for the whole grid, and the documented limitations of correct-direction outer bands remain. A layout refactor does not resolve these statistical limitations. See the implementation's module notes and [method description](../knowledge/seq-power-analysis.md).
+Reports keep empirical power separate from Gaussian directional nuisance sensitivity and MDE. Detected null inflation excludes a cell from all sample-size crossings; no detected inflation is not a calibration guarantee. Constant or numerically unresolved original variance aborts planning, and unresolved outer resamples make the nuisance band unavailable. The pilot-SD CI width is a plug-in quantity, not an expected future width. Wilson intervals and first-grid crossings are pointwise, with no simultaneous guarantee across the grid. The pilot-p10 criterion also requires the MC lower-bound criterion. See the [method description](../knowledge/seq-power-analysis.md) and [API verification](statistical-apis.md).
 
 ## Observed prefix variance
 

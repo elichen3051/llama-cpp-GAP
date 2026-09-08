@@ -6,28 +6,13 @@ saved_metrics_paired_compare.py.  Every requested cap is aggregated to one
 paired scalar per item.  Future datasets resample whole items with replacement;
 individual tokens are never resampled or treated as independent observations.
 
-TODO(review, before merge):
-- Gate required-N crossings on an explicit null-calibration acceptance rule.
-- Treat zero/near-zero pilot variance as unidentified unless an external
-  variance floor is supplied; do not report perfect power or zero MDE.
-- Make outer-bootstrap power bands use correct-direction power, excluding the
-  wrong-sign tail currently included by the two-sided normal approximation.
-- Either use simultaneous MC bands when selecting across the N-by-cap grid or
-  label the existing Wilson crossing as pointwise only.
-- Rename the pilot-SD CI half-width as a plug-in approximation, or estimate its
-  distribution from the future-sample simulations.
-- Validate mc_confidence_level in the public engine and persist candidate
-  direction plus the effective pilot-row selection/fingerprint in artifacts.
-- Harden the wrapper contract: separate prospective and reproducibility size
-  grids, derive default caps from the collection cap, and split metric support.
-- Clean up companion diagnostics: deterministic position profiles are not
-  token noise; handle zero-variance/strict-JSON and negative-cost-fit cases;
-  remove remaining guidance toward legacy observed-effect power.
 """
 
 from __future__ import annotations
 
 import argparse
+import hashlib
+import json
 import math
 import sys
 from pathlib import Path
@@ -41,7 +26,7 @@ from stats.cli.common import (
     resolve_item_end,
     write_report_and_json,
 )
-from stats.contracts import AlignmentError, DEFAULT_METRICS  # noqa: E402
+from stats.contracts import AlignmentError, DEFAULT_METRICS, LOWER_IS_BETTER  # noqa: E402
 from stats.power import build_design  # noqa: E402
 
 
@@ -283,7 +268,7 @@ def _pilot_cap_lines(design):
         "|---:|---:|---:|---:|---:|",
     ]
     for row in design["pilot_caps"]:
-        if "effective_sd_outer_p10" in row:
+        if row.get("effective_sd_outer_p10") is not None:
             effective_sd = (
                 f"{row['effective_sd']:.6g} "
                 f"[{row['effective_sd_outer_p10']:.6g}, "
@@ -291,6 +276,8 @@ def _pilot_cap_lines(design):
             )
         else:
             effective_sd = f"{row['effective_sd']:.6g}"
+            if row.get("unresolved_outer_draws"):
+                effective_sd += f" [band unavailable: {row['unresolved_outer_draws']} unresolved draws]"
         lines.append(
             f"| {row['token_cap']} | {row['pilot_effect']:+.6g} | "
             f"{effective_sd} | {row['mean_tokens_per_item']:.1f} | "
@@ -304,13 +291,14 @@ def _design_surface_lines(design):
     if design["mode"] == "prospective_power":
         lines.extend([
             "Power counts only rejection in the assumed effect's direction. `null rej.` ",
-            "is a separately null-centered calibration simulation; its Monte-Carlo ",
-            "interval should cover the nominal alpha before trusting the power cell.",
-            "`pilot power p10–p90` is an outer whole-item pilot-bootstrap band ",
-            "using the labeled normal approximation, not another MC interval.",
+            "is a separately null-centered simulation. Cells with null MC lower above nominal alpha are excluded from every N crossing.",
+            "Other cells have no detected inflation; this does not prove calibration.",
+            "`pilot power p10-p90` is outer item-bootstrap Gaussian nuisance sensitivity using directional noncentral-t power.",
+            "It is a different model from empirical MC. Degenerate outer resamples make the band unavailable.",
+            "All MC intervals are pointwise per cell and give no simultaneous guarantee across the N-by-cap grid.",
             "",
-            "| K | N | assumed effect | power [MC interval] | pilot power p10–p90 (approx.) | "
-            "wrong sign | null rej. [MC interval] | CI half-width | MDE approx | expected tokens |",
+            "| K | N | assumed effect | power [MC interval] | pilot power p10-p90 (Gaussian) | "
+            "wrong sign | null rej. [MC interval] | plug-in CI half-width | Gaussian MDE | expected tokens |",
             "|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
         ])
         for cell in design["cells"]:
@@ -341,18 +329,18 @@ def _design_surface_lines(design):
                 f"{cell['assumed_effect']:+.6g} | {power} | {nuisance_power} | "
                 f"{wrong} | "
                 f"{null_rejection} | "
-                f"{cell['expected_ci_half_width']:.6g} | {cell['mde_approx']:.6g} | "
+                f"{cell['plugin_ci_half_width']:.6g} | {cell['normal_model_mde']:.6g} | "
                 f"{cell['expected_evaluated_tokens']:.0f} |"
             )
     else:
         lines.extend([
-            "| K | N | expected CI half-width | MDE approx | expected tokens |",
+            "| K | N | plug-in CI half-width | Gaussian MDE | expected tokens |",
             "|---:|---:|---:|---:|---:|",
         ])
         for cell in design["cells"]:
             lines.append(
                 f"| {cell['token_cap']} | {cell['sample_size']} | "
-                f"{cell['expected_ci_half_width']:.6g} | {cell['mde_approx']:.6g} | "
+                f"{cell['plugin_ci_half_width']:.6g} | {cell['normal_model_mde']:.6g} | "
                 f"{cell['expected_evaluated_tokens']:.0f} |"
             )
     return lines
@@ -368,9 +356,10 @@ def _required_n_lines(design):
             "The MC-lower column requires the lower end of the future-simulation ",
             "Wilson interval to clear the target. The pilot-p10 column additionally ",
             "requires the lower decile across outer whole-item pilot resamples to ",
-            "clear it. `—` means the supplied N grid did not establish a crossing.",
+            "clear it. Detected null inflation excludes the cell from all crossings. These pointwise criteria give no grid-wide coverage guarantee.",
+            "A missing crossing means the eligible supplied N grid did not reach the criterion.",
             "",
-            "| K | point estimate | MC-lower-bound criterion | pilot-power-p10 criterion (approx.) |",
+            "| K | point estimate | MC-lower-bound criterion | pilot-power-p10 criterion (Gaussian) |",
             "|---:|---:|---:|---:|",
         ])
         for row in design["required_n_by_cap"]:
@@ -485,6 +474,7 @@ def main(argv=None) -> int:
             "metric": args.metric,
             "weighting": args.weighting,
             "paired_difference": "candidate_b_minus_candidate_a",
+            "score_direction": "lower_is_better" if args.metric in LOWER_IS_BETTER else "higher_is_better",
             "item_score": "mean over first min(token_cap, stored item length) positions",
             "sampling_unit": "item",
         },
@@ -495,6 +485,10 @@ def main(argv=None) -> int:
             "subset": meta.get("subset"),
             "split": meta.get("split"),
             "collection_cap": panel["collection_cap"],
+            "dataset_content_hash": meta.get("dataset_content_hash"),
+            "selected_item_keys": panel["used"],
+            "selection": {"start": args.start, "end": args.end},
+            "selected_item_keys_sha256": hashlib.sha256(json.dumps(panel["used"], ensure_ascii=True, separators=(",", ":")).encode("utf-8")).hexdigest(),
         },
         "alignment": {
             "n_used": len(panel["used"]),

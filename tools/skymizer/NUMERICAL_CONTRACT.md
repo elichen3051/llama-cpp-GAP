@@ -116,3 +116,9 @@ This deliberately changes report structure and the Holm family. Item-weighted ra
 The handwritten incomplete-beta/Student-t distribution and variance planner quantile approximation are replaced by SciPy. Production item paired inference uses `ttest_rel` and its confidence interval API. Scalar power intervals reuse that guarded implementation; Wilson intervals share an explicit `method="wilson"` call. Bootstrap constructions and Holm adjustment are unchanged.
 
 This is an intentional numerical migration. Student-t endpoints, p-values and their downstream transforms can differ in their final bits; item and token point estimates and bootstrap results must remain unchanged. Closed-form checks and published MATLAB quantiles validate the replacement independently before re-baselining the engine golden. The exact package APIs, Julia correspondences and numerical tolerances are recorded in function docstrings and [statistical API verification](docs/statistical-apis.md).
+
+## 9. Prospective power schema v2
+
+Empirical item resampling remains the primary power model. Gaussian nuisance sensitivity uses SciPy noncentral-t power in the assumed direction only; its MDE uses dimensionless SciPy root finding. The pilot-SD interval width is labeled as a plug-in quantity. Public counts and grids reject non-integers before simulation. Original and outer pilot samples share the same numerical-resolution rule; unresolved original variance aborts planning, and unresolved outer draws disable the nuisance band.
+
+Detected null inflation excludes a cell from all required-N crossings. Remaining cells have no detected inflation, without a calibration guarantee. The nuisance crossing also requires the ordinary MC lower-bound condition. Monte Carlo intervals and crossings are pointwise, not simultaneous over the grid. Reports preserve the selected item keys, their digest, row selection and metric direction.

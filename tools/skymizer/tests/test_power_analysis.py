@@ -94,7 +94,7 @@ def test_precision_only_never_substitutes_the_observed_effect():
     assert design["mode"] == "precision_only"
     assert design["sesoi"] is None
     assert all("power" not in cell for cell in design["cells"])
-    assert design["cells"][1]["mde_approx"] < design["cells"][0]["mde_approx"]
+    assert design["cells"][1]["normal_model_mde"] < design["cells"][0]["normal_model_mde"]
     assert all(row["first_evaluated_n_point_estimate"] is None
                for row in design["required_n_by_cap"])
 
@@ -237,7 +237,7 @@ def test_cli_writes_prospective_schema_and_report(tmp_path):
     ])
     assert rc == 0
     payload = json.loads(payload_path.read_text())
-    assert payload["schema_version"] == "skymizer-sequential-power-v1"
+    assert payload["schema_version"] == "skymizer-sequential-power-v2"
     assert payload["estimand"]["sampling_unit"] == "item"
     assert payload["design"]["mode"] == "prospective_power"
     assert len(payload["design"]["cells"]) == 4
@@ -250,3 +250,155 @@ def test_cli_writes_prospective_schema_and_report(tmp_path):
     assert "pilot power p10" in markdown
     assert "pilot's observed effect" not in markdown
     assert markdown.endswith("\n")
+    assert "pointwise" in markdown and "no simultaneous guarantee" in markdown
+    assert "plug-in" in markdown
+    assert payload["estimand"]["score_direction"] == "lower_is_better"
+    assert len(payload["inputs"]["selected_item_keys"]) == payload["alignment"]["n_used"]
+    import hashlib
+    keys = payload["inputs"]["selected_item_keys"]
+    assert payload["inputs"]["selected_item_keys_sha256"] == hashlib.sha256(json.dumps(keys, ensure_ascii=True, separators=(",", ":")).encode()).hexdigest()
+
+
+@pytest.mark.parametrize("options", [{"reps": float("nan")}, {"reps": 2.5}, {"outer_reps": float("inf")},
+                                      {"outer_reps": True}, {"mc_confidence_level": float("nan")},
+                                      {"mc_confidence_level": 2}, {"seed": -1}, {"effect_profile": "other"},
+                                      {"effect_profile": "pilot"}, {"reference_cap": 1}])
+def test_public_design_rejects_invalid_domains_before_simulation(monkeypatch, options):
+    def forbidden(*args, **kwargs):
+        raise AssertionError("invalid arguments reached simulation")
+    monkeypatch.setattr("stats.power._simulate_t_surface", forbidden)
+    with pytest.raises(ValueError):
+        build_design({1: [-1., 1.]}, {1: [1., 1.]}, [2], **options)
+
+
+@pytest.mark.parametrize("sizes", [[2.9], [True], [float("nan")], []])
+def test_public_design_does_not_truncate_or_accept_invalid_sample_sizes(sizes):
+    with pytest.raises(ValueError):
+        build_design({1: [-1., 1.]}, {1: [1., 1.]}, sizes, outer_reps=0)
+
+
+@pytest.mark.parametrize("pilot", [np.zeros(5), np.full(3, .1), np.array([1., 1., np.nextafter(1., 2.)])])
+def test_unidentified_pilot_variance_cannot_report_perfect_power_or_zero_mde(pilot):
+    for effect in (None, .1):
+        with pytest.raises(ValueError, match="unidentified"):
+            build_design({1: pilot}, {1: np.ones(len(pilot))}, [2], sesoi=effect, outer_reps=0)
+
+
+def test_small_metric_units_preserve_power_and_scale_precision():
+    pilot = np.array([-2., -1., 0., 1., 2.])
+    options = dict(outer_reps=0, reps=100, seed=1)
+    regular = build_design({1: pilot}, {1: np.ones(5)}, [10], sesoi=.5, **options)["cells"][0]
+    small = build_design({1: pilot * 1e-12}, {1: np.ones(5)}, [10], sesoi=.5e-12, **options)["cells"][0]
+    assert small["power"] == regular["power"]
+    assert small["normal_model_mde"] == pytest.approx(regular["normal_model_mde"] * 1e-12, rel=1e-12, abs=0)
+
+
+def test_null_inflation_suppresses_all_sample_size_crossings():
+    design = build_design({1: [-1., 1.]}, {1: [1., 1.]}, [2], sesoi=20., reps=4000, outer_reps=0, seed=1)
+    cell = design["cells"][0]
+    assert cell["null_rejection_rate"] == pytest.approx(.5, abs=.04)
+    assert cell["power"] > .99
+    assert cell["null_calibration_status"] == "detected_inflation"
+    assert cell["crossing_eligible"] is False
+    assert all(value is None for key, value in design["required_n_by_cap"][0].items() if key != "token_cap")
+
+
+def test_degenerate_outer_draws_make_nuisance_band_unavailable():
+    design = build_design({1: [0., 0., 0., 0., 10.]}, {1: np.ones(5)}, [20], sesoi=1., reps=100, outer_reps=200)
+    band = design["cells"][0]["pilot_uncertainty"]
+    assert band["degenerate_draws"] > 0
+    assert band["status"] == "unavailable_degenerate_resamples"
+    assert band["mde_p10"] is None
+    assert "power_p90" not in band
+    assert design["required_n_by_cap"][0]["first_evaluated_n_pilot_power_p10"] is None
+
+
+@pytest.mark.parametrize("effect", [0., .01, 1., 10., -1.])
+def test_directional_normal_model_matches_independent_gaussian_integral(effect):
+    """At df=1, condition on |Z| in (Z0+nc)/|Z|; integrate elementary normal tails."""
+    import math
+    from scipy.integrate import quad
+    from stats.power import _normal_model_power
+    critical = 1.0 / math.tan(math.pi * .025)
+    nc = abs(effect) * math.sqrt(2.)
+    want = quad(lambda z: .5 * math.erfc((critical*z - nc) / math.sqrt(2.))
+                * math.sqrt(2./math.pi) * math.exp(-z*z/2.), 0., math.inf, epsabs=1e-12)[0]
+    assert _normal_model_power(effect, 1., 2, .95) == pytest.approx(want, rel=1e-10)
+
+
+def test_normal_model_mde_reaches_target_in_independent_df1_integral():
+    import math
+    from scipy.integrate import quad
+    from stats.power import _normal_model_mde_per_sd
+    effect = _normal_model_mde_per_sd(2, .95, .8)
+    critical = 1.0 / math.tan(math.pi * .025)
+    nc = effect * math.sqrt(2.)
+    got = quad(lambda z: .5 * math.erfc((critical*z-nc)/math.sqrt(2.))
+               * math.sqrt(2./math.pi) * math.exp(-z*z/2.), 0., math.inf, epsabs=1e-12)[0]
+    assert got == pytest.approx(.8, abs=1e-10)
+
+
+def test_pilot_crossing_also_requires_mc_lower_bound(monkeypatch):
+    import stats.power as power
+    def cells(*args, **kwargs):
+        return [{"token_cap": 1, "sample_size": 20, "assumed_effect": 10.,
+                 "power": .7, "power_mc_lower": .6, "power_mc_upper": .8,
+                 "wrong_sign_rate": 0., "directional_power_defined": True,
+                 "null_rejection_rate": .05, "null_rejection_mc_lower": .02, "null_rejection_mc_upper": .09}]
+    monkeypatch.setattr(power, "_simulate_t_surface", cells)
+    design = build_design({1: np.linspace(-1.,1.,50)}, {1: np.ones(50)}, [20], sesoi=10., outer_reps=20)
+    assert design["cells"][0]["pilot_uncertainty"]["power_p10"] > .8
+    assert design["required_n_by_cap"][0]["first_evaluated_n_pilot_power_p10"] is None
+
+
+@pytest.mark.parametrize("effect", [.01, 1e-15])
+def test_outer_resamples_use_the_same_near_constant_guard_as_the_pilot(effect):
+    pilot = np.r_[1. + (np.arange(50) % 3) * np.spacing(1.), 2.]
+    design = build_design({1: pilot}, {1: np.ones(51)}, [100], sesoi=effect, reps=100, outer_reps=200)
+    band = design["cells"][0]["pilot_uncertainty"]
+    assert band["status"] == "unavailable_degenerate_resamples"
+    assert band["degenerate_draws"] > 0
+    assert "power_p90" not in band
+
+
+
+def test_production_unrepresentable_confidence_rejected_before_noncentral_t(monkeypatch):
+    def forbidden(*args, **kwargs):
+        raise AssertionError("unrepresentable confidence reached nct")
+    monkeypatch.setattr("stats.power._normal_model_mde_per_sd", forbidden)
+    with pytest.raises(ValueError, match="too close to 1"):
+        build_design({1: [-1., 0., 1.]}, {1: np.ones(3)}, [2], confidence_level=np.nextafter(1., 0.), outer_reps=0)
+
+
+def test_unresolved_near_null_mde_cannot_be_reported_as_zero():
+    with pytest.raises(ValueError, match="MDE inversion"):
+        build_design({1: [-1., 0., 1.]}, {1: np.ones(3)}, [25], confidence_level=1e-14,
+                     target_power=.500000000000001, outer_reps=0)
+
+
+
+def test_wilson_rejects_unrepresentable_confidence():
+    with pytest.raises(ValueError, match="too close to 1"):
+        wilson_interval(8, 10, np.nextafter(1., 0.))
+    with pytest.raises(ValueError, match="too close to 1"):
+        build_design({1: [-1., 0., 1.]}, {1: np.ones(3)}, [2], mc_confidence_level=np.nextafter(1., 0.))
+
+
+def test_noncentral_t_convergence_warning_cannot_be_reported_as_power(monkeypatch):
+    import warnings
+    from stats.power import _normal_model_power
+    def unconverged(*args, **kwargs):
+        warnings.warn("series did not converge", RuntimeWarning)
+        return .9
+    monkeypatch.setattr("stats.power.nct.sf", unconverged)
+    with pytest.raises(ValueError, match="failed numerical evaluation"):
+        _normal_model_power(1., 1., 2, .95)
+
+
+def test_outer_variance_underflow_disables_bands_without_aborting_valid_pilot():
+    pilot = np.array([0., 1e-160, 2e-160, -1e-150, 1e-150])
+    design = build_design({1: pilot}, {1: np.ones(5)}, [10], outer_reps=100, seed=7)
+    band = design["cells"][0]["pilot_uncertainty"]
+    assert band["status"] == "unavailable_degenerate_resamples"
+    assert band["degenerate_draws"] > 0
+    assert design["pilot_caps"][0]["effective_sd_outer_p10"] is None

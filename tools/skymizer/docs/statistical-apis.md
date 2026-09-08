@@ -10,10 +10,22 @@ Paired inference is restricted to item-weighted endpoints. Token-weighted means,
 | Two-sided Student-t tail | `stats.student_t.t_two_sided_p` calls `2 * scipy.stats.t.sf(abs(t), df)` | [SciPy Student-t survival function](https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.t.html) |
 | Item paired t-test and CI | `stats.inference._student_t_delta` calls `scipy.stats.ttest_rel(d, zeros, alternative="two-sided", nan_policy="raise")`, then `confidence_interval(confidence_level)`, where `d = B - A` | [SciPy paired t-test and result API](https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.ttest_rel.html) |
 | Monte Carlo proportion interval | `stats.power.wilson_interval` calls `scipy.stats.binomtest(hits, total).proportion_ci(confidence_level=..., method="wilson")` | [SciPy binomtest](https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.binomtest.html), [proportion_ci](https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats._result_classes.BinomTestResult.proportion_ci.html) |
+| Directional Gaussian power sensitivity | `stats.power._normal_model_power` calls `nct.sf(t.isf(alpha/2, df), df, abs(effect)*sqrt(n)/sd)` | [SciPy noncentral t](https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.nct.html), [Student t](https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.t.html) |
+| Gaussian directional MDE | `_normal_model_mde_per_sd` solves for dimensionless noncentrality and converts to effect/SD | [SciPy brentq](https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.brentq.html) |
 
 The power planner's scalar interval reuses the production paired-test helper. Its batched simulation retains vectorized item means and standard errors, using SciPy t quantiles. The legacy variance planner also uses the shared SciPy quantile wrapper; its sample-size search remains a documented approximation, not exact noncentral-t power inversion. The legacy subsampling tool reuses the Wilson helper's lower endpoint.
 
 `method="wilson"` is explicit: SciPy's default proportion interval is Clopper-Pearson, a different method. The reported Monte Carlo lower bound is the lower endpoint of a two-sided interval, not a one-sided interval at the same confidence level.
+
+## Prospective power model and eligibility
+
+The main power surface still resamples complete pilot items under a declared signed SESOI. The noncentral-t calculation describes a separate IID Gaussian model for nuisance sensitivity and MDE. It counts only rejection in the declared direction of the two-sided test, so a generic two-sided power routine that sums both rejection tails would estimate a different event. Independent tests integrate elementary normal tails at df=1 rather than using noncentral-t to generate its own oracle.
+
+Power schema v2 calls the pilot-SD width `plugin_ci_half_width`, not an expected future width, and calls the model-based effect threshold `normal_model_mde`. Root finding uses dimensionless noncentrality so the numerical tolerance does not depend on metric units. These Gaussian quantities need not agree with the empirical power model for a skewed pilot.
+
+Constant pilots and pilots with range at most `10 * eps * max(abs(values))` have unresolved variance for planning. This is an explicit numerical-resolution rule, not a scientific variance floor. The same rule applies to outer pilot resamples; any unresolved draw makes the entire nuisance band unavailable, with its count recorded. Draws are not silently deleted or assigned perfect power.
+
+A cell whose null-rejection Wilson lower endpoint exceeds nominal alpha is excluded from all sample-size crossings. Other cells are labeled `no_detected_inflation`; that is not proof of correct calibration. The pilot-p10 crossing additionally requires the ordinary MC lower-bound criterion. All Monte Carlo intervals are pointwise per cell, with no simultaneous guarantee over a searched grid. No package can choose an acceptable population shift or false-positive tolerance for the study.
 
 ## MATLAB correspondence
 

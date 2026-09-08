@@ -193,42 +193,21 @@ model-based sensitivity assumption。
 6. 對 centered-at-zero residual 同時計算 null rejection；
 7. 重複 `--reps` 次。
 
-每格輸出：
+Per-cell schema v2 outputs include empirical directional power and wrong-sign rates, their pointwise Wilson MC intervals, null rejection, `plugin_ci_half_width`, `normal_model_mde`, and expected evaluated tokens. The width plugs in pilot SD; it is not an expected future interval width.
 
-- `power`；
-- `power_mc_lower/upper`：Wilson Monte-Carlo interval；
-- `wrong_sign_rate`；
-- `null_rejection_rate`；
-- expected CI half-width；
-- approximate MDE；
-- expected evaluated token count。
-
-power crossing 同時報 point-estimate 首次達標的 evaluated N，以及 Wilson
-lower bound 也達標的保守 N。不同 caps 不假設單調，因此不能找到第一個
-達標 cap 後就停止檢查後續 caps。啟用 outer bootstrap 時，另報 normal
-approximation 下 power p10 也達標的 nuisance-conservative N。
+A detected null inflation (`null_rejection_mc_lower > nominal alpha`) excludes the cell from every N crossing. Remaining cells have no detected inflation, not a calibration guarantee. The pilot-p10 crossing also requires the ordinary MC lower-bound criterion. These are first evaluated-grid crossings, with no simultaneous guarantee across N or caps.
 
 ---
 
 ## 6. Pilot nuisance uncertainty
 
-單層 future-sample simulation 條件在 pilot empirical distribution 為真。
-Wilson interval只表示有限 `--reps` 的 Monte-Carlo error，不包含 pilot
-variance estimation error。
+The empirical future-sample simulation conditions on the pilot empirical distribution. Wilson intervals describe finite simulation error, not uncertainty in the pilot distribution.
 
-`--outer-reps` 對完整 items 再做 outer bootstrap，重新估每個 cap 的
-effective SD、CI half-width 與 MDE。power uncertainty band使用固定 SESOI
-和 bootstrap SD 的 normal approximation。JSON 將方法標為：
+Outer item resamples estimate SD sensitivity. Gaussian directional power uses `scipy.stats.nct.sf` with a two-sided t critical value; only the assumed-direction rejection tail counts. MDE inverts that same Gaussian model using `scipy.optimize.brentq` in dimensionless noncentrality. These are separate model-based sensitivity quantities, not another empirical power interval. The JSON method is `outer_item_bootstrap_plus_directional_normal_model`.
 
-    outer_item_bootstrap_plus_normal_power_approximation
+Original and outer samples share an input-relative numerical-resolution guard. An unresolved original pilot aborts planning; any unresolved outer sample makes its whole nuisance band unavailable. Samples are not dropped or assigned power 1.
 
-這是 nuisance uncertainty sensitivity，不是完整 Bayesian assurance；它沒有
-替 effect 建 prior，也不涵蓋 dataset/model drift。經典 assurance 定義見
-[O'Hagan et al. 2005](https://doi.org/10.1002/pst.175)。
-
-所有 empirical rejection proportions另報 Monte-Carlo interval；報告
-simulation MC error 的原則見
-[Morris et al. 2019](https://doi.org/10.1002/sim.8086)。
+The signed SESOI is fixed externally, and the bands do not include dataset/model drift or uncertainty in that choice. See [statistical API references](../docs/statistical-apis.md) for exact calls, assumptions, and independent validation.
 
 ---
 
@@ -358,10 +337,9 @@ simulator直接呼叫同一 inference primitive，並分開控制 future-dataset
 
 1. observed pilot effect 只作 profile/sign-flip 診斷，不用它取代 SESOI。
 2. 檢查 `fraction_reaching_cap`；大量 items 在 cap 前結束時，增加 cap 會飽和。
-3. 檢查 `null_rejection_rate` 的 MC interval是否涵蓋 nominal alpha。
-4. 用 `power_mc_lower` 而不是 point estimate 作保守 crossing。
-5. 需要防範 pilot nuisance 誤差時，再看 approximate
-   `first_evaluated_n_pilot_power_p10`；它不是精確的 nested-bootstrap power。
+3. Exclude cells with detected null inflation; no detected inflation does not prove calibration.
+4. The MC lower-bound crossing is pointwise, with no simultaneous grid-wide guarantee.
+5. The Gaussian pilot-p10 criterion additionally requires the ordinary MC lower-bound crossing; it is not empirical nested-bootstrap power.
 6. 比較 expected evaluated tokens，不要只比較 N 或 K。
 7. 檢查 outer uncertainty band；若跨越 target，pilot 不足以精確規劃。
 8. 不要假設更大的 K 一定更好，也不要自動輸出單一「最佳 K」。
