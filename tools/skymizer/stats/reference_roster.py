@@ -13,7 +13,7 @@ from lib.collect_common import dump_stem
 from lib.collection_state import comparison_locks, require_completed_attempts
 from lib.dataset_fingerprint import dataset_content_hash
 from lib.reference_dataset import validate_reference_row
-from stats.campaign import content_hash
+from stats.contracts import content_hash
 
 
 def _encoded_view(dataset):

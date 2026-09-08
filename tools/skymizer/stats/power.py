@@ -102,10 +102,8 @@ def wilson_interval(hits: int, total: int, confidence_level: float = 0.95):
     return float(ci.low), float(ci.high)
 
 
-def _batch_estimate_and_se(values, weights, weighting: str):
-    """Vectorized counterpart of :func:`estimate_and_se` for MC draws."""
-    if weighting != "item":
-        raise ValueError("paired-test power requires weighting='item'; token weighting is descriptive only")
+def _batch_item_estimate_and_se(values):
+    """Equal-item estimates and standard errors for Monte Carlo draws."""
     n = values.shape[1]
     with np.errstate(over="ignore", invalid="ignore", divide="ignore"):
         estimate = values.mean(axis=1)
@@ -157,17 +155,15 @@ def _pilot_profiles(
 
 def _simulate_t_surface(
     residuals_by_cap: Mapping[int, np.ndarray],
-    weights_by_cap: Mapping[int, np.ndarray],
     effects_by_cap: Mapping[int, float],
     sample_sizes: Sequence[int],
-    weighting: str,
     confidence_level: float,
     reps: int,
     seed: int,
     mc_confidence_level: float,
     chunk_size: int = 256,
 ):
-    """Empirical future-item simulation with a two-sided t rejection threshold.
+    """Equal-item future simulation with a two-sided t rejection threshold.
 
     SciPy t.isf uses alpha/2 directly: https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.t.html
     """
@@ -189,8 +185,7 @@ def _simulate_t_surface(
             indices = rng.integers(0, pilot_n, size=(count, sample_size))
             for cap in caps:
                 values = residuals_by_cap[cap][indices]
-                weights = weights_by_cap[cap][indices]
-                null_estimate, se = _batch_estimate_and_se(values, weights, weighting)
+                null_estimate, se = _batch_item_estimate_and_se(values)
                 half_width = critical * se
                 effect = effects_by_cap[cap]
                 alternative_estimate = null_estimate + effect
@@ -428,7 +423,7 @@ def build_design(
     cells_by_key = {}
     if effects is not None:
         simulated = _simulate_t_surface(
-            residuals, weights, effects, sizes, weighting, confidence_level,
+            residuals, effects, sizes, confidence_level,
             reps, seed, mc_confidence_level,
         )
         cells_by_key = {

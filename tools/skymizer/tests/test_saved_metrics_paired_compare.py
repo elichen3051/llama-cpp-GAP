@@ -1528,3 +1528,18 @@ def test_campaign_rejects_complex_scores_and_differences():
         analyze_campaign(plan, loaded)
     with pytest.raises(ValueError, match="real"):
         clustered_mean_test(np.array([1+1j, 2+1j, 3+1j]), [0, 1, 2], .05, 1)
+
+
+@pytest.mark.parametrize("invalid", ["nonfinite", "same_path"])
+def test_shared_report_writer_validates_before_replacing_output(tmp_path, invalid):
+    from argparse import Namespace
+    from stats.cli.common import write_report_and_json
+    out = tmp_path / "report.md"
+    out.write_text("existing report")
+    output_json = out if invalid == "same_path" else tmp_path / "result.json"
+    payload = {"p": float("nan") if invalid == "nonfinite" else .5}
+    with pytest.raises(ValueError):
+        write_report_and_json(Namespace(out=out, output_json=output_json), "replacement", payload)
+    assert out.read_text() == "existing report"
+    if invalid == "nonfinite":
+        assert not output_json.exists()

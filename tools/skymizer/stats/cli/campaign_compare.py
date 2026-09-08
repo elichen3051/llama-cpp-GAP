@@ -44,7 +44,6 @@ def main(argv=None):
                 lines.append(f"| {cell['cell_id']} | {cell['descriptive_minimum']} | {possible} | {cell['unique_best_by_simultaneous_intervals'] or 'unresolved'} |")
             lines.extend(["", "Possible-best sets use separate Bonferroni simultaneous intervals. See JSON for intervals, descriptive rankings, provenance and the complete plan."])
             report = "\n".join(lines) + "\n"
-        json.dumps(result, allow_nan=False)
         write_report_and_json(args, report, result)
     except (ValueError, OSError, KeyError, TypeError) as error:
         parser.exit(2, f"campaign: {error}\n")

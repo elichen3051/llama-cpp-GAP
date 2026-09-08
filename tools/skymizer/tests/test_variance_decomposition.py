@@ -188,7 +188,7 @@ def test_deterministic_position_profile_keeps_raw_proxy_failure_and_suppresses_a
     monkeypatch.setattr(vd, 'collect_deltas', lambda *args: (deltas, lengths, lengths, -1., 0))
     monkeypatch.setattr(vd, 'cost_model_from_manifest', lambda *args: dict(cfix=2.,ctok=.01,r2=1.,n_rows=40))
     (tmp_path/'metrics').mkdir()
-    output = tmp_path/'variance.json'
+    output = tmp_path/'json-output'/'variance.json'
     assert vd.main(['--candidate-a',str(tmp_path),'--candidate-b',str(tmp_path),'--output-json',str(output)]) == 0
     result = json.loads(output.read_text(), parse_constant=lambda value: pytest.fail(value))
     assert result['var_between_raw'] < 0

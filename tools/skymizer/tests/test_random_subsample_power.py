@@ -38,7 +38,7 @@ def _run(tmp_path, monkeypatch, *extra, n=40, effect=0.02):
     monkeypatch.setattr(rsp, "load_population",
                         lambda a, b: _population(n=n, effect=effect))
     out = tmp_path / "curve.md"
-    js = tmp_path / "curve.json"
+    js = tmp_path / "json-output" / "curve.json"
     rc = rsp.main(["--candidate-a", str(tmp_path), "--candidate-b", str(tmp_path),
                    "--sizes", "10", "20", "40", "--reps", "12",
                    "--bootstrap-iters", "800", "--seed", "3",
@@ -100,8 +100,9 @@ def test_invalid_numeric_options_fail_before_loading(tmp_path, monkeypatch, opti
 
 
 def test_nonfinite_mc_interval_cannot_silently_become_no_crossing(monkeypatch):
-    monkeypatch.setattr(rsp,'wilson_interval',lambda *args:(float('nan'),float('nan')))
-    with pytest.raises(ValueError, match='not numerically representable'):
+    from types import SimpleNamespace
+    monkeypatch.setattr("stats.power.binomtest", lambda *args: SimpleNamespace(proportion_ci=lambda **kwargs: (float("nan"), float("nan"))))
+    with pytest.raises(ValueError, match="invalid Wilson"):
         rsp.wilson_lower(8,10)
 
 

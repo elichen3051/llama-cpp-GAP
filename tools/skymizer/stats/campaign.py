@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-import hashlib
 import itertools
-import json
 import math
 from pathlib import Path
 
@@ -12,12 +10,8 @@ import numpy as np
 from statsmodels.regression.linear_model import OLS
 
 from stats import collection_io
+from stats.contracts import content_hash
 from stats.multiplicity import adjust_pvalues
-
-
-def content_hash(value):
-    """Hash a JSON value independently of dictionary key order."""
-    return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()).hexdigest()
 
 
 def _names(values, label, minimum=1):
@@ -324,14 +318,10 @@ def select_benchmark(plan, loaded, rule):
     if set(loaded) != {c["cell_id"] for c in plan["cells"]}:
         raise ValueError("loaded cells must exactly match the training plan")
     _require_selection_provenance(plan, loaded)
-    if len({c["mode"] for c in plan["cells"]}) != 1:
-        raise ValueError("select instruct and thinking benchmarks separately")
     first = plan["cells"][0]["roster"]
     identities = sorted([{k: r.get(k, []) for k in ("item_id", "source_id", "image_hashes")} for r in first], key=lambda r: r["item_id"])
     ids = [r["item_id"] for r in identities]
-    target = rule.get("size")
-    if not isinstance(target, int) or isinstance(target, bool) or not 3 <= target < len(ids):
-        raise ValueError("size must be an integer from 3 to pool size minus one")
+    target = rule["size"]
     tasks = []
     for cell in plan["cells"]:
         roster = cell["roster"]

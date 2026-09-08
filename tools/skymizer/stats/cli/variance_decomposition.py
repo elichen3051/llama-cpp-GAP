@@ -566,6 +566,7 @@ def main(argv=None) -> int:
             for key, value in block.items():
                 if isinstance(value, float) and not np.isfinite(value):
                     block[key] = None
+        args.output_json.parent.mkdir(parents=True, exist_ok=True)
         args.output_json.write_text(json.dumps(payload, indent=2, allow_nan=False) + "\n", encoding="utf-8")
         print(f"wrote json -> {args.output_json}", file=sys.stderr)
     return 0

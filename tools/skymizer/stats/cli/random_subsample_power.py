@@ -7,7 +7,6 @@ Use power_analysis.py with an external SESOI for prospective collection planning
 """
 
 import argparse
-import json
 import math
 import sys
 from pathlib import Path
@@ -19,6 +18,7 @@ from stats.contracts import DEFAULT_METRICS              # noqa: E402
 from stats.engine import compare_items                   # noqa: E402
 from stats.power import wilson_interval                  # noqa: E402
 from stats import collection_io as paired_io                # noqa: E402
+from stats.cli.common import write_report_and_json
 
 WEIGHTINGS = ("item_weighted",)
 
@@ -95,10 +95,7 @@ def wilson_lower(hits: int, n: int, confidence_level: float = 0.95) -> float:
     """
     if n == 0 and hits == 0:
         return 0.0
-    lower, upper = wilson_interval(hits, n, confidence_level)
-    if not (math.isfinite(lower) and math.isfinite(upper) and 0.0 <= lower <= upper <= 1.0):
-        raise ValueError("Wilson interval is not numerically representable")
-    return lower
+    return wilson_interval(hits, n, confidence_level)[0]
 
 
 def verdicts_of(result):
@@ -326,10 +323,7 @@ def main(argv=None) -> int:
         args, scores_a, scores_b, weights, sizes, truth, base_metrics, pop)
 
     text, min_n = _render_report(args, pop, sizes, truth, counts, effect)
-    args.out.parent.mkdir(parents=True, exist_ok=True)
-    args.out.write_text(text, encoding="utf-8")
-    print(f"wrote report -> {args.out}", file=sys.stderr)
-
+    payload = None
     if args.output_json:
         is_power = args.mode == "power"
         payload = {
@@ -362,9 +356,7 @@ def main(argv=None) -> int:
                 {f"{m}/{w}": {str(n): c for n, c in per_n.items()}
                  for (m, w), per_n in counts.items()},
         }
-        args.output_json.write_text(json.dumps(payload, indent=2, allow_nan=False) + "\n",
-                                    encoding="utf-8")
-        print(f"wrote json -> {args.output_json}", file=sys.stderr)
+    write_report_and_json(args, text, payload)
     return 0
 
 

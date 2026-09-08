@@ -1,4 +1,4 @@
-"""Argument and output helpers for saved-metrics comparison."""
+"""Shared arguments and report output for statistical CLIs."""
 import json
 import math
 import sys
@@ -151,11 +151,15 @@ def resolve_metrics(args) -> tuple[str, ...]:
 
 
 def write_report_and_json(args, table: str, result) -> None:
+    """Serialize strict JSON before writing either report, and create output directories."""
+    if args.output_json and args.out.resolve() == args.output_json.resolve():
+        raise ValueError("report and JSON paths must differ")
+    encoded = json.dumps(result, indent=2, allow_nan=False) + "\n" if args.output_json else None
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(table, encoding="utf-8")
     print(f"wrote report -> {args.out}", file=sys.stderr)
 
     if args.output_json:
         args.output_json.parent.mkdir(parents=True, exist_ok=True)
-        args.output_json.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
+        args.output_json.write_text(encoded, encoding="utf-8")
         print(f"wrote json -> {args.output_json}", file=sys.stderr)

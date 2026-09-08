@@ -8,7 +8,7 @@ import pytest
 
 import stats.cli.power_analysis as power_cli
 from stats.engine import compare_items
-from stats.power import _batch_estimate_and_se, build_design, paired_t_interval, wilson_interval
+from stats.power import _batch_item_estimate_and_se, build_design, paired_t_interval, wilson_interval
 import lib.kld_metrics_io as kio
 from fakes import make_records, write_vlmk
 
@@ -56,7 +56,7 @@ def test_planning_interval_cannot_turn_invalid_variance_into_significance(values
     with pytest.raises(ValueError, match="standard error"):
         paired_t_interval(values, np.ones(3), "item", .95)
     with pytest.raises(ValueError, match="standard error"):
-        _batch_estimate_and_se(np.array([values]), np.ones((1, 3)), "item")
+        _batch_item_estimate_and_se(np.array([values]))
 
 
 @pytest.mark.parametrize("weighting", ["item"])

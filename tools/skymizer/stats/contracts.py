@@ -1,6 +1,13 @@
 # stats/contracts.py -- Constants, schema version, default metric/primary/CI/bucket policy, the
 # AlignmentError/MissingMetricError exceptions, and min_bootstrap_iters.
+import hashlib
+import json
 import math
+
+
+def content_hash(value):
+    """Hash a JSON value independently of dictionary key order."""
+    return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()).hexdigest()
 
 # v3: significant paired verdicts say A/B closer (to the shared reference),
 # and non-finite metrics abort instead of being removed from the paired sample.
