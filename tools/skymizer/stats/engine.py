@@ -234,6 +234,20 @@ def _side_metrics(scores_a, scores_b, w, model_a_label, model_b_label):
     return candidate_metrics, reference_metrics
 
 
+def _adjust_exploratory_cells(cells, confidence_level):
+    """Retain every planned cell; unavailable tests count as p=1 internally."""
+    adjusted = holm_adjust([c.get("p_value", 1.0) for c in cells])
+    censored = any(c.get("p_value_metadata", {}).get("censored", False) for c in cells)
+    for cell, p_adj in zip(cells, adjusted):
+        cell["holm_family_size"] = len(cells)
+        if "p_value" not in cell:
+            continue
+        cell["p_value_holm"] = p_adj
+        if censored:
+            cell["p_value_holm_is_upper_bound"] = True
+        cell["holm_significant"] = bool(p_adj < 1.0 - confidence_level)
+
+
 def _apply_multiplicity(metric_results, metrics, primary_metric, primary_weighting,
                         confidence_level, equivalence_margin) -> dict[str, Any]:
     """One item-weighted primary endpoint; Holm over the remaining item endpoints."""
@@ -266,12 +280,8 @@ def _apply_multiplicity(metric_results, metrics, primary_metric, primary_weighti
                 continue
             block["role"] = "exploratory"
             family.append((name, weighting_key))
-    adjusted = holm_adjust([metric_results[n][k]["p_value"] for n, k in family])
+    _adjust_exploratory_cells([metric_results[n][k] for n, k in family], confidence_level)
     alpha = 1.0 - confidence_level
-    for (name, weighting_key), p_adj in zip(family, adjusted):
-        block = metric_results[name][weighting_key]
-        block["p_value_holm"] = p_adj
-        block["holm_significant"] = bool(p_adj <= alpha)
     return {
         "primary_endpoint": {"metric": primary_metric,
                              "weighting": primary_weighting,
@@ -312,12 +322,8 @@ def _token_level_blocks(token_metrics_a, token_metrics_b, item_keys, position_bu
                 confidence_level=confidence_level,
                 bootstrap_iters=bootstrap_iters, seed=seed, ci_method=ci_method)
             per_item_tails[name] = block
-            tail_cells.extend(c for c in block["cells"] if "p_value" in c)
-        if tail_cells:
-            for cell, p_adj in zip(tail_cells,
-                                   holm_adjust([c["p_value"] for c in tail_cells])):
-                cell["p_value_holm"] = p_adj
-                cell["holm_significant"] = bool(p_adj <= 1.0 - confidence_level)
+            tail_cells.extend(block["cells"])
+        _adjust_exploratory_cells(tail_cells, confidence_level)
         bucket_cells: list[dict[str, Any]] = []
         for name in POOLED_TOKEN_METRICS:
             if name not in token_metrics_a:
@@ -341,15 +347,8 @@ def _token_level_blocks(token_metrics_a, token_metrics_b, item_keys, position_bu
                     bootstrap_iters=bootstrap_iters, seed=seed,
                     ci_method=ci_method)
                 position_strata[name] = cells
-                bucket_cells.extend(c for c in cells if "p_value" in c)
-        if bucket_cells:
-            # Their OWN Holm family: these strata were chosen from prior
-            # measurements on this data, so they are exploratory by
-            # construction and must not borrow the primary endpoint's alpha.
-            for cell, p_adj in zip(bucket_cells,
-                                   holm_adjust([c["p_value"] for c in bucket_cells])):
-                cell["p_value_holm"] = p_adj
-                cell["holm_significant"] = bool(p_adj <= 1.0 - confidence_level)
+                bucket_cells.extend(cells)
+        _adjust_exploratory_cells(bucket_cells, confidence_level)
     return pooled_distribution, position_strata, per_item_tails
 
 

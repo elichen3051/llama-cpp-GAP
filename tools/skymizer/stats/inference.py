@@ -3,14 +3,13 @@
 # index stream, weighting blocks and the derived ppl/rms blocks.
 # NUMERICAL_CONTRACT.md #5/#6.
 import math
-from statistics import NormalDist
+import warnings
 from typing import Any, Mapping, Sequence
 
 import numpy as np
-from scipy.stats import ttest_rel
+from scipy.stats import DegenerateDataWarning, bootstrap, ttest_rel
 
-from stats.contracts import CI_METHODS, DEFAULT_CI_METHOD, NonFiniteMetricError
-from stats.student_t import t_two_sided_p
+from stats.contracts import BOOTSTRAP_MIN_TAIL_DRAWS, CI_METHODS, DEFAULT_CI_METHOD, InferenceUnavailableError, NonFiniteMetricError, min_bootstrap_iters
 
 # Paired statistics engine (ported from llm_quant_fidelity/paired_compare.py)
 # --------------------------------------------------------------------------- #
@@ -107,7 +106,7 @@ def _compute_decision(
                 "(TOST by interval inclusion): equivalent at that margin")
         return out
 
-    b_smaller = delta_estimate < null_value
+    b_smaller = ci_upper < null_value
     if score_direction == "lower_is_better":
         verdict = "B closer" if b_smaller else "A closer"
     else:
@@ -151,153 +150,95 @@ def _statistic_and_se(diffs: np.ndarray, weights: np.ndarray, weighting: str):
     return theta, se
 
 
-def _bca_shape(boot: np.ndarray, estimate: float, jackknife: np.ndarray):
-    """(z0, a) -- BCa's bias correction and acceleration, or None when either
-    is undefined. Shared by the interval and by the p-value that inverts it,
-    so the two can never be built from different shape parameters."""
-    if boot.size < 2 or jackknife.size < 2:
-        return None
-    below = float(np.count_nonzero(boot < estimate)) / boot.size
-    if not (0.0 < below < 1.0):
-        return None                      # z0 = +/-inf: no usable bias correction
-    z0 = NormalDist().inv_cdf(below)
-    centered = jackknife.mean() - jackknife
-    try:
-        denom = float((centered ** 2).sum()) ** 1.5
-    except OverflowError as error:
-        raise NonFiniteMetricError("non-finite BCa acceleration; paired comparison aborted") from error
-    if not np.isfinite(denom):
-        raise NonFiniteMetricError("non-finite BCa acceleration; paired comparison aborted")
-    if denom <= 0.0:
-        return None                      # constant jackknife: no acceleration
-    a = float((centered ** 3).sum()) / (6.0 * denom)
-    if not np.isfinite(a):
-        raise NonFiniteMetricError("non-finite BCa acceleration; paired comparison aborted")
-    return z0, a
+def _bootstrap_tail_counts(samples, lower, upper):
+    """Count strict outside draws, excluding endpoint differences within float roundoff."""
+    tolerance = 8.0 * np.finfo(float).eps * float(np.max(np.abs(samples)))
+    return int(np.count_nonzero(samples < lower - tolerance)), int(np.count_nonzero(samples > upper + tolerance))
 
 
-def _bca_endpoints(boot: np.ndarray, estimate: float, jackknife: np.ndarray,
-                   confidence_level: float):
-    """Bias-corrected and accelerated (BCa) percentile levels, or None when the
-    sample is degenerate and BCa is undefined.
+def _bootstrap_ci_inference(interval_at, confidence_level: float, bootstrap_iters: int):
+    """Invert a nested CI family only where both tails have enough resamples.
 
-    The plain percentile interval is only FIRST-order accurate and carries two
-    biases the per-item KLD deltas actually exhibit:
-
-      * median bias -- the bootstrap distribution is not centred on the
-        estimate; corrected by z0 = Phi^-1(fraction of replicates below it).
-      * skew -- per-item deltas are right-skewed, so the two tails need
-        different lengths; corrected by the acceleration `a`, estimated from
-        the leave-one-ITEM-out jackknife (the exchangeable unit, same as the
-        resample unit).
-
-    Measured coverage of a nominal 95% interval at n=25 on right-skewed
-    per-item deltas (1000 sims, B=4000, the same run quoted in this file's
-    header): 0.905 at skew 2.3 and 0.869 at skew 6.2 with the percentile
-    method -- a real alpha of 9-13%, not 5%, exactly in the n=25..75 range the
-    power tooling recommends. BCa moves those to 0.908 / 0.891; the
-    studentized interval to 0.936 / 0.923. (That run's generator was never
-    committed; the reproducible study in
-    verify_and_validation_scripts/measure_ci_coverage.py, tabulated in
-    docs/compare.md, is what the current default -- the t interval -- rests
-    on.)
-
-    Returns (alpha_lo, alpha_hi) in (0, 1), or None if z0 or `a` cannot be
-    formed (all replicates on one side of the estimate, or a jackknife with no
-    spread). The caller then falls back to the percentile interval and records
-    that it did.
+    The returned p is the upper numerical bracket, or a conservative upper bound when the null lies outside the supported confidence range. Strict outside counts intentionally reject unresolved tied endpoints. This checks Monte Carlo support, not population coverage or independent sampling.
+    SciPy permits CI reuse without new draws: https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.bootstrap.html
     """
-    shape = _bca_shape(boot, estimate, jackknife)
-    if shape is None:
-        return None
-    z0, a = shape
-    alpha = 1.0 - confidence_level
-    out = []
-    for q in (alpha / 2.0, 1.0 - alpha / 2.0):
-        z = NormalDist().inv_cdf(q)
-        adj = z0 + z
-        denom_a = 1.0 - a * adj
-        if denom_a <= 0.0 or not np.isfinite(denom_a):
-            return None                  # the acceleration blew the map up
-        level = NormalDist().cdf(z0 + adj / denom_a)
-        if not (0.0 < level < 1.0):
-            return None
-        out.append(level)
-    lo, hi = out
-    if not lo < hi:
-        return None
-    return lo, hi
+    evaluated = {}
 
+    def checked(level):
+        if level in evaluated:
+            return evaluated[level]
+        lower, upper, below, above = interval_at(level)
+        if not math.isfinite(lower) or not math.isfinite(upper):
+            raise NonFiniteMetricError("non-finite bootstrap confidence interval; paired comparison aborted")
+        if lower > upper:
+            raise ValueError("bootstrap confidence interval is reversed; paired comparison aborted")
+        for other_level, (other_lower, other_upper, other_below, other_above) in evaluated.items():
+            narrow, wide = ((lower, upper), (other_lower, other_upper)) if level < other_level else ((other_lower, other_upper), (lower, upper))
+            narrow_counts, wide_counts = ((below, above), (other_below, other_above)) if level < other_level else ((other_below, other_above), (below, above))
+            tolerance = 8.0 * np.finfo(float).eps * max(abs(v) for v in (*narrow, *wide))
+            if narrow[0] < wide[0] - tolerance or narrow[1] > wide[1] + tolerance or any(a < b for a, b in zip(narrow_counts, wide_counts)):
+                raise ValueError("bootstrap confidence intervals or tail counts are not monotone; paired comparison aborted")
+        evaluated[level] = (lower, upper, below, above)
+        return evaluated[level]
 
-def _add_one_two_sided(values, pivot) -> float:
-    """Symmetric "add-one" two-sided achieved significance level of `pivot`
-    against a replicate sample:
+    def supported(interval):
+        return min(interval[2:]) >= BOOTSTRAP_MIN_TAIL_DRAWS
 
-        p = 2 min( (1 + #{v <= pivot}) / (B+1), (1 + #{v >= pivot}) / (B+1) )
+    def contains_zero(interval):
+        return interval[0] <= 0.0 <= interval[1]
 
-    capped at 1. The +1/(B+1) form is the standard bootstrap ASL: it can
-    never return 0 (a B-replicate bootstrap cannot resolve a p below its own
-    2/(B+1) floor, and Holm needs a usable number), and counting BOTH tails
-    inclusively keeps it exactly symmetric under negation -- a one-sided
-    `<=` count alone makes an all-negative replicate set report half the p of
-    an all-positive one."""
-    v = np.asarray(values, dtype=float)
-    n = v.size
-    if n == 0:
-        return 1.0
-    lo = (float(np.count_nonzero(v <= pivot)) + 1.0) / (n + 1.0)
-    hi = (float(np.count_nonzero(v >= pivot)) + 1.0) / (n + 1.0)
-    return float(min(1.0, 2.0 * min(lo, hi)))
-
-
-def _two_sided_p(boot, estimate, *, ci_method, z0=None, accel=None,
-                 t_star=None, delta_se=None, df=None):
-    """Two-sided achieved significance level for H0: delta == 0, obtained by
-    INVERTING the very interval the verdict reads -- find the confidence level
-    at which the interval's endpoint lands exactly on 0. So "p <= alpha" and
-    "the CI excludes 0" can never disagree, whichever --ci-method is in use.
-
-    t:           p = P(|T_df| >= |estimate / SE|), the classical paired t
-                 test with df = n - 1 -- exactly the level at which
-                 estimate -+ t_{df, 1-p/2} SE touches 0.
-    percentile:  p = 2 min(F(0), 1 - F(0)) with F the replicate ECDF.
-    studentized: the same against the PIVOT: p = 2 min(G(T0), 1 - G(T0)) with
-                 G the ECDF of t* and T0 = estimate / SE.
-    bca:         the percentile form pushed through BCa's level transform,
-                 solved for the alpha whose endpoint hits 0:
-                     w = Phi^-1(F(0)),  y = (w - z0) / (1 + a (w - z0)),
-                     p = 2 min(Phi(y - z0), 1 - Phi(y - z0)).
-                 With z0 = 0 and a = 0 this collapses to the percentile form,
-                 as it must.
-
-    Returns None when the pieces are unavailable."""
-    if ci_method == "t":
-        if df is None or df < 1 or not delta_se:
-            return None
-        return t_two_sided_p(estimate / delta_se, df)
-    boot = np.asarray(boot, dtype=float)
-    if ci_method == "studentized":
-        if t_star is None or not delta_se:
-            return None
-        return _add_one_two_sided(t_star, estimate / delta_se)
-    if boot.size == 0:
-        return None
-    if ci_method != "bca" or z0 is None or accel is None:
-        return _add_one_two_sided(boot, 0.0)
-    # BCa: the transform needs a CDF value, so use the mid-rank ECDF at 0 --
-    # symmetric under negation and never exactly 0 or 1.
-    n = boot.size
-    u = (float(np.count_nonzero(boot < 0.0))
-         + 0.5 * float(np.count_nonzero(boot == 0.0)) + 0.5) / (n + 1.0)
-    w = NormalDist().inv_cdf(u)
-    denom = 1.0 + accel * (w - z0)
-    if denom == 0.0 or not np.isfinite(denom):
-        return None
-    q = NormalDist().cdf((w - z0) / denom - z0)
-    p = 2.0 * min(q, 1.0 - q)
-    # Floor at the same 2/(B+1) resolution the add-one form has, so the three
-    # methods' p-values are on one scale and Holm never sees a 0.
-    return float(min(1.0, max(p, 2.0 / (n + 1.0))))
+    reported = checked(confidence_level)
+    if not supported(reported):
+        raise InferenceUnavailableError(
+            f"bootstrap CI has insufficient endpoint support: {reported[2]} and {reported[3]} draws strictly outside its endpoints; require {BOOTSTRAP_MIN_TAIL_DRAWS} per tail. Increase --bootstrap-iters; tied or discrete samples may require a different method such as --ci-method t, with its assumptions assessed.")
+    central = checked(0.0)
+    support_low, support_high = confidence_level, 1.0 - 2.0 / (bootstrap_iters + 1.0)
+    if support_high <= support_low:
+        raise InferenceUnavailableError("bootstrap confidence level exceeds finite-resample resolution; increase --bootstrap-iters")
+    if supported(checked(support_high)):
+        support_low = support_high
+    else:
+        for _ in range(52):
+            midpoint = (support_low + support_high) / 2.0
+            if midpoint in (support_low, support_high):
+                break
+            if supported(checked(midpoint)):
+                support_low = midpoint
+            else:
+                support_high = midpoint
+    supported_alpha_min = 1.0 - support_low
+    censored = not contains_zero(checked(support_low))
+    if censored:
+        p_lower, p_upper = 0.0, supported_alpha_min
+    elif contains_zero(central):
+        p_lower = p_upper = 1.0
+    else:
+        low, high = 0.0, support_low
+        if contains_zero(reported):
+            high = confidence_level
+        else:
+            low = confidence_level
+        for _ in range(52):
+            midpoint = (low + high) / 2.0
+            if midpoint in (low, high):
+                break
+            if contains_zero(checked(midpoint)):
+                high = midpoint
+            else:
+                low = midpoint
+        p_lower, p_upper = 1.0 - high, 1.0 - low
+    if (p_upper < 1.0 - confidence_level) != (not contains_zero(reported)):
+        raise InferenceUnavailableError("bootstrap p-value is unresolved at the requested confidence boundary; increase --bootstrap-iters or use --ci-method t with its assumptions assessed")
+    return reported, p_upper, {
+        "method": "bootstrap_ci_inversion",
+        "censored": censored,
+        "lower_bound": p_lower,
+        "upper_bound": p_upper,
+        "supported_alpha_min": supported_alpha_min,
+        "minimum_tail_draws": BOOTSTRAP_MIN_TAIL_DRAWS,
+        "tail_roundoff_rtol": 8.0 * np.finfo(float).eps,
+        "rejection_rule": "p_value < alpha; p_value is a conservative upper bound when censored",
+    }
 
 
 def holm_adjust(p_values: Sequence[float]) -> list[float]:
@@ -312,6 +253,8 @@ def holm_adjust(p_values: Sequence[float]) -> list[float]:
     p_adj_(k) = max_{j <= k} (m - j) * p_(j), clipped to 1 -- the running max
     enforces monotonicity, so a cell can never be adjusted below one that had
     a smaller raw p."""
+    if any(not math.isfinite(p) or not 0.0 <= p <= 1.0 for p in p_values):
+        raise ValueError("Holm p-values must be finite and in [0, 1]")
     m = len(p_values)
     if m == 0:
         return []
@@ -325,13 +268,10 @@ def holm_adjust(p_values: Sequence[float]) -> list[float]:
 
 
 def _bootstrap_item_indices(seed: int | None, n_items: int, iters: int):
-    """THE item-resample stream every bootstrap in one report consumes:
-    default_rng(seed), then one rng.integers(0, n_items, size=n_items) draw
-    per iteration, yielded in order. Every bootstrapped statistic in one
-    report iterates this generator, so "all statistics resample identical item
-    sets" holds by construction rather than by call sites agreeing on the rng
-    recipe.
-    Do not change the recipe: the golden-fixture parity tests pin it."""
+    """Reference item stream: default_rng(seed), then n_items integers per draw.
+
+    Bootstrap-t consumes this generator. SciPy percentile/BCa uses the same stream in batches; parity tests check its distribution against this recipe.
+    """
     rng = np.random.default_rng(seed)
     for _ in range(iters):
         yield rng.integers(0, n_items, size=n_items)
@@ -395,28 +335,11 @@ def _paired_bootstrap_delta(
     seed: int | None,
     ci_method: str = DEFAULT_CI_METHOD,
 ) -> dict[str, Any]:
-    """Estimate candidate-minus-baseline mean delta and its CI.
+    """Paired item-mean inference, with token weighting excluded.
 
-    Only item weighting supports paired inference. The bootstrap unit is the item index.
-
-    `ci_method`:
-      "t" -- the classical paired Student-t interval (see _student_t_delta):
-          no bootstrap, `bootstrap_iters` and `seed` are ignored.
-      "studentized" -- the bootstrap-t interval. Each replicate is
-          standardized by ITS OWN analytic SE, so the interval is built from
-          the pivotal quantity t* = (theta* - theta)/SE* rather than from the
-          replicate distribution directly. This is the construction that
-          actually repairs coverage for the mean of right-skewed data, which
-          is what per-item KLD deltas are.
-      "bca" -- bias-corrected and accelerated (see _bca_endpoints):
-          second-order accurate and skew-aware, and it rebalances the
-          one-sided error rates, but on this data it does not move total
-          coverage much.
-      "percentile" -- the first-order interval, kept because the cross-repo
-          golden fixtures pin it.
-
-    Both corrected methods fall back to percentile on a degenerate sample and
-    say so in ci["method"] / ci["ci_method"] / ci["fallback"].
+    SciPy percentile/BCa bootstrap resamples the B-A differences with the shared index stream: https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.bootstrap.html
+    Bootstrap-t uses every finite nonzero-SE pivot and crossed NumPy quantiles: https://numpy.org/doc/stable/reference/generated/numpy.quantile.html
+    Nonconstant two-item bootstrap samples and unsupported tails fail explicitly. Constant differences retain an empirical point-interval convention, without claiming zero population variance. Bootstrap intervals and their inverted p-values remain approximations under independent item sampling.
     """
     if weighting != "item":
         raise ValueError("paired inference requires weighting='item'; token weighting is descriptive only")
@@ -445,80 +368,83 @@ def _paired_bootstrap_delta(
                                 confidence_level=confidence_level)
 
     delta, delta_se = _statistic_and_se(diffs, weights, weighting)
+    floor = min_bootstrap_iters(confidence_level, ci_method)
+    if bootstrap_iters < floor:
+        raise ValueError(f"bootstrap_iters must be >= {floor} for {ci_method} at confidence_level={confidence_level:g}")
+    constant = bool(np.all(diffs == diffs[0]))
+    if not constant and diffs.size == 2:
+        raise InferenceUnavailableError("nonconstant two-item bootstrap inference is unsupported; collect more independent items or use --ci-method t with its assumptions assessed")
 
-    boot = np.empty(bootstrap_iters, dtype=float)
-    # Replicate SEs are only needed by the studentized interval; computing
-    # them for every method would slow the (much more common) mean-only path.
-    boot_se = np.empty(bootstrap_iters, dtype=float) if ci_method == "studentized" else None
-    for i, idx in enumerate(_bootstrap_item_indices(seed, diffs.size, bootstrap_iters)):
-        if boot_se is None:
-            boot[i] = diffs[idx].mean()
-        else:
-            boot[i], boot_se[i] = _statistic_and_se(diffs[idx], weights[idx],
-                                                    weighting)
-    if not np.all(np.isfinite(boot)):
-        raise NonFiniteMetricError("non-finite bootstrap estimates; paired comparison aborted")
-
-    alpha = 1.0 - confidence_level
-    levels = (alpha / 2.0, 1.0 - alpha / 2.0)
     fallback = None
-    studentized = None
-    bca_shape = None
-    t_star = None
-    if ci_method == "studentized":
-        # t* = (theta* - theta) / SE*. Replicates whose own SE is zero (every
-        # resampled item identical) have no pivot and are dropped; if too few
-        # survive the interval is not trustworthy and we fall back.
-        usable = np.isfinite(boot_se) & (boot_se > 0.0)
-        if delta_se <= 0.0 or not np.isfinite(delta_se):
-            fallback = ("the sample has no spread, so there is no SE to "
-                        "studentize by; percentile interval used instead")
-        elif int(usable.sum()) < max(2, bootstrap_iters // 2):
-            fallback = (f"only {int(usable.sum())} of {bootstrap_iters} "
-                        "replicates had a usable standard error; percentile "
-                        "interval used instead")
-        else:
-            t_star = (boot[usable] - delta) / boot_se[usable]
-            if not np.all(np.isfinite(t_star)):
-                raise NonFiniteMetricError("non-finite studentized bootstrap pivots; paired comparison aborted")
-            t_hi, t_lo = np.quantile(t_star, [1.0 - alpha / 2.0, alpha / 2.0])
-            # NOTE the crossed order: the bootstrap-t interval is
-            # [theta - t_(1-a/2) * SE, theta - t_(a/2) * SE]. Writing it the
-            # "obvious" way round silently produces a percentile-like
-            # interval reflected through the estimate.
-            studentized = (delta - float(t_hi) * delta_se,
-                           delta - float(t_lo) * delta_se)
-    if ci_method == "bca":
-        # Leave-one-ITEM-out jackknife of the SAME statistic (the item is the
-        # exchangeable unit and the resample unit, so the acceleration must be
-        # estimated on it too). Both forms are closed-form here, so this costs
-        # one vector op rather than n re-evaluations.
-        n = diffs.size
-        total = diffs.sum()
-        jack = (total - diffs) / (n - 1)
-        jack = np.asarray(jack, dtype=float)
-        bca_shape = _bca_shape(boot, delta, jack)
-        endpoints = _bca_endpoints(boot, delta, jack, confidence_level)
-        if endpoints is None:
-            fallback = ("degenerate sample (no usable bias correction or "
-                        "acceleration); percentile interval used instead")
-        else:
-            levels = endpoints
-    if studentized is not None:
-        lower, upper = studentized
-        used = "studentized"
+    used = ci_method
+    if constant:
+        delta = float(diffs[0])
+        delta_se = 0.0
+        lower = upper = delta
+        used = "percentile"
+        fallback = "constant differences (no spread): empirical percentile point-interval convention; this does not establish zero population variance"
+        bootstrap_std = 0.0
+        resolution = 2.0 / (bootstrap_iters + 1.0)
+        p_value = 1.0 if delta == 0.0 else resolution
+        p_metadata = {
+            "method": "constant_empirical_distribution",
+            "censored": delta != 0.0,
+            "lower_bound": 1.0 if delta == 0.0 else 0.0,
+            "upper_bound": p_value,
+            "supported_alpha_min": None,
+            "resolution": resolution,
+            "rejection_rule": "p_value < alpha; constant-input convention, not a population variance guarantee",
+        }
+        tail_support = {"minimum": BOOTSTRAP_MIN_TAIL_DRAWS, "lower": 0, "upper": 0, "exemption": "constant_empirical_distribution"}
     else:
-        lower, upper = np.quantile(boot, list(levels))
-        used = ci_method if not fallback else "percentile"
-        t_star = None
-    # The p-value must invert the interval that was ACTUALLY built (after any
-    # fallback), so "p <= alpha" and "the CI excludes 0" always agree.
-    p_value = _two_sided_p(
-        boot, delta, ci_method=used,
-        z0=(bca_shape or (None, None))[0], accel=(bca_shape or (None, None))[1],
-        t_star=t_star, delta_se=delta_se)
-    bootstrap_std = float(boot.std(ddof=1)) if bootstrap_iters > 1 else 0.0
-    if p_value is None or not all(math.isfinite(v) for v in (lower, upper, p_value, bootstrap_std)):
+        if ci_method == "studentized":
+            boot = np.empty(bootstrap_iters, dtype=float)
+            pivots = np.empty(bootstrap_iters, dtype=float)
+            for i, idx in enumerate(_bootstrap_item_indices(seed, diffs.size, bootstrap_iters)):
+                draw = diffs[idx]
+                if np.all(draw == draw[0]):
+                    raise InferenceUnavailableError("studentized bootstrap has a zero-SE resample; no pivots were discarded. Use another method such as --ci-method t with its assumptions assessed")
+                boot[i], se = _statistic_and_se(draw, weights[idx], weighting)
+                if se <= 0.0:
+                    raise InferenceUnavailableError("studentized bootstrap has an unusable resample SE; paired comparison aborted")
+                with np.errstate(over="ignore", invalid="ignore", divide="ignore"):
+                    pivots[i] = (boot[i] - delta) / se
+            if not np.all(np.isfinite(pivots)):
+                raise NonFiniteMetricError("non-finite studentized bootstrap pivots; paired comparison aborted")
+
+            def interval_at(level):
+                alpha = 1.0 - level
+                low_pivot, high_pivot = np.quantile(pivots, [alpha / 2.0, 1.0 - alpha / 2.0])
+                below, above = _bootstrap_tail_counts(pivots, low_pivot, high_pivot)
+                return (delta - float(high_pivot) * delta_se, delta - float(low_pivot) * delta_se,
+                        above, below)
+        else:
+            def scipy_bootstrap(level, previous=None):
+                try:
+                    with warnings.catch_warnings(), np.errstate(over="raise", invalid="raise", divide="raise"):
+                        warnings.simplefilter("error", DegenerateDataWarning)
+                        return bootstrap(
+                            (diffs,), np.mean, paired=True, vectorized=True, batch=128,
+                            method=ci_method, confidence_level=level,
+                            n_resamples=bootstrap_iters if previous is None else 0,
+                            rng=np.random.default_rng(seed), bootstrap_result=previous)
+                except (DegenerateDataWarning, FloatingPointError) as error:
+                    raise NonFiniteMetricError("SciPy bootstrap interval is undefined for this sample; use another method with its assumptions assessed") from error
+
+            resampled = scipy_bootstrap(confidence_level)
+            boot = resampled.bootstrap_distribution
+
+            def interval_at(level):
+                result = resampled if level == confidence_level else scipy_bootstrap(level, resampled)
+                low, high = result.confidence_interval
+                return (float(low), float(high), *_bootstrap_tail_counts(boot, low, high))
+        if not np.all(np.isfinite(boot)):
+            raise NonFiniteMetricError("non-finite bootstrap estimates; paired comparison aborted")
+        reported, p_value, p_metadata = _bootstrap_ci_inference(interval_at, confidence_level, bootstrap_iters)
+        lower, upper, below, above = reported
+        tail_support = {"minimum": BOOTSTRAP_MIN_TAIL_DRAWS, "lower": below, "upper": above}
+        bootstrap_std = float(boot.std(ddof=1))
+    if not all(math.isfinite(v) for v in (lower, upper, p_value, bootstrap_std)):
         raise NonFiniteMetricError("non-finite bootstrap interval, p-value, or standard deviation; paired comparison aborted")
     ci = {
         "method": f"paired_{weighting}_weighted_bootstrap_{used}",
@@ -529,6 +455,7 @@ def _paired_bootstrap_delta(
         "standard_error": delta_se,
         "bootstrap_iters": bootstrap_iters,
         "contains_zero": bool(lower <= 0.0 <= upper),
+        "tail_support": tail_support,
     }
     if fallback:
         ci["fallback"] = fallback
@@ -536,6 +463,7 @@ def _paired_bootstrap_delta(
         "estimate": delta,
         "ci": ci,
         "p_value": p_value,
+        "p_value_metadata": p_metadata,
         "bootstrap_std": bootstrap_std,
     }
 
@@ -596,6 +524,7 @@ def _build_weighting_block(
         "ci_delta": ci,
         "bootstrap_std": delta_result["bootstrap_std"],
         "p_value": delta_result["p_value"],
+        **({"p_value_metadata": delta_result["p_value_metadata"]} if "p_value_metadata" in delta_result else {}),
         "decision": decision,
     }
 

@@ -572,11 +572,11 @@ def _results_rows(result, metrics_to_show, weightings, primary_cell) -> list[lis
                 ci_str = _fmt_signed_ci(ci)
             if (name, block_key) == primary_cell:
                 label = f"★ {label}"
-                p_str = (f"{block['p_value']:.4g} (primary)"
+                p_str = (f"{_format_p_value(block)} (primary)"
                          if block.get("p_value") is not None else "—")
             elif block.get("p_value_holm") is not None:
                 mark = "✓" if block.get("holm_significant") else "·"
-                p_str = f"{block['p_value_holm']:.4g} {mark}"
+                p_str = f"{_format_p_value(block, adjusted=True)} {mark}"
             else:
                 p_str = "—"
             if descriptive:
@@ -590,8 +590,20 @@ def _results_rows(result, metrics_to_show, weightings, primary_cell) -> list[lis
     return rows
 
 
+def _format_p_value(block, adjusted=False):
+    """Label finite-resample upper bounds separately from resolved p-values."""
+    key = "p_value_holm" if adjusted else "p_value"
+    value = block.get(key)
+    if value is None:
+        return "-"
+    bounded = block.get("p_value_holm_is_upper_bound", False) if adjusted else block.get("p_value_metadata", {}).get("censored", False)
+    return ("<= " if bounded else "") + f"{value:.4g}"
+
+
 def _section_notes(metrics_to_show, n_items, result_metrics) -> list[str]:
     note_lines = []
+    if any(m.get("item_weighted", {}).get("p_value_metadata") for _, m in metrics_to_show):
+        note_lines.append("note: bootstrap p-values invert the fixed empirical CI family. <= marks its conservative upper bound, not a Monte Carlo confidence bound. Unsupported exploratory cells keep their place in the Holm family.")
     if n_items is not None and n_items < 30:
         note_lines.append(
             f"note: small sample (n_items = {n_items} < 30). No interval "
@@ -757,7 +769,7 @@ def _format_per_item_tails(tails, a_label: str, b_label: str,
                 _fmt_plain(c.get("candidate_mean")),
                 _fmt_signed(c.get("delta_candidate_minus_baseline")),
                 _fmt_signed_ci(c.get("ci_delta", {})),
-                f"{c['p_value_holm']:.4g} {mark}"
+                f"{_format_p_value(c, adjusted=True)} {mark}"
                 if c.get("p_value_holm") is not None else "—",
                 c["decision"]["verdict"],
             ])
@@ -841,7 +853,7 @@ def _format_position_strata(strata, a_label: str, b_label: str,
                 _fmt_plain(c.get("candidate_mean")),
                 _fmt_signed(c.get("delta_candidate_minus_baseline")),
                 _fmt_signed_ci(c.get("ci_delta", {})),
-                f"{c['p_value_holm']:.4g} {mark}"
+                f"{_format_p_value(c, adjusted=True)} {mark}"
                 if c.get("p_value_holm") is not None else "—",
                 c["decision"]["verdict"],
             ])

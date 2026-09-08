@@ -31,7 +31,7 @@ dirs to have been *collected* with the same cap.
 
 For each base metric the report shows both candidate means and the item-weighted and token-weighted delta `b - a`. Only item-weighted endpoints have a paired CI, p-value, directional verdict or equivalence decision. Token-weighted blocks are descriptive only, including derived PPL and RMS values. The default item interval is Student-t without bootstrap resampling; optional bootstrap methods resample the same paired item indices across metrics.
 
-JSON schema `vlm-paired-compare-v4` removes inference fields from token-weighted blocks and removes `weighting_consensus`. Descriptive blocks have `role: descriptive`. `--weighting token` controls display only and does not enable token-weighted inference.
+JSON schema `vlm-paired-compare-v5` retains the v4 policy, which removes inference fields from token-weighted blocks and removes `weighting_consensus`. Descriptive blocks have `role: descriptive`. `--weighting token` controls display only and does not enable token-weighted inference.
 
 > [!IMPORTANT]
 > `inconclusive` means *the interval contains 0* — **not** that the two
@@ -127,15 +127,11 @@ What to read off it:
   the sampling distribution of the statistic is far from t — e.g. per-item
   *tail* statistics — and BCa / percentile are kept for parity checks.
 
-For the bootstrap methods, the two corrected ones need twice the replicates of the percentile method
-(BCa's adjusted levels sit further into the tails; the studentized method
-reads the same levels of a heavier-tailed `t*`), so `--bootstrap-iters` must
-be ≥ 800 at the 0.95 default and ≥ 400 for `percentile`; the comparator
-warns below the customary 2000 (none of this applies to `t`, which draws no
-replicates). On a degenerate sample (no spread to studentize by, or no usable
-bias correction/acceleration) either bootstrap method falls back to the
-percentile interval and records `fallback` in the JSON; the t interval
-collapses to the point estimate and records the same key.
+Bootstrap uses SciPy for percentile and BCa intervals. BCa uses SciPy's midrank tie handling. Bootstrap-t remains explicit because SciPy does not expose this method; any unusable pivot aborts instead of silently deleting a tail. Nonconstant two-item samples fail. Nominal resample floors are only prefilters: the reported endpoints each need ten strict-outside draws. Constant differences retain an explicitly labeled empirical point-interval convention, which does not establish zero population variance.
+
+Bootstrap p-values invert the same fixed empirical CI family. Outside the supported confidence range, JSON records censoring and a conservative upper bound; markdown shows `<=`. This is not a Monte Carlo confidence bound and does not prove population calibration. Decisions use strict `p < alpha`, consistent with a closed CI containing its boundary. Unsupported optional buckets and tails retain descriptive estimates and a reason, with no CI, p or verdict. They still count in their declared Holm family through internal p=1 placeholders; invalid or nonfinite data remain fatal.
+
+The coverage table above records the former bootstrap implementation. It does not validate the corrected implementation or its new unavailable-result policy. Repeat the coverage study with unavailable outcomes counted before relying on those historical bootstrap rates.
 
 #### Multiplicity: one confirmatory endpoint, Holm over the rest
 

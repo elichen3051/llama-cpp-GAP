@@ -24,7 +24,7 @@ CI_METHODS = ("t", "studentized", "bca", "percentile")
 # default metric list, so it stays on this fixed tuple.
 GOLDEN_METRICS = ("nll", "kld", "reversed_kld", "js_kld", "ear", "same_top_rate", "mse_dp")
 assert set(GOLDEN_METRICS) <= set(DEFAULT_METRICS)
-BOOTSTRAP_ITERS = 1000
+BOOTSTRAP_ITERS = 5000
 SEED = 20260824
 N_ITEMS = 16
 

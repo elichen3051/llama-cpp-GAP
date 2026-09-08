@@ -30,7 +30,7 @@ from stats.inference import (
     _bootstrap_item_indices,
     _paired_bootstrap_delta,
     _statistic_and_se,
-    _two_sided_p,
+    _bootstrap_ci_inference,
 )
 from stats.render import format_comparison_table
 from stats.student_t import t_ppf, t_two_sided_p
@@ -40,7 +40,7 @@ def _bca_reference(boot, estimate, jack, confidence_level):
     """Efron & Tibshirani's BCa levels, transcribed straight from the
     definition, with no shortcuts."""
     nd = NormalDist()
-    z0 = nd.inv_cdf((boot < estimate).mean())
+    z0 = nd.inv_cdf(((boot < estimate).sum() + 0.5 * (boot == estimate).sum()) / boot.size)
     c = jack.mean() - jack
     a = (c ** 3).sum() / (6.0 * ((c ** 2).sum() ** 1.5))
     alpha = 1.0 - confidence_level
@@ -116,9 +116,8 @@ def test_bca_differs_from_percentile_on_skewed_data():
     assert bca["ci"]["method"].endswith("_bca")
 
 
-def test_bca_matches_scipy_within_monte_carlo_noise():
-    """Independent implementation check against scipy.stats.bootstrap. The two
-    draw different resamples, so they agree only to Monte-Carlo noise."""
+def test_bca_matches_scipy_on_the_same_resamples():
+    """The public API uses the same paired item stream, including its tie policy."""
     scipy_stats = pytest.importorskip("scipy.stats")
     d = _skewed(40, 0.8, 21)
     base, w = np.zeros_like(d), np.ones_like(d)
@@ -128,10 +127,11 @@ def test_bca_matches_scipy_within_monte_carlo_noise():
                                       ci_method="bca")
     theirs = scipy_stats.bootstrap((d,), np.mean, method="BCa",
                                    confidence_level=0.95, n_resamples=20000,
-                                   random_state=np.random.default_rng(5))
-    width = theirs.confidence_interval.high - theirs.confidence_interval.low
-    assert abs(ours["ci"]["lower"] - theirs.confidence_interval.low) < 0.05 * width
-    assert abs(ours["ci"]["upper"] - theirs.confidence_interval.high) < 0.05 * width
+                                   rng=np.random.default_rng(5), paired=True, batch=128)
+    assert ours["ci"]["lower"] == theirs.confidence_interval.low
+    assert ours["ci"]["upper"] == theirs.confidence_interval.high
+    expected = np.array([d[i].mean() for i in _bootstrap_item_indices(5, d.size, 20000)])
+    np.testing.assert_array_equal(theirs.bootstrap_distribution, expected)
 
 
 def test_bca_falls_back_to_percentile_on_a_degenerate_sample():
@@ -142,23 +142,20 @@ def test_bca_falls_back_to_percentile_on_a_degenerate_sample():
     base, w = np.zeros_like(d), np.ones_like(d)
     res = _paired_bootstrap_delta(base, d, w, weighting="item",
                                      confidence_level=0.95,
-                                     bootstrap_iters=500, seed=1,
+                                     bootstrap_iters=1000, seed=1,
                                      ci_method="bca")
     assert res["ci"]["ci_method"] == "percentile"
-    assert "degenerate" in res["ci"]["fallback"]
+    assert "constant differences" in res["ci"]["fallback"]
     assert math.isfinite(res["ci"]["lower"]) and math.isfinite(res["ci"]["upper"])
     assert res["ci"]["lower"] == pytest.approx(0.25)
 
 
-def test_bca_survives_the_two_item_minimum():
-    d = np.array([0.1, 0.4])
-    base, w = np.zeros_like(d), np.ones_like(d)
-    res = _paired_bootstrap_delta(base, d, w, weighting="item",
-                                     confidence_level=0.95,
-                                     bootstrap_iters=500, seed=2,
-                                     ci_method="bca")
-    assert math.isfinite(res["ci"]["lower"]) and math.isfinite(res["ci"]["upper"])
-    assert res["ci"]["lower"] <= res["estimate"] <= res["ci"]["upper"]
+@pytest.mark.parametrize("method", BOOTSTRAP_CI_METHODS)
+def test_nonconstant_two_item_bootstrap_fails_closed(method):
+    """The exact n=2 percentile CI is min/max; its centered-normal null rejection probability is 1/2."""
+    with pytest.raises(ValueError, match="two-item bootstrap"):
+        _paired_bootstrap_delta(np.zeros(2), np.array([0.1, 0.4]), np.ones(2), weighting="item",
+                                confidence_level=0.95, bootstrap_iters=5000, seed=2, ci_method=method)
 
 
 def test_ci_method_is_recorded_and_rejected_when_unknown():
@@ -357,31 +354,17 @@ def test_t_interval_plumbs_through_compare_items():
 # --------------------------------------------------------------------------- #
 # p-values must invert the interval that was actually built
 # --------------------------------------------------------------------------- #
-@pytest.mark.parametrize("method", ["t", "percentile", "bca", "studentized"])
-@pytest.mark.parametrize("weighting", ["item"])
-def test_p_value_agrees_with_its_own_interval(method, weighting):
-    """"p <= alpha" and "the CI excludes 0" must not be able to disagree,
-    which is what lets the Holm column sit beside the CI column."""
-    rng = np.random.default_rng(99)
-    disagree = 0
-    for t in range(60):
-        n = int(rng.integers(6, 45))
-        d = (np.exp(0.8 * rng.standard_normal(n)) - math.exp(0.32)
-             + rng.normal(0.0, 0.4))
-        base = np.zeros(n)
-        w = rng.integers(5, 60, n).astype(float)
-        r = _paired_bootstrap_delta(base, d, w, weighting=weighting,
-                                       confidence_level=0.95,
-                                       bootstrap_iters=2000, seed=t,
-                                       ci_method=method)
-        excludes = not (r["ci"]["lower"] <= 0.0 <= r["ci"]["upper"])
-        disagree += (r["p_value"] <= 0.05) != excludes
-    if method == "t":
-        assert disagree == 0            # analytic: the inversion is exact
-    else:
-        # A handful of boundary cells can differ: the interval interpolates
-        # between order statistics while the ASL counts them.
-        assert disagree <= 2, disagree
+@pytest.mark.parametrize("method", CI_METHODS)
+@pytest.mark.parametrize("offset", [-1e-8, 1e-8])
+def test_p_value_agrees_at_a_shifted_interval_boundary(method, offset):
+    d = np.random.default_rng(123).normal(size=30)
+    kw = dict(weighting="item", confidence_level=0.95, bootstrap_iters=5000, seed=7, ci_method=method)
+    initial = _paired_bootstrap_delta(np.zeros(30), d, np.ones(30), **kw)
+    shifted = d - initial["ci"]["lower"] + offset
+    result = _paired_bootstrap_delta(np.zeros(30), shifted, np.ones(30), **kw)
+    assert result["ci"]["lower"] == pytest.approx(offset, abs=1e-14)
+    assert (result["p_value"] < 1.0 - 0.95) == (offset > 0.0)
+    assert result["ci"]["contains_zero"] == (offset < 0.0)
 
 
 def test_p_value_is_symmetric_under_negation():
@@ -416,11 +399,95 @@ def test_p_value_is_symmetric_under_negation():
                                        seed=None, ci_method="t")["p_value"])
 
 
-def test_bca_p_value_reduces_to_the_percentile_form_without_correction():
-    boot = np.linspace(-1.0, 3.0, 4001)
-    plain = _two_sided_p(boot, 1.0, ci_method="percentile")
-    reduced = _two_sided_p(boot, 1.0, ci_method="bca", z0=0.0, accel=0.0)
-    assert reduced == pytest.approx(plain, rel=0.02)
+def test_bootstrap_inversion_respects_a_closed_ci_boundary():
+    def interval_at(level):
+        count = int(500 * (1.0 - level))
+        return 0.25 - level, 0.25 + level, count, count
+
+    reported, p, metadata = _bootstrap_ci_inference(interval_at, 0.25, 1000)
+    assert reported[0] == 0.0
+    assert p >= 0.75
+    assert metadata["lower_bound"] <= 0.75 <= metadata["upper_bound"]
+    assert not metadata["censored"]
+
+
+@pytest.mark.parametrize("method", BOOTSTRAP_CI_METHODS)
+def test_bootstrap_api_enforces_the_cli_resample_floor(method):
+    d = np.arange(10, dtype=float)
+    minimum = min_bootstrap_iters(0.95, method)
+    with pytest.raises(ValueError, match=f"bootstrap_iters must be >= {minimum}"):
+        _paired_bootstrap_delta(np.zeros(10), d, np.ones(10), weighting="item",
+                                confidence_level=0.95, bootstrap_iters=minimum - 1, seed=7, ci_method=method)
+
+
+def test_bca_candidate_swap_preserves_the_interval_and_p_value_with_ties():
+    d = np.r_[np.zeros(15), np.ones(15)] - 0.3125
+    kw = dict(weighting="item", confidence_level=0.95, bootstrap_iters=5000, seed=7, ci_method="bca")
+    positive = _paired_bootstrap_delta(np.zeros(30), d, np.ones(30), **kw)
+    negative = _paired_bootstrap_delta(np.zeros(30), -d, np.ones(30), **kw)
+    assert positive["ci"]["lower"] > 0.0
+    assert negative["ci"]["upper"] < 0.0
+    assert positive["ci"]["lower"] == pytest.approx(-negative["ci"]["upper"], abs=1e-14)
+    assert positive["ci"]["upper"] == pytest.approx(-negative["ci"]["lower"], abs=1e-14)
+    assert positive["p_value"] == pytest.approx(negative["p_value"], abs=1e-14)
+
+
+def test_studentized_does_not_discard_a_zero_se_tail_at_n30():
+    d = np.r_[np.full(29, -1.0), 24.0]
+    with pytest.raises(ValueError, match="zero-SE resample; no pivots were discarded"):
+        _paired_bootstrap_delta(np.zeros(30), d, np.ones(30), weighting="item",
+                                confidence_level=0.95, bootstrap_iters=5000, seed=7, ci_method="studentized")
+
+
+@pytest.mark.parametrize("method, differences", [("bca", np.r_[np.zeros(29), 1.0]), ("percentile", np.array([0.0, 0.0, 1.0]))])
+def test_bootstrap_rejects_endpoints_without_ten_strict_outside_draws(method, differences):
+    with pytest.raises(ValueError, match="insufficient endpoint support.*strictly outside"):
+        _paired_bootstrap_delta(np.zeros_like(differences), differences, np.ones_like(differences), weighting="item",
+                                confidence_level=0.95, bootstrap_iters=5000, seed=7, ci_method=method)
+
+
+def test_more_resamples_resolve_a_censored_p_value():
+    d = np.random.default_rng(123).normal(size=30) + 0.25
+    results = [_paired_bootstrap_delta(np.zeros(30), d, np.ones(30), weighting="item",
+                                      confidence_level=0.95, bootstrap_iters=b, seed=7, ci_method="percentile")
+               for b in (1000, 10000)]
+    small, large = results
+    assert small["p_value_metadata"]["censored"]
+    assert small["p_value_metadata"]["lower_bound"] == 0.0
+    assert small["p_value"] == small["p_value_metadata"]["supported_alpha_min"]
+    assert not large["p_value_metadata"]["censored"]
+    assert large["p_value"] < small["p_value"]
+    assert large["p_value_metadata"]["supported_alpha_min"] < small["p_value_metadata"]["supported_alpha_min"]
+
+
+def test_comparison_preserves_censoring_only_for_item_inference():
+    d = np.random.default_rng(123).normal(size=30) + 0.25
+    result = compare_items([{"kld": 5.0}] * 30, [{"kld": float(5.0 + value)} for value in d], list(range(1, 31)),
+                           metrics=["kld"], confidence_level=0.95, bootstrap_iters=1000, seed=7,
+                           model_a_label="A", model_b_label="B", ci_method="percentile")
+    metric = result["metrics"]["kld"]
+    item = metric["item_weighted"]
+    assert item["p_value_metadata"]["censored"]
+    assert item["p_value"] == item["p_value_metadata"]["upper_bound"]
+    assert "p_value_metadata" not in metric["token_weighted"]
+    assert metric["token_weighted"]["role"] == "descriptive"
+
+
+@pytest.mark.parametrize("failure", ["nonfinite", "reversed", "nonnested", "tail_counts"])
+def test_bootstrap_inversion_rejects_invalid_ci_families(failure):
+    def interval_at(level):
+        if level == 0.0:
+            if failure == "nonfinite":
+                return float("nan"), 0.0, 100, 100
+            if failure == "reversed":
+                return 1.0, -1.0, 100, 100
+            if failure == "nonnested":
+                return -2.0, 2.0, 100, 100
+            return 0.0, 0.0, 1, 1
+        return -level, level, 20, 20
+
+    with pytest.raises(ValueError, match="non-finite|reversed|not monotone"):
+        _bootstrap_ci_inference(interval_at, 0.95, 1000)
 
 
 @pytest.mark.parametrize("method", CI_METHODS)
@@ -441,3 +508,10 @@ def test_underflowed_standard_error_cannot_become_zero_spread(weighting, differe
         _paired_bootstrap_delta(np.zeros_like(differences), differences,
                                 np.ones_like(differences), weighting=weighting, confidence_level=0.95,
                                 bootstrap_iters=0, seed=1, ci_method="t")
+
+
+def test_asymmetric_interval_direction_uses_the_interval_side():
+    from stats.inference import _compute_decision
+    result = _compute_decision(delta_estimate=.01, ci_lower=-.03, ci_upper=-.01, null_value=0., score_direction="lower_is_better", confidence_level=.95)
+    assert result["verdict"] == "B closer"
+    assert result["statistically_distinguishable_from_null"]

@@ -83,7 +83,7 @@ def _result_for_render(*, with_inputs: bool = True):
 # Task 1: scaffold
 # --------------------------------------------------------------------------- #
 def test_constants_and_imports():
-    assert SCHEMA_VERSION == "vlm-paired-compare-v4"
+    assert SCHEMA_VERSION == "vlm-paired-compare-v5"
     assert DEFAULT_METRICS == (
         "nll", "kld", "reversed_kld", "js_kld", "ear", "ear_20", "ear_10", "ear_5",
         "ear_20_normalized", "ear_10_normalized", "ear_5_normalized",
@@ -226,12 +226,12 @@ def test_primary_weighting_token_is_rejected_by_cli():
 
 @pytest.mark.parametrize("ci_method", ["t", "percentile", "bca", "studentized"])
 def test_item_inference_is_independent_of_token_counts(ci_method):
-    a = [{"kld": 1.0} for _ in range(5)]
-    b = [{"kld": value} for value in (0.5, 0.7, 1.0, 1.1, 1.4)]
+    a = [{"kld": 1.0} for _ in range(30)]
+    b = [{"kld": float(value)} for value in np.linspace(0.5, 1.4, 30)]
     kwargs = dict(metrics=["kld"], confidence_level=0.95, bootstrap_iters=1000,
                   seed=7, model_a_label="A", model_b_label="B", ci_method=ci_method)
-    uniform = compare_items(a, b, [1] * 5, **kwargs)["metrics"]["kld"]
-    skewed = compare_items(a, b, [1, 1, 1, 1, 1000], **kwargs)["metrics"]["kld"]
+    uniform = compare_items(a, b, [1] * 30, **kwargs)["metrics"]["kld"]
+    skewed = compare_items(a, b, [1] * 29 + [1000], **kwargs)["metrics"]["kld"]
     assert uniform["item_weighted"] == skewed["item_weighted"]
     assert uniform["token_weighted"]["candidate_mean"] != skewed["token_weighted"]["candidate_mean"]
 
@@ -540,13 +540,13 @@ def test_report_never_contradicts_its_own_confidence_level(level, label):
     --confidence-level 0.99 the summary bullet said 99% while the table
     column and the JSON `reason` said 95%. Any archived report or JSON at a
     non-default level was self-contradicting."""
-    scores_a = [{"kld": 0.10 + 0.01 * i} for i in range(8)]
-    scores_b = [{"kld": 0.12 + 0.01 * i} for i in range(8)]
+    scores_a = [{"kld": 0.25} for _ in range(8)]
+    scores_b = [{"kld": 0.5} for _ in range(8)]
     weights = [10] * 8
     for ci_method, how in (("t", "paired Student-t (df = n - 1, no bootstrap)"),
-                           ("studentized", "500 paired-bootstrap iters")):
+                           ("studentized", "8000 paired-bootstrap iters")):
         result = compare_items(scores_a, scores_b, weights, metrics=["kld"],
-                                  confidence_level=level, bootstrap_iters=500,
+                                  confidence_level=level, bootstrap_iters=8000,
                                   seed=1, model_a_label="A", model_b_label="B",
                                   ci_method=ci_method)
         for weighting in ("item_weighted",):

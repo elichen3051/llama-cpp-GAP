@@ -126,3 +126,7 @@ Detected null inflation excludes a cell from all required-N crossings. Remaining
 ## 10. Auxiliary diagnostic models
 
 Promote both stored float32 operands to float64 before forming token deltas. The variance component mean(s_i^2/T_i) is an unvalidated IID common-mean proxy, with its raw residual retained; nonpositive residuals suppress extrapolation. SNR intervals and observed-effect sample-size searches use SciPy noncentral-t tails under an IID normal item model. Convergence failures are unavailable. Cost fits must have identifiable coefficients and nonnegative costs. Random-subsample agreement targets nominal unadjusted per-metric verdicts, with pointwise Wilson intervals and no minimum-N guarantee.
+
+## 11. Bootstrap CI inversion (comparison schema v5)
+
+SciPy supplies percentile and BCa intervals with the existing paired-item RNG stream. Bootstrap-t rejects every unusable pivot rather than deleting draws. Nonconstant two-item inference and unsupported actual tails are unavailable. Inverted p-values carry finite-resample support and censoring metadata; decisions use strict p < alpha. Censored Holm results are labeled upper bounds on the fixed empirical inversion. Optional unavailable cells retain descriptive values and internal p=1 family membership, never displayed as measured p-values. Primary inference failures and invalid data remain fatal.

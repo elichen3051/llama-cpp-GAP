@@ -6,6 +6,7 @@ from typing import Any, Sequence
 import numpy as np
 
 from stats.contracts import (
+    InferenceUnavailableError,
     PER_ITEM_TAIL_LADDER,
     POOLED_LADDER,
     POOLED_TAIL_ROWS,
@@ -35,6 +36,17 @@ def _bucket_ranges(edges: Sequence[int]) -> list[tuple[int, int, str]]:
         hi = e[i + 1] if i + 1 < len(e) else None
         out.append((lo, hi, f"{lo}-{hi}" if hi is not None else f"{lo}+"))
     return out
+
+
+def _optional_weighting_block(a, b, weights, **kwargs):
+    """Keep valid descriptive values when the requested exploratory CI is unsupported."""
+    try:
+        return _build_weighting_block(a, b, weights, **kwargs)
+    except InferenceUnavailableError as error:
+        return {"baseline_mean": float(a.mean()), "candidate_mean": float(b.mean()),
+                "delta_candidate_minus_baseline": float((b - a).mean()),
+                "inference_status": "unavailable", "requested_ci_method": kwargs["ci_method"],
+                "skipped": str(error)}
 
 
 def _position_bucket_blocks(
@@ -91,7 +103,7 @@ def _position_bucket_blocks(
                 "inference needs >= 2")
             blocks.append(entry)
             continue
-        entry.update(_build_weighting_block(
+        entry.update(_optional_weighting_block(
             np.asarray(a_vals), np.asarray(b_vals), np.asarray(weights),
             weighting="item", score_direction=score_direction,
             confidence_level=confidence_level,
@@ -368,7 +380,7 @@ def _per_item_tail_blocks(
                 "inference needs >= 2")
             cells.append(entry)
             continue
-        entry.update(_build_weighting_block(
+        entry.update(_optional_weighting_block(
             a_vals, b_vals, np.asarray(weights, dtype=np.float64),
             weighting="item", score_direction=score_direction,
             confidence_level=confidence_level,

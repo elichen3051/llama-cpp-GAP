@@ -44,7 +44,7 @@ def _run(with_target=True, ci_method="t", **kw):
         ta = dict(ta, target=tgt)
         tb = dict(tb, target=tgt)
     res = compare_items(sa, sb, w, metrics=["kld", "nll"], confidence_level=0.95,
-                           bootstrap_iters=500, seed=3, model_a_label="A",
+                           bootstrap_iters=5000, seed=3, model_a_label="A",
                            model_b_label="B", ci_method=ci_method,
                            token_metrics_a=ta, token_metrics_b=tb, item_keys=keys)
     return res, (keys, sa, sb, w, ta, tb, tgt)

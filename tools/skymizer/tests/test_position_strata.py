@@ -164,3 +164,18 @@ def test_report_renders_the_strata_section_as_exploratory():
     assert "first ~32 answer tokens" in md
     assert "| kld    | 0-32" in md
     assert "p (Holm)" in md
+
+
+def test_unsupported_optional_bootstrap_is_explicit_and_keeps_descriptive_values():
+    from stats.tokens import _position_bucket_blocks
+    from stats.contracts import NonFiniteMetricError
+    a = [np.array([1.]), np.array([1.]), np.array([1.])]
+    b = [np.array([2.]), np.array([3.]), np.array([4.])]
+    kwargs = dict(metric="kld", score_direction="lower_is_better", edges=[0], confidence_level=.95, bootstrap_iters=1000, seed=1, ci_method="studentized")
+    cell = _position_bucket_blocks(a, b, **kwargs)[0]
+    assert cell["inference_status"] == "unavailable"
+    assert cell["delta_candidate_minus_baseline"] == 2.
+    assert not {"p_value", "ci_delta", "decision"} & cell.keys()
+    b[0][0] = np.nan
+    with pytest.raises(NonFiniteMetricError):
+        _position_bucket_blocks(a, b, **kwargs)

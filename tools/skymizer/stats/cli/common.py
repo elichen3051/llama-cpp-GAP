@@ -1,5 +1,6 @@
 """Argument and output helpers for saved-metrics comparison."""
 import json
+import math
 import sys
 from pathlib import Path
 
@@ -74,11 +75,14 @@ def add_shared_paired_args(p, *, num_eval_tokens_help: str, end_help: str) -> No
                         "is the bootstrap-t: each replicate is divided by its "
                         "own analytic SE. 'bca' is bias-corrected and "
                         "accelerated. 'percentile' is the first-order "
-                        "interval, kept for cross-repo parity checks. "
-                        "docs/compare.md tabulates their measured coverage.")
+                        "interval. Nonconstant two-item samples, unsupported "
+                        "tails and unusable studentized pivots fail explicitly. "
+                        "docs/compare.md explains assumptions and limitations.")
     p.add_argument("--bootstrap-iters", type=int, default=5000,
                    help="replicates for the bootstrap methods (default 5000); "
-                        "ignored by --ci-method t")
+                        "ignored by --ci-method t. Bootstrap CIs require ten draws "
+                        "strictly outside each endpoint; p-values beyond that "
+                        "supported range are reported as conservative upper bounds.")
     p.add_argument("--seed", type=int, default=1234)
     p.add_argument("--weighting", choices=["item", "token", "both"], default="both")
     p.add_argument("--num-eval-tokens", type=int, default=-1, help=num_eval_tokens_help)
@@ -114,8 +118,8 @@ def validate_shared_paired_args(args) -> None:
         sys.exit(f"--end must be -1 (all) or >= 0, got {args.end}")
     if not (0.0 < args.confidence_level < 1.0):
         sys.exit(f"--confidence-level must be in (0, 1), got {args.confidence_level}")
-    if args.equivalence_margin is not None and args.equivalence_margin <= 0.0:
-        sys.exit("--equivalence-margin must be > 0 (it is a two-sided TOST "
+    if args.equivalence_margin is not None and (not math.isfinite(args.equivalence_margin) or args.equivalence_margin <= 0.0):
+        sys.exit("--equivalence-margin must be finite and > 0 (it is a two-sided TOST "
                  f"margin), got {args.equivalence_margin}")
     if args.ci_method == "t":
         return                       # no replicates are drawn; nothing to floor
@@ -124,11 +128,8 @@ def validate_shared_paired_args(args) -> None:
         sys.exit(
             f"--bootstrap-iters must be >= {floor} at --confidence-level "
             f"{args.confidence_level:g} with --ci-method {args.ci_method}, "
-            f"got {args.bootstrap_iters}. Fewer "
-            "replicates cannot resolve the requested percentile: the CI "
-            "endpoints collapse towards the min/max of the replicate sample "
-            "(at 1 iteration lower == upper, so EVERY metric reads as "
-            "significant).")
+            f"got {args.bootstrap_iters}. This nominal floor is a prefilter; "
+            "actual CI endpoints must also have ten strict-outside draws per tail.")
     if args.bootstrap_iters < BOOTSTRAP_ITERS_ADVISORY:
         print(f"WARNING: --bootstrap-iters {args.bootstrap_iters} is below the "
               f"customary {BOOTSTRAP_ITERS_ADVISORY}; the CI endpoints carry "

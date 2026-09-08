@@ -211,3 +211,23 @@ def test_report_marks_the_primary_and_shows_the_holm_column():
     assert len(star_rows) == 1
     assert "kld" in star_rows[0] and "(primary)" in star_rows[0]
     assert "| item" in star_rows[0] and "| token" not in star_rows[0]
+
+
+@pytest.mark.parametrize("bad_p", [float("nan"), float("inf"), -0.01, 1.01])
+def test_holm_rejects_invalid_p_values(bad_p):
+    with pytest.raises(ValueError, match="finite and in"):
+        holm_adjust([0.01, bad_p])
+
+
+def test_unavailable_cells_retain_family_and_censored_bounds():
+    from stats.engine import _adjust_exploratory_cells
+    from stats.render import _format_p_value
+    cells = [{"p_value": .01, "p_value_metadata": {"censored": True}}, {"skipped": "unsupported"}, {"p_value": .025}]
+    _adjust_exploratory_cells(cells, .95)
+    assert [c["holm_family_size"] for c in cells] == [3, 3, 3]
+    assert cells[0]["p_value_holm"] == pytest.approx(.03)
+    assert "p_value_holm" not in cells[1]
+    assert _format_p_value(cells[2], adjusted=True).startswith("<= ")
+    boundary = [{"p_value": 1 - .95}]
+    _adjust_exploratory_cells(boundary, .95)
+    assert not boundary[0]["holm_significant"]

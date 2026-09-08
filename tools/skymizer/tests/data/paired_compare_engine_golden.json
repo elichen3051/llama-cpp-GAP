@@ -2,7 +2,7 @@
  "fixture": {
   "n_items": 16,
   "seed": 20260824,
-  "bootstrap_iters": 1000,
+  "bootstrap_iters": 5000,
   "weights": [
    10,
    18,
@@ -24,7 +24,7 @@
  },
  "results": {
   "t": {
-   "schema_version": "vlm-paired-compare-v4",
+   "schema_version": "vlm-paired-compare-v5",
    "n_items": 16,
    "confidence_level": "0x1.e666666666666p-1",
    "ci_method": "t",
@@ -76,6 +76,7 @@
        "reason": "95% CI [+0.001119, +0.021792] excludes 0"
       },
       "role": "exploratory",
+      "holm_family_size": 6,
       "p_value_holm": "0x1.07115a7af27ccp-5",
       "holm_significant": true
      },
@@ -158,6 +159,7 @@
        "reason": "95% CI [+0.000311, +0.000334] excludes 0"
       },
       "role": "exploratory",
+      "holm_family_size": 6,
       "p_value_holm": "0x1.0177d31779056p-60",
       "holm_significant": true
      },
@@ -200,6 +202,7 @@
        "reason": "95% CI [+0.000142, +0.000152] excludes 0"
       },
       "role": "exploratory",
+      "holm_family_size": 6,
       "p_value_holm": "0x1.0177d31779056p-60",
       "holm_significant": true
      },
@@ -242,6 +245,7 @@
        "reason": "95% CI [-0.008056, -0.007843] excludes 0"
       },
       "role": "exploratory",
+      "holm_family_size": 6,
       "p_value_holm": "0x1.838428dc2c20bp-81",
       "holm_significant": true
      },
@@ -285,6 +289,7 @@
        "reason": "95% CI [-0.002000, -0.002000] excludes 0"
       },
       "role": "exploratory",
+      "holm_family_size": 6,
       "p_value_holm": "0x0.0p+0",
       "holm_significant": true
      },
@@ -327,6 +332,7 @@
        "reason": "95% CI [+0.017536, +0.028193] excludes 0"
       },
       "role": "exploratory",
+      "holm_family_size": 6,
       "p_value_holm": "0x1.5663067a3f040p-22",
       "holm_significant": true
      },
@@ -3360,6 +3366,7 @@
          "equivalence_alpha": null,
          "reason": "95% CI [+0.000458, +0.000540] excludes 0"
         },
+        "holm_family_size": 3,
         "p_value_holm": "0x1.c252aefbfdf60p-43",
         "holm_significant": true
        },
@@ -3398,6 +3405,7 @@
          "equivalence_alpha": null,
          "reason": "95% CI [+0.000492, +0.000609] excludes 0"
         },
+        "holm_family_size": 3,
         "p_value_holm": "0x1.ba973d2058100p-38",
         "holm_significant": true
        },
@@ -3435,6 +3443,7 @@
          "equivalence_alpha": null,
          "reason": "95% CI [+0.000494, +0.000625] excludes 0"
         },
+        "holm_family_size": 3,
         "p_value_holm": "0x1.a74816019070bp-37",
         "holm_significant": true
        }
@@ -4354,6 +4363,7 @@
         "equivalence_alpha": null,
         "reason": "95% CI [+0.000279, +0.000304] excludes 0"
        },
+       "holm_family_size": 9,
        "p_value_holm": "0x1.d7ece182abfe9p-55",
        "holm_significant": true
       },
@@ -4392,6 +4402,7 @@
         "equivalence_alpha": null,
         "reason": "95% CI [+0.000262, +0.000310] excludes 0"
        },
+       "holm_family_size": 9,
        "p_value_holm": "0x1.788be5b87d239p-35",
        "holm_significant": true
       },
@@ -4430,6 +4441,7 @@
         "equivalence_alpha": null,
         "reason": "95% CI [+0.000313, +0.000345] excludes 0"
        },
+       "holm_family_size": 9,
        "p_value_holm": "0x1.0ed74a3fdc907p-12",
        "holm_significant": true
       }
@@ -4470,6 +4482,7 @@
         "equivalence_alpha": null,
         "reason": "95% CI [-0.008051, -0.007706] excludes 0"
        },
+       "holm_family_size": 9,
        "p_value_holm": "0x1.0b50dae4fd1f4p-69",
        "holm_significant": true
       },
@@ -4508,6 +4521,7 @@
         "equivalence_alpha": null,
         "reason": "95% CI [-0.009064, -0.007611] excludes 0"
        },
+       "holm_family_size": 9,
        "p_value_holm": "0x1.0d20679bc753fp-34",
        "holm_significant": true
       },
@@ -4546,6 +4560,7 @@
         "equivalence_alpha": null,
         "reason": "95% CI [-0.008188, -0.007934] excludes 0"
        },
+       "holm_family_size": 9,
        "p_value_holm": "0x1.517ac35452872p-15",
        "holm_significant": true
       }
@@ -4586,6 +4601,7 @@
         "equivalence_alpha": null,
         "reason": "95% CI [-0.090773, -0.070445] excludes 0"
        },
+       "holm_family_size": 9,
        "p_value_holm": "0x1.86960a71742ecp-33",
        "holm_significant": true
       },
@@ -4624,6 +4640,7 @@
         "equivalence_alpha": null,
         "reason": "95% CI [-0.092661, -0.070886] excludes 0"
        },
+       "holm_family_size": 9,
        "p_value_holm": "0x1.89229757fbd80p-28",
        "holm_significant": true
       },
@@ -4662,6 +4679,7 @@
         "equivalence_alpha": null,
         "reason": "95% CI [-0.101826, -0.024684] excludes 0"
        },
+       "holm_family_size": 9,
        "p_value_holm": "0x1.3f77cdb711aacp-6",
        "holm_significant": true
       }
@@ -4670,7 +4688,7 @@
    }
   },
   "studentized": {
-   "schema_version": "vlm-paired-compare-v4",
+   "schema_version": "vlm-paired-compare-v5",
    "n_items": 16,
    "confidence_level": "0x1.e666666666666p-1",
    "ci_method": "studentized",
@@ -4685,7 +4703,7 @@
     "alpha": "0x1.99999999999a0p-5",
     "policy": "One confirmatory endpoint whose interval spends the whole alpha; every other item-weighted endpoint is exploratory and carries a Holm-Bonferroni-adjusted p-value over the remaining 6 cells. Holm controls the family-wise error rate under arbitrary dependence: kld/reversed_kld/js_kld are functionals of the same distribution pair. Token-weighted summaries are descriptive only."
    },
-   "bootstrap_iters": 1000,
+   "bootstrap_iters": 5000,
    "seed": 20260824,
    "model_a_label": "A",
    "model_b_label": "B",
@@ -4701,27 +4719,44 @@
        "method": "paired_item_weighted_bootstrap_studentized",
        "ci_method": "studentized",
        "confidence_level": "0x1.e666666666666p-1",
-       "lower": "0x1.8f3cdfee9e2b0p-11",
-       "upper": "0x1.57fdad0d68131p-6",
+       "lower": "0x1.4112810f063d0p-11",
+       "upper": "0x1.5f05453f7401dp-6",
        "standard_error": "0x1.3dd2bcd8fa469p-8",
-       "bootstrap_iters": 1000,
-       "contains_zero": false
+       "bootstrap_iters": 5000,
+       "contains_zero": false,
+       "tail_support": {
+        "minimum": 10,
+        "lower": 125,
+        "upper": 125
+       }
       },
-      "bootstrap_std": "0x1.34f2cb8092918p-8",
-      "p_value": "0x1.475a4718cea43p-5",
+      "bootstrap_std": "0x1.3339b24a0f778p-8",
+      "p_value": "0x1.425e6b8f5a5b0p-5",
+      "p_value_metadata": {
+       "method": "bootstrap_ci_inversion",
+       "censored": false,
+       "lower_bound": "0x1.425e6b8f5a5a0p-5",
+       "upper_bound": "0x1.425e6b8f5a5b0p-5",
+       "supported_alpha_min": "0x1.d7f41e8574600p-9",
+       "minimum_tail_draws": 10,
+       "tail_roundoff_rtol": "0x1.0000000000000p-49",
+       "rejection_rule": "p_value < alpha; p_value is a conservative upper bound when censored"
+      },
       "decision": {
        "verdict": "A closer",
        "statistically_distinguishable_from_null": true,
        "null_value": "0x0.0p+0",
        "confidence_level": "0x1.e666666666666p-1",
-       "equivalence_bound": "0x1.57fdad0d68131p-6",
+       "equivalence_bound": "0x1.5f05453f7401dp-6",
        "equivalence_margin": null,
        "equivalence_established": null,
        "equivalence_alpha": null,
-       "reason": "95% CI [+0.000761, +0.020996] excludes 0"
+       "reason": "95% CI [+0.000612, +0.021425] excludes 0"
       },
       "role": "exploratory",
-      "p_value_holm": "0x1.475a4718cea43p-5",
+      "holm_family_size": 6,
+      "p_value_holm": "0x1.425e6b8f5a5b0p-5",
+      "p_value_holm_is_upper_bound": true,
       "holm_significant": true
      },
      "token_weighted": {
@@ -4742,24 +4777,39 @@
        "method": "paired_item_weighted_bootstrap_studentized",
        "ci_method": "studentized",
        "confidence_level": "0x1.e666666666666p-1",
-       "lower": "0x1.293a9350be9ddp-12",
-       "upper": "0x1.4091d922b77c3p-12",
+       "lower": "0x1.29030d74526b1p-12",
+       "upper": "0x1.3f1c563bc0954p-12",
        "standard_error": "0x1.42e40dc9d0239p-18",
-       "bootstrap_iters": 1000,
-       "contains_zero": false
+       "bootstrap_iters": 5000,
+       "contains_zero": false,
+       "tail_support": {
+        "minimum": 10,
+        "lower": 125,
+        "upper": 125
+       }
       },
-      "bootstrap_std": "0x1.3f759d838be3bp-18",
-      "p_value": "0x1.05e1d27a3ee9cp-9",
+      "bootstrap_std": "0x1.3ced4e8b4a93dp-18",
+      "p_value": "0x1.d7f41e8574600p-9",
+      "p_value_metadata": {
+       "method": "bootstrap_ci_inversion",
+       "censored": true,
+       "lower_bound": "0x0.0p+0",
+       "upper_bound": "0x1.d7f41e8574600p-9",
+       "supported_alpha_min": "0x1.d7f41e8574600p-9",
+       "minimum_tail_draws": 10,
+       "tail_roundoff_rtol": "0x1.0000000000000p-49",
+       "rejection_rule": "p_value < alpha; p_value is a conservative upper bound when censored"
+      },
       "decision": {
        "verdict": "A closer",
        "statistically_distinguishable_from_null": true,
        "null_value": "0x0.0p+0",
        "confidence_level": "0x1.e666666666666p-1",
-       "equivalence_bound": "0x1.4091d922b77c3p-12",
+       "equivalence_bound": "0x1.3f1c563bc0954p-12",
        "equivalence_margin": "0x1.a36e2eb1c432dp-13",
        "equivalence_established": false,
        "equivalence_alpha": "0x1.99999999999a0p-6",
-       "reason": "95% CI [+0.000283, +0.000306] excludes 0"
+       "reason": "95% CI [+0.000283, +0.000304] excludes 0"
       },
       "role": "primary"
      },
@@ -4781,27 +4831,44 @@
        "method": "paired_item_weighted_bootstrap_studentized",
        "ci_method": "studentized",
        "confidence_level": "0x1.e666666666666p-1",
-       "lower": "0x1.46f3a20c04e0bp-12",
-       "upper": "0x1.60a06ed9636f0p-12",
+       "lower": "0x1.46b68eccc10f6p-12",
+       "upper": "0x1.5f05920e870a8p-12",
        "standard_error": "0x1.632e0f2acb5a3p-18",
-       "bootstrap_iters": 1000,
-       "contains_zero": false
+       "bootstrap_iters": 5000,
+       "contains_zero": false,
+       "tail_support": {
+        "minimum": 10,
+        "lower": 125,
+        "upper": 125
+       }
       },
-      "bootstrap_std": "0x1.5f67c6dd80473p-18",
-      "p_value": "0x1.05e1d27a3ee9cp-9",
+      "bootstrap_std": "0x1.5c9ea332d208fp-18",
+      "p_value": "0x1.d7f41e8574600p-9",
+      "p_value_metadata": {
+       "method": "bootstrap_ci_inversion",
+       "censored": true,
+       "lower_bound": "0x0.0p+0",
+       "upper_bound": "0x1.d7f41e8574600p-9",
+       "supported_alpha_min": "0x1.d7f41e8574600p-9",
+       "minimum_tail_draws": 10,
+       "tail_roundoff_rtol": "0x1.0000000000000p-49",
+       "rejection_rule": "p_value < alpha; p_value is a conservative upper bound when censored"
+      },
       "decision": {
        "verdict": "A closer",
        "statistically_distinguishable_from_null": true,
        "null_value": "0x0.0p+0",
        "confidence_level": "0x1.e666666666666p-1",
-       "equivalence_bound": "0x1.60a06ed9636f0p-12",
+       "equivalence_bound": "0x1.5f05920e870a8p-12",
        "equivalence_margin": null,
        "equivalence_established": null,
        "equivalence_alpha": null,
-       "reason": "95% CI [+0.000312, +0.000336] excludes 0"
+       "reason": "95% CI [+0.000312, +0.000335] excludes 0"
       },
       "role": "exploratory",
-      "p_value_holm": "0x1.88d2bbb75e5eap-7",
+      "holm_family_size": 6,
+      "p_value_holm": "0x1.26f8931368bc0p-6",
+      "p_value_holm_is_upper_bound": true,
       "holm_significant": true
      },
      "token_weighted": {
@@ -4822,27 +4889,44 @@
        "method": "paired_item_weighted_bootstrap_studentized",
        "ci_method": "studentized",
        "confidence_level": "0x1.e666666666666p-1",
-       "lower": "0x1.293a9350be9ddp-13",
-       "upper": "0x1.4091d922b77c3p-13",
+       "lower": "0x1.29030d74526b1p-13",
+       "upper": "0x1.3f1c563bc0954p-13",
        "standard_error": "0x1.42e40dc9d0239p-19",
-       "bootstrap_iters": 1000,
-       "contains_zero": false
+       "bootstrap_iters": 5000,
+       "contains_zero": false,
+       "tail_support": {
+        "minimum": 10,
+        "lower": 125,
+        "upper": 125
+       }
       },
-      "bootstrap_std": "0x1.3f759d838be3bp-19",
-      "p_value": "0x1.05e1d27a3ee9cp-9",
+      "bootstrap_std": "0x1.3ced4e8b4a93dp-19",
+      "p_value": "0x1.d7f41e8574600p-9",
+      "p_value_metadata": {
+       "method": "bootstrap_ci_inversion",
+       "censored": true,
+       "lower_bound": "0x0.0p+0",
+       "upper_bound": "0x1.d7f41e8574600p-9",
+       "supported_alpha_min": "0x1.d7f41e8574600p-9",
+       "minimum_tail_draws": 10,
+       "tail_roundoff_rtol": "0x1.0000000000000p-49",
+       "rejection_rule": "p_value < alpha; p_value is a conservative upper bound when censored"
+      },
       "decision": {
        "verdict": "A closer",
        "statistically_distinguishable_from_null": true,
        "null_value": "0x0.0p+0",
        "confidence_level": "0x1.e666666666666p-1",
-       "equivalence_bound": "0x1.4091d922b77c3p-13",
+       "equivalence_bound": "0x1.3f1c563bc0954p-13",
        "equivalence_margin": null,
        "equivalence_established": null,
        "equivalence_alpha": null,
-       "reason": "95% CI [+0.000142, +0.000153] excludes 0"
+       "reason": "95% CI [+0.000142, +0.000152] excludes 0"
       },
       "role": "exploratory",
-      "p_value_holm": "0x1.88d2bbb75e5eap-7",
+      "holm_family_size": 6,
+      "p_value_holm": "0x1.26f8931368bc0p-6",
+      "p_value_holm_is_upper_bound": true,
       "holm_significant": true
      },
      "token_weighted": {
@@ -4863,27 +4947,44 @@
        "method": "paired_item_weighted_bootstrap_studentized",
        "ci_method": "studentized",
        "confidence_level": "0x1.e666666666666p-1",
-       "lower": "-0x1.074ab6a9223c9p-7",
-       "upper": "-0x1.00225c83bcd9dp-7",
+       "lower": "-0x1.076b7ec879745p-7",
+       "upper": "-0x1.002c991cfef55p-7",
        "standard_error": "0x1.a2fa6e2e16a33p-15",
-       "bootstrap_iters": 1000,
-       "contains_zero": false
+       "bootstrap_iters": 5000,
+       "contains_zero": false,
+       "tail_support": {
+        "minimum": 10,
+        "lower": 125,
+        "upper": 125
+       }
       },
-      "bootstrap_std": "0x1.9303023f7d819p-15",
-      "p_value": "0x1.05e1d27a3ee9cp-9",
+      "bootstrap_std": "0x1.94236db1b988ep-15",
+      "p_value": "0x1.d7f41e8574700p-9",
+      "p_value_metadata": {
+       "method": "bootstrap_ci_inversion",
+       "censored": true,
+       "lower_bound": "0x0.0p+0",
+       "upper_bound": "0x1.d7f41e8574700p-9",
+       "supported_alpha_min": "0x1.d7f41e8574700p-9",
+       "minimum_tail_draws": 10,
+       "tail_roundoff_rtol": "0x1.0000000000000p-49",
+       "rejection_rule": "p_value < alpha; p_value is a conservative upper bound when censored"
+      },
       "decision": {
        "verdict": "A closer",
        "statistically_distinguishable_from_null": true,
        "null_value": "0x0.0p+0",
        "confidence_level": "0x1.e666666666666p-1",
-       "equivalence_bound": "0x1.074ab6a9223c9p-7",
+       "equivalence_bound": "0x1.076b7ec879745p-7",
        "equivalence_margin": null,
        "equivalence_established": null,
        "equivalence_alpha": null,
-       "reason": "95% CI [-0.008035, -0.007817] excludes 0"
+       "reason": "95% CI [-0.008039, -0.007818] excludes 0"
       },
       "role": "exploratory",
-      "p_value_holm": "0x1.88d2bbb75e5eap-7",
+      "holm_family_size": 6,
+      "p_value_holm": "0x1.26f8931368bc0p-6",
+      "p_value_holm_is_upper_bound": true,
       "holm_significant": true
      },
      "token_weighted": {
@@ -4907,12 +5008,27 @@
        "lower": "-0x1.0624dd2f1aa00p-9",
        "upper": "-0x1.0624dd2f1aa00p-9",
        "standard_error": "0x0.0p+0",
-       "bootstrap_iters": 1000,
+       "bootstrap_iters": 5000,
        "contains_zero": false,
-       "fallback": "the sample has no spread, so there is no SE to studentize by; percentile interval used instead"
+       "tail_support": {
+        "minimum": 10,
+        "lower": 0,
+        "upper": 0,
+        "exemption": "constant_empirical_distribution"
+       },
+       "fallback": "constant differences (no spread): empirical percentile point-interval convention; this does not establish zero population variance"
       },
       "bootstrap_std": "0x0.0p+0",
-      "p_value": "0x1.05e1d27a3ee9cp-9",
+      "p_value": "0x1.a358b63c4d31bp-12",
+      "p_value_metadata": {
+       "method": "constant_empirical_distribution",
+       "censored": true,
+       "lower_bound": "0x0.0p+0",
+       "upper_bound": "0x1.a358b63c4d31bp-12",
+       "supported_alpha_min": null,
+       "resolution": "0x1.a358b63c4d31bp-12",
+       "rejection_rule": "p_value < alpha; constant-input convention, not a population variance guarantee"
+      },
       "decision": {
        "verdict": "A closer",
        "statistically_distinguishable_from_null": true,
@@ -4925,7 +5041,9 @@
        "reason": "95% CI [-0.002000, -0.002000] excludes 0"
       },
       "role": "exploratory",
-      "p_value_holm": "0x1.88d2bbb75e5eap-7",
+      "holm_family_size": 6,
+      "p_value_holm": "0x1.3a8288ad39e54p-9",
+      "p_value_holm_is_upper_bound": true,
       "holm_significant": true
      },
      "token_weighted": {
@@ -4946,27 +5064,44 @@
        "method": "paired_item_weighted_bootstrap_studentized",
        "ci_method": "studentized",
        "confidence_level": "0x1.e666666666666p-1",
-       "lower": "0x1.e365c5c2adb0fp-7",
-       "upper": "0x1.b71cd1b922267p-6",
+       "lower": "0x1.eebe83f4209e7p-7",
+       "upper": "0x1.ba57aeef61f3ap-6",
        "standard_error": "0x1.47a6297a981cap-9",
-       "bootstrap_iters": 1000,
-       "contains_zero": false
+       "bootstrap_iters": 5000,
+       "contains_zero": false,
+       "tail_support": {
+        "minimum": 10,
+        "lower": 125,
+        "upper": 125
+       }
       },
-      "bootstrap_std": "0x1.453c1b04a1c6dp-9",
-      "p_value": "0x1.05e1d27a3ee9cp-9",
+      "bootstrap_std": "0x1.40961a95b7fa1p-9",
+      "p_value": "0x1.d7f41e8574600p-9",
+      "p_value_metadata": {
+       "method": "bootstrap_ci_inversion",
+       "censored": true,
+       "lower_bound": "0x0.0p+0",
+       "upper_bound": "0x1.d7f41e8574600p-9",
+       "supported_alpha_min": "0x1.d7f41e8574600p-9",
+       "minimum_tail_draws": 10,
+       "tail_roundoff_rtol": "0x1.0000000000000p-49",
+       "rejection_rule": "p_value < alpha; p_value is a conservative upper bound when censored"
+      },
       "decision": {
        "verdict": "A closer",
        "statistically_distinguishable_from_null": true,
        "null_value": "0x0.0p+0",
        "confidence_level": "0x1.e666666666666p-1",
-       "equivalence_bound": "0x1.b71cd1b922267p-6",
+       "equivalence_bound": "0x1.ba57aeef61f3ap-6",
        "equivalence_margin": null,
        "equivalence_established": null,
        "equivalence_alpha": null,
-       "reason": "95% CI [+0.014752, +0.026801] excludes 0"
+       "reason": "95% CI [+0.015098, +0.026998] excludes 0"
       },
       "role": "exploratory",
-      "p_value_holm": "0x1.88d2bbb75e5eap-7",
+      "holm_family_size": 6,
+      "p_value_holm": "0x1.26f8931368bc0p-6",
+      "p_value_holm_is_upper_bound": true,
       "holm_significant": true
      },
      "token_weighted": {
@@ -5004,9 +5139,9 @@
        "method": "paired_item_weighted_bootstrap_studentized",
        "ci_method": "studentized",
        "confidence_level": "0x1.e666666666666p-1",
-       "lower": "0x1.0031ec798c633p+0",
-       "upper": "0x1.056e8286392c7p+0",
-       "bootstrap_iters": 1000,
+       "lower": "0x1.00282575aacabp+0",
+       "upper": "0x1.058b3b360f7ffp+0",
+       "bootstrap_iters": 5000,
        "contains_one": false
       },
       "decision": {
@@ -7979,26 +8114,43 @@
          "method": "paired_item_weighted_bootstrap_studentized",
          "ci_method": "studentized",
          "confidence_level": "0x1.e666666666666p-1",
-         "lower": "0x1.e3ab1fae15ddfp-12",
-         "upper": "0x1.202ab81e638f0p-11",
+         "lower": "0x1.e493bf9421dfep-12",
+         "upper": "0x1.20de57a09a4ecp-11",
          "standard_error": "0x1.416986cb723b7p-16",
-         "bootstrap_iters": 1000,
-         "contains_zero": false
+         "bootstrap_iters": 5000,
+         "contains_zero": false,
+         "tail_support": {
+          "minimum": 10,
+          "lower": 125,
+          "upper": 125
+         }
         },
-        "bootstrap_std": "0x1.4468cd87db5d3p-16",
-        "p_value": "0x1.05e1d27a3ee9cp-9",
+        "bootstrap_std": "0x1.3e0141eeabce2p-16",
+        "p_value": "0x1.d7f41e8574600p-9",
+        "p_value_metadata": {
+         "method": "bootstrap_ci_inversion",
+         "censored": true,
+         "lower_bound": "0x0.0p+0",
+         "upper_bound": "0x1.d7f41e8574600p-9",
+         "supported_alpha_min": "0x1.d7f41e8574600p-9",
+         "minimum_tail_draws": 10,
+         "tail_roundoff_rtol": "0x1.0000000000000p-49",
+         "rejection_rule": "p_value < alpha; p_value is a conservative upper bound when censored"
+        },
         "decision": {
          "verdict": "A closer",
          "statistically_distinguishable_from_null": true,
          "null_value": "0x0.0p+0",
          "confidence_level": "0x1.e666666666666p-1",
-         "equivalence_bound": "0x1.202ab81e638f0p-11",
+         "equivalence_bound": "0x1.20de57a09a4ecp-11",
          "equivalence_margin": null,
          "equivalence_established": null,
          "equivalence_alpha": null,
-         "reason": "95% CI [+0.000461, +0.000550] excludes 0"
+         "reason": "95% CI [+0.000462, +0.000551] excludes 0"
         },
-        "p_value_holm": "0x1.88d2bbb75e5eap-8",
+        "holm_family_size": 3,
+        "p_value_holm": "0x1.61f716e417480p-7",
+        "p_value_holm_is_upper_bound": true,
         "holm_significant": true
        },
        {
@@ -8016,26 +8168,43 @@
          "method": "paired_item_weighted_bootstrap_studentized",
          "ci_method": "studentized",
          "confidence_level": "0x1.e666666666666p-1",
-         "lower": "0x1.057a269187ec9p-11",
-         "upper": "0x1.45c4d360b2d4ep-11",
+         "lower": "0x1.04b8778b3758cp-11",
+         "upper": "0x1.4472e163102fcp-11",
          "standard_error": "0x1.cd913b65075a1p-16",
-         "bootstrap_iters": 1000,
-         "contains_zero": false
+         "bootstrap_iters": 5000,
+         "contains_zero": false,
+         "tail_support": {
+          "minimum": 10,
+          "lower": 125,
+          "upper": 125
+         }
         },
-        "bootstrap_std": "0x1.cf501fd53db0bp-16",
-        "p_value": "0x1.05e1d27a3ee9cp-9",
+        "bootstrap_std": "0x1.c4daffc5de4cep-16",
+        "p_value": "0x1.d7f41e8575800p-9",
+        "p_value_metadata": {
+         "method": "bootstrap_ci_inversion",
+         "censored": true,
+         "lower_bound": "0x0.0p+0",
+         "upper_bound": "0x1.d7f41e8575800p-9",
+         "supported_alpha_min": "0x1.d7f41e8575800p-9",
+         "minimum_tail_draws": 10,
+         "tail_roundoff_rtol": "0x1.0000000000000p-49",
+         "rejection_rule": "p_value < alpha; p_value is a conservative upper bound when censored"
+        },
         "decision": {
          "verdict": "A closer",
          "statistically_distinguishable_from_null": true,
          "null_value": "0x0.0p+0",
          "confidence_level": "0x1.e666666666666p-1",
-         "equivalence_bound": "0x1.45c4d360b2d4ep-11",
+         "equivalence_bound": "0x1.4472e163102fcp-11",
          "equivalence_margin": null,
          "equivalence_established": null,
          "equivalence_alpha": null,
-         "reason": "95% CI [+0.000499, +0.000621] excludes 0"
+         "reason": "95% CI [+0.000497, +0.000619] excludes 0"
         },
-        "p_value_holm": "0x1.88d2bbb75e5eap-8",
+        "holm_family_size": 3,
+        "p_value_holm": "0x1.61f716e417480p-7",
+        "p_value_holm_is_upper_bound": true,
         "holm_significant": true
        },
        {
@@ -8052,26 +8221,43 @@
          "method": "paired_item_weighted_bootstrap_studentized",
          "ci_method": "studentized",
          "confidence_level": "0x1.e666666666666p-1",
-         "lower": "0x1.083913ff1ff48p-11",
-         "upper": "0x1.4f6b65e779013p-11",
+         "lower": "0x1.077d2b3546171p-11",
+         "upper": "0x1.4efd206edb904p-11",
          "standard_error": "0x1.018bc1be56ec7p-15",
-         "bootstrap_iters": 1000,
-         "contains_zero": false
+         "bootstrap_iters": 5000,
+         "contains_zero": false,
+         "tail_support": {
+          "minimum": 10,
+          "lower": 125,
+          "upper": 125
+         }
         },
-        "bootstrap_std": "0x1.01cc64594c002p-15",
-        "p_value": "0x1.05e1d27a3ee9cp-9",
+        "bootstrap_std": "0x1.f7e9a1e90c26bp-16",
+        "p_value": "0x1.d7f41e8574600p-9",
+        "p_value_metadata": {
+         "method": "bootstrap_ci_inversion",
+         "censored": true,
+         "lower_bound": "0x0.0p+0",
+         "upper_bound": "0x1.d7f41e8574600p-9",
+         "supported_alpha_min": "0x1.d7f41e8574600p-9",
+         "minimum_tail_draws": 10,
+         "tail_roundoff_rtol": "0x1.0000000000000p-49",
+         "rejection_rule": "p_value < alpha; p_value is a conservative upper bound when censored"
+        },
         "decision": {
          "verdict": "A closer",
          "statistically_distinguishable_from_null": true,
          "null_value": "0x0.0p+0",
          "confidence_level": "0x1.e666666666666p-1",
-         "equivalence_bound": "0x1.4f6b65e779013p-11",
+         "equivalence_bound": "0x1.4efd206edb904p-11",
          "equivalence_margin": null,
          "equivalence_established": null,
          "equivalence_alpha": null,
-         "reason": "95% CI [+0.000504, +0.000640] excludes 0"
+         "reason": "95% CI [+0.000503, +0.000639] excludes 0"
         },
-        "p_value_holm": "0x1.88d2bbb75e5eap-8",
+        "holm_family_size": 3,
+        "p_value_holm": "0x1.61f716e417480p-7",
+        "p_value_holm_is_upper_bound": true,
         "holm_significant": true
        }
       ],
@@ -8970,26 +9156,43 @@
         "method": "paired_item_weighted_bootstrap_studentized",
         "ci_method": "studentized",
         "confidence_level": "0x1.e666666666666p-1",
-        "lower": "0x1.229afe379cc86p-12",
-        "upper": "0x1.3de50cb3ff92ap-12",
+        "lower": "0x1.22e6ff4b027e9p-12",
+        "upper": "0x1.3e1795ddfdf20p-12",
         "standard_error": "0x1.929fd05b2f1e7p-18",
-        "bootstrap_iters": 1000,
-        "contains_zero": false
+        "bootstrap_iters": 5000,
+        "contains_zero": false,
+        "tail_support": {
+         "minimum": 10,
+         "lower": 125,
+         "upper": 125
+        }
        },
-       "bootstrap_std": "0x1.804ec45983f95p-18",
-       "p_value": "0x1.05e1d27a3ee9cp-9",
+       "bootstrap_std": "0x1.843b151155830p-18",
+       "p_value": "0x1.d7f41e8574a00p-9",
+       "p_value_metadata": {
+        "method": "bootstrap_ci_inversion",
+        "censored": true,
+        "lower_bound": "0x0.0p+0",
+        "upper_bound": "0x1.d7f41e8574a00p-9",
+        "supported_alpha_min": "0x1.d7f41e8574a00p-9",
+        "minimum_tail_draws": 10,
+        "tail_roundoff_rtol": "0x1.0000000000000p-49",
+        "rejection_rule": "p_value < alpha; p_value is a conservative upper bound when censored"
+       },
        "decision": {
         "verdict": "A closer",
         "statistically_distinguishable_from_null": true,
         "null_value": "0x0.0p+0",
         "confidence_level": "0x1.e666666666666p-1",
-        "equivalence_bound": "0x1.3de50cb3ff92ap-12",
+        "equivalence_bound": "0x1.3e1795ddfdf20p-12",
         "equivalence_margin": null,
         "equivalence_established": null,
         "equivalence_alpha": null,
         "reason": "95% CI [+0.000277, +0.000303] excludes 0"
        },
-       "p_value_holm": "0x1.269e0cc986c70p-6",
+       "holm_family_size": 9,
+       "p_value_holm": "0x1.0979512b11760p-5",
+       "p_value_holm_is_upper_bound": true,
        "holm_significant": true
       },
       {
@@ -9007,26 +9210,43 @@
         "method": "paired_item_weighted_bootstrap_studentized",
         "ci_method": "studentized",
         "confidence_level": "0x1.e666666666666p-1",
-        "lower": "0x1.062b2863b219ep-12",
-        "upper": "0x1.3df9d366393f9p-12",
+        "lower": "0x1.061b4f70a5b93p-12",
+        "upper": "0x1.3e6cbe3a18d7ep-12",
         "standard_error": "0x1.6f871395fedf9p-17",
-        "bootstrap_iters": 1000,
-        "contains_zero": false
+        "bootstrap_iters": 5000,
+        "contains_zero": false,
+        "tail_support": {
+         "minimum": 10,
+         "lower": 125,
+         "upper": 125
+        }
        },
-       "bootstrap_std": "0x1.5f9c2a49894c3p-17",
-       "p_value": "0x1.05e1d27a3ee9cp-9",
+       "bootstrap_std": "0x1.666ae2c95ed04p-17",
+       "p_value": "0x1.d7f41e8575e00p-9",
+       "p_value_metadata": {
+        "method": "bootstrap_ci_inversion",
+        "censored": true,
+        "lower_bound": "0x0.0p+0",
+        "upper_bound": "0x1.d7f41e8575e00p-9",
+        "supported_alpha_min": "0x1.d7f41e8575e00p-9",
+        "minimum_tail_draws": 10,
+        "tail_roundoff_rtol": "0x1.0000000000000p-49",
+        "rejection_rule": "p_value < alpha; p_value is a conservative upper bound when censored"
+       },
        "decision": {
         "verdict": "A closer",
         "statistically_distinguishable_from_null": true,
         "null_value": "0x0.0p+0",
         "confidence_level": "0x1.e666666666666p-1",
-        "equivalence_bound": "0x1.3df9d366393f9p-12",
+        "equivalence_bound": "0x1.3e6cbe3a18d7ep-12",
         "equivalence_margin": null,
         "equivalence_established": null,
         "equivalence_alpha": null,
-        "reason": "95% CI [+0.000250, +0.000303] excludes 0"
+        "reason": "95% CI [+0.000250, +0.000304] excludes 0"
        },
-       "p_value_holm": "0x1.269e0cc986c70p-6",
+       "holm_family_size": 9,
+       "p_value_holm": "0x1.0979512b11760p-5",
+       "p_value_holm_is_upper_bound": true,
        "holm_significant": true
       },
       {
@@ -9040,31 +9260,10 @@
        "baseline_mean": "0x1.3bd932e555555p-10",
        "candidate_mean": "0x1.922995bc71c71p-10",
        "delta_candidate_minus_baseline": "0x1.59418b5c71c71p-12",
-       "ci_delta": {
-        "method": "paired_item_weighted_bootstrap_studentized",
-        "ci_method": "studentized",
-        "confidence_level": "0x1.e666666666666p-1",
-        "lower": "0x1.54383c3691014p-12",
-        "upper": "0x1.6b0593f8f6848p-12",
-        "standard_error": "0x1.f6449e608391bp-19",
-        "bootstrap_iters": 1000,
-        "contains_zero": false
-       },
-       "bootstrap_std": "0x1.8cd680b1b81efp-19",
-       "p_value": "0x1.2105ed5f1e336p-9",
-       "decision": {
-        "verdict": "A closer",
-        "statistically_distinguishable_from_null": true,
-        "null_value": "0x0.0p+0",
-        "confidence_level": "0x1.e666666666666p-1",
-        "equivalence_bound": "0x1.6b0593f8f6848p-12",
-        "equivalence_margin": null,
-        "equivalence_established": null,
-        "equivalence_alpha": null,
-        "reason": "95% CI [+0.000324, +0.000346] excludes 0"
-       },
-       "p_value_holm": "0x1.269e0cc986c70p-6",
-       "holm_significant": true
+       "inference_status": "unavailable",
+       "requested_ci_method": "studentized",
+       "skipped": "studentized bootstrap has a zero-SE resample; no pivots were discarded. Use another method such as --ci-method t with its assumptions assessed",
+       "holm_family_size": 9
       }
      ],
      "ear": [
@@ -9083,26 +9282,43 @@
         "method": "paired_item_weighted_bootstrap_studentized",
         "ci_method": "studentized",
         "confidence_level": "0x1.e666666666666p-1",
-        "lower": "-0x1.09dfb683c1a86p-7",
-        "upper": "-0x1.f9a0914afe066p-8",
+        "lower": "-0x1.08a065606087dp-7",
+        "upper": "-0x1.f9f9862829ad4p-8",
         "standard_error": "0x1.533b5080030efp-14",
-        "bootstrap_iters": 1000,
-        "contains_zero": false
+        "bootstrap_iters": 5000,
+        "contains_zero": false,
+        "tail_support": {
+         "minimum": 10,
+         "lower": 125,
+         "upper": 125
+        }
        },
-       "bootstrap_std": "0x1.5522c3329ef59p-14",
-       "p_value": "0x1.05e1d27a3ee9cp-9",
+       "bootstrap_std": "0x1.4d47c79da57f9p-14",
+       "p_value": "0x1.d7f41e8574d00p-9",
+       "p_value_metadata": {
+        "method": "bootstrap_ci_inversion",
+        "censored": true,
+        "lower_bound": "0x0.0p+0",
+        "upper_bound": "0x1.d7f41e8574d00p-9",
+        "supported_alpha_min": "0x1.d7f41e8574d00p-9",
+        "minimum_tail_draws": 10,
+        "tail_roundoff_rtol": "0x1.0000000000000p-49",
+        "rejection_rule": "p_value < alpha; p_value is a conservative upper bound when censored"
+       },
        "decision": {
         "verdict": "A closer",
         "statistically_distinguishable_from_null": true,
         "null_value": "0x0.0p+0",
         "confidence_level": "0x1.e666666666666p-1",
-        "equivalence_bound": "0x1.09dfb683c1a86p-7",
+        "equivalence_bound": "0x1.08a065606087dp-7",
         "equivalence_margin": null,
         "equivalence_established": null,
         "equivalence_alpha": null,
-        "reason": "95% CI [-0.008114, -0.007715] excludes 0"
+        "reason": "95% CI [-0.008076, -0.007721] excludes 0"
        },
-       "p_value_holm": "0x1.269e0cc986c70p-6",
+       "holm_family_size": 9,
+       "p_value_holm": "0x1.0979512b11760p-5",
+       "p_value_holm_is_upper_bound": true,
        "holm_significant": true
       },
       {
@@ -9120,26 +9336,43 @@
         "method": "paired_item_weighted_bootstrap_studentized",
         "ci_method": "studentized",
         "confidence_level": "0x1.e666666666666p-1",
-        "lower": "-0x1.4e5b8b34f935cp-7",
-        "upper": "-0x1.022e5ae09f271p-7",
+        "lower": "-0x1.4c4bd02561b85p-7",
+        "upper": "-0x1.01798231683efp-7",
         "standard_error": "0x1.5dcdff129e0adp-12",
-        "bootstrap_iters": 1000,
-        "contains_zero": false
+        "bootstrap_iters": 5000,
+        "contains_zero": false,
+        "tail_support": {
+         "minimum": 10,
+         "lower": 125,
+         "upper": 125
+        }
        },
-       "bootstrap_std": "0x1.4ae01c840c408p-12",
-       "p_value": "0x1.05e1d27a3ee9cp-9",
+       "bootstrap_std": "0x1.529d06a84ca0fp-12",
+       "p_value": "0x1.d7f41e8574800p-9",
+       "p_value_metadata": {
+        "method": "bootstrap_ci_inversion",
+        "censored": true,
+        "lower_bound": "0x0.0p+0",
+        "upper_bound": "0x1.d7f41e8574800p-9",
+        "supported_alpha_min": "0x1.d7f41e8574800p-9",
+        "minimum_tail_draws": 10,
+        "tail_roundoff_rtol": "0x1.0000000000000p-49",
+        "rejection_rule": "p_value < alpha; p_value is a conservative upper bound when censored"
+       },
        "decision": {
         "verdict": "A closer",
         "statistically_distinguishable_from_null": true,
         "null_value": "0x0.0p+0",
         "confidence_level": "0x1.e666666666666p-1",
-        "equivalence_bound": "0x1.4e5b8b34f935cp-7",
+        "equivalence_bound": "0x1.4c4bd02561b85p-7",
         "equivalence_margin": null,
         "equivalence_established": null,
         "equivalence_alpha": null,
-        "reason": "95% CI [-0.010204, -0.007879] excludes 0"
+        "reason": "95% CI [-0.010141, -0.007858] excludes 0"
        },
-       "p_value_holm": "0x1.269e0cc986c70p-6",
+       "holm_family_size": 9,
+       "p_value_holm": "0x1.0979512b11760p-5",
+       "p_value_holm_is_upper_bound": true,
        "holm_significant": true
       },
       {
@@ -9153,31 +9386,10 @@
        "baseline_mean": "0x1.f9a9e3276f313p-1",
        "candidate_mean": "0x1.f589604ba2e8cp-1",
        "delta_candidate_minus_baseline": "-0x1.0820b6f3121abp-7",
-       "ci_delta": {
-        "method": "paired_item_weighted_bootstrap_studentized",
-        "ci_method": "studentized",
-        "confidence_level": "0x1.e666666666666p-1",
-        "lower": "-0x1.092032a064070p-7",
-        "upper": "-0x1.d17168a6e2139p-8",
-        "standard_error": "0x1.ef3ac5ceb4acfp-16",
-        "bootstrap_iters": 1000,
-        "contains_zero": false
-       },
-       "bootstrap_std": "0x1.9234b0a63f7e9p-16",
-       "p_value": "0x1.2105ed5f1e336p-9",
-       "decision": {
-        "verdict": "A closer",
-        "statistically_distinguishable_from_null": true,
-        "null_value": "0x0.0p+0",
-        "confidence_level": "0x1.e666666666666p-1",
-        "equivalence_bound": "0x1.092032a064070p-7",
-        "equivalence_margin": null,
-        "equivalence_established": null,
-        "equivalence_alpha": null,
-        "reason": "95% CI [-0.008091, -0.007102] excludes 0"
-       },
-       "p_value_holm": "0x1.269e0cc986c70p-6",
-       "holm_significant": true
+       "inference_status": "unavailable",
+       "requested_ci_method": "studentized",
+       "skipped": "studentized bootstrap has a zero-SE resample; no pivots were discarded. Use another method such as --ci-method t with its assumptions assessed",
+       "holm_family_size": 9
       }
      ],
      "dp": [
@@ -9196,26 +9408,43 @@
         "method": "paired_item_weighted_bootstrap_studentized",
         "ci_method": "studentized",
         "confidence_level": "0x1.e666666666666p-1",
-        "lower": "-0x1.83ce2d9c5a0a5p-4",
-        "upper": "-0x1.2ab97111cb46bp-4",
+        "lower": "-0x1.8442ab675ab69p-4",
+        "upper": "-0x1.2a58dc776b4b8p-4",
         "standard_error": "0x1.38835bdbe8dcdp-8",
-        "bootstrap_iters": 1000,
-        "contains_zero": false
+        "bootstrap_iters": 5000,
+        "contains_zero": false,
+        "tail_support": {
+         "minimum": 10,
+         "lower": 125,
+         "upper": 125
+        }
        },
-       "bootstrap_std": "0x1.32702120e2767p-8",
-       "p_value": "0x1.05e1d27a3ee9cp-9",
+       "bootstrap_std": "0x1.309b3a6616487p-8",
+       "p_value": "0x1.d7f41e8574600p-9",
+       "p_value_metadata": {
+        "method": "bootstrap_ci_inversion",
+        "censored": true,
+        "lower_bound": "0x0.0p+0",
+        "upper_bound": "0x1.d7f41e8574600p-9",
+        "supported_alpha_min": "0x1.d7f41e8574600p-9",
+        "minimum_tail_draws": 10,
+        "tail_roundoff_rtol": "0x1.0000000000000p-49",
+        "rejection_rule": "p_value < alpha; p_value is a conservative upper bound when censored"
+       },
        "decision": {
         "verdict": "A closer",
         "statistically_distinguishable_from_null": true,
         "null_value": "0x0.0p+0",
         "confidence_level": "0x1.e666666666666p-1",
-        "equivalence_bound": "0x1.83ce2d9c5a0a5p-4",
+        "equivalence_bound": "0x1.8442ab675ab69p-4",
         "equivalence_margin": null,
         "equivalence_established": null,
         "equivalence_alpha": null,
-        "reason": "95% CI [-0.094679, -0.072931] excludes 0"
+        "reason": "95% CI [-0.094790, -0.072839] excludes 0"
        },
-       "p_value_holm": "0x1.269e0cc986c70p-6",
+       "holm_family_size": 9,
+       "p_value_holm": "0x1.0979512b11760p-5",
+       "p_value_holm_is_upper_bound": true,
        "holm_significant": true
       },
       {
@@ -9233,26 +9462,43 @@
         "method": "paired_item_weighted_bootstrap_studentized",
         "ci_method": "studentized",
         "confidence_level": "0x1.e666666666666p-1",
-        "lower": "-0x1.892c30354ae6fp-4",
-        "upper": "-0x1.291d87b2c7fcap-4",
+        "lower": "-0x1.8a15948edb4f1p-4",
+        "upper": "-0x1.2ab89e5217683p-4",
         "standard_error": "0x1.477a5f895ef7dp-8",
-        "bootstrap_iters": 1000,
-        "contains_zero": false
+        "bootstrap_iters": 5000,
+        "contains_zero": false,
+        "tail_support": {
+         "minimum": 10,
+         "lower": 125,
+         "upper": 125
+        }
        },
-       "bootstrap_std": "0x1.3cbd9ed3d0b7dp-8",
-       "p_value": "0x1.05e1d27a3ee9cp-9",
+       "bootstrap_std": "0x1.3ab3cb2cc2ca4p-8",
+       "p_value": "0x1.d7f41e8574900p-9",
+       "p_value_metadata": {
+        "method": "bootstrap_ci_inversion",
+        "censored": true,
+        "lower_bound": "0x0.0p+0",
+        "upper_bound": "0x1.d7f41e8574900p-9",
+        "supported_alpha_min": "0x1.d7f41e8574900p-9",
+        "minimum_tail_draws": 10,
+        "tail_roundoff_rtol": "0x1.0000000000000p-49",
+        "rejection_rule": "p_value < alpha; p_value is a conservative upper bound when censored"
+       },
        "decision": {
         "verdict": "A closer",
         "statistically_distinguishable_from_null": true,
         "null_value": "0x0.0p+0",
         "confidence_level": "0x1.e666666666666p-1",
-        "equivalence_bound": "0x1.892c30354ae6fp-4",
+        "equivalence_bound": "0x1.8a15948edb4f1p-4",
         "equivalence_margin": null,
         "equivalence_established": null,
         "equivalence_alpha": null,
-        "reason": "95% CI [-0.095989, -0.072538] excludes 0"
+        "reason": "95% CI [-0.096212, -0.072930] excludes 0"
        },
-       "p_value_holm": "0x1.269e0cc986c70p-6",
+       "holm_family_size": 9,
+       "p_value_holm": "0x1.0979512b11760p-5",
+       "p_value_holm_is_upper_bound": true,
        "holm_significant": true
       },
       {
@@ -9266,38 +9512,17 @@
        "baseline_mean": "-0x1.886a752cc4868p-4",
        "candidate_mean": "-0x1.45c11a66f3121p-3",
        "delta_candidate_minus_baseline": "-0x1.0317bfa1219dcp-4",
-       "ci_delta": {
-        "method": "paired_item_weighted_bootstrap_studentized",
-        "ci_method": "studentized",
-        "confidence_level": "0x1.e666666666666p-1",
-        "lower": "-0x1.5a9fb5315fccep+42",
-        "upper": "-0x1.96ef7957d4ff6p-5",
-        "standard_error": "0x1.25bf39869243dp-7",
-        "bootstrap_iters": 1000,
-        "contains_zero": false
-       },
-       "bootstrap_std": "0x1.d1aa678491576p-8",
-       "p_value": "0x1.16e0689427379p-9",
-       "decision": {
-        "verdict": "A closer",
-        "statistically_distinguishable_from_null": true,
-        "null_value": "0x0.0p+0",
-        "confidence_level": "0x1.e666666666666p-1",
-        "equivalence_bound": "0x1.5a9fb5315fccep+42",
-        "equivalence_margin": null,
-        "equivalence_established": null,
-        "equivalence_alpha": null,
-        "reason": "95% CI [-5954952545663.201172, -0.049675] excludes 0"
-       },
-       "p_value_holm": "0x1.269e0cc986c70p-6",
-       "holm_significant": true
+       "inference_status": "unavailable",
+       "requested_ci_method": "studentized",
+       "skipped": "studentized bootstrap has a zero-SE resample; no pivots were discarded. Use another method such as --ci-method t with its assumptions assessed",
+       "holm_family_size": 9
       }
      ]
     }
    }
   },
   "bca": {
-   "schema_version": "vlm-paired-compare-v4",
+   "schema_version": "vlm-paired-compare-v5",
    "n_items": 16,
    "confidence_level": "0x1.e666666666666p-1",
    "ci_method": "bca",
@@ -9312,7 +9537,7 @@
     "alpha": "0x1.99999999999a0p-5",
     "policy": "One confirmatory endpoint whose interval spends the whole alpha; every other item-weighted endpoint is exploratory and carries a Holm-Bonferroni-adjusted p-value over the remaining 6 cells. Holm controls the family-wise error rate under arbitrary dependence: kld/reversed_kld/js_kld are functionals of the same distribution pair. Token-weighted summaries are descriptive only."
    },
-   "bootstrap_iters": 1000,
+   "bootstrap_iters": 5000,
    "seed": 20260824,
    "model_a_label": "A",
    "model_b_label": "B",
@@ -9328,27 +9553,44 @@
        "method": "paired_item_weighted_bootstrap_bca",
        "ci_method": "bca",
        "confidence_level": "0x1.e666666666666p-1",
-       "lower": "0x1.34e734820a4e6p-9",
-       "upper": "0x1.4f38082f247fap-6",
+       "lower": "0x1.260c5c5f2d489p-9",
+       "upper": "0x1.50e82d77025fep-6",
        "standard_error": "0x1.3dd2bcd8fa469p-8",
-       "bootstrap_iters": 1000,
-       "contains_zero": false
+       "bootstrap_iters": 5000,
+       "contains_zero": false,
+       "tail_support": {
+        "minimum": 10,
+        "lower": 121,
+        "upper": 130
+       }
       },
-      "bootstrap_std": "0x1.34f2cb8092918p-8",
-      "p_value": "0x1.773c7a2ae2c20p-6",
+      "bootstrap_std": "0x1.3339b24a0f778p-8",
+      "p_value": "0x1.26c6001b80920p-6",
+      "p_value_metadata": {
+       "method": "bootstrap_ci_inversion",
+       "censored": false,
+       "lower_bound": "0x1.26c6001b80900p-6",
+       "upper_bound": "0x1.26c6001b80920p-6",
+       "supported_alpha_min": "0x1.1030b5a1ef380p-8",
+       "minimum_tail_draws": 10,
+       "tail_roundoff_rtol": "0x1.0000000000000p-49",
+       "rejection_rule": "p_value < alpha; p_value is a conservative upper bound when censored"
+      },
       "decision": {
        "verdict": "A closer",
        "statistically_distinguishable_from_null": true,
        "null_value": "0x0.0p+0",
        "confidence_level": "0x1.e666666666666p-1",
-       "equivalence_bound": "0x1.4f38082f247fap-6",
+       "equivalence_bound": "0x1.50e82d77025fep-6",
        "equivalence_margin": null,
        "equivalence_established": null,
        "equivalence_alpha": null,
-       "reason": "95% CI [+0.002357, +0.020460] excludes 0"
+       "reason": "95% CI [+0.002243, +0.020563] excludes 0"
       },
       "role": "exploratory",
-      "p_value_holm": "0x1.7e4d48994a600p-6",
+      "holm_family_size": 6,
+      "p_value_holm": "0x1.26c6001b80920p-5",
+      "p_value_holm_is_upper_bound": true,
       "holm_significant": true
      },
      "token_weighted": {
@@ -9369,20 +9611,35 @@
        "method": "paired_item_weighted_bootstrap_bca",
        "ci_method": "bca",
        "confidence_level": "0x1.e666666666666p-1",
-       "lower": "0x1.2a024172be14bp-12",
-       "upper": "0x1.3e165605c0962p-12",
+       "lower": "0x1.2a358162d6172p-12",
+       "upper": "0x1.3d9bcc8de30afp-12",
        "standard_error": "0x1.42e40dc9d0239p-18",
-       "bootstrap_iters": 1000,
-       "contains_zero": false
+       "bootstrap_iters": 5000,
+       "contains_zero": false,
+       "tail_support": {
+        "minimum": 10,
+        "lower": 134,
+        "upper": 117
+       }
       },
-      "bootstrap_std": "0x1.3f759d838be3bp-18",
-      "p_value": "0x1.05e1d27a3ee9cp-9",
+      "bootstrap_std": "0x1.3ced4e8b4a93dp-18",
+      "p_value": "0x1.2521768a55f00p-8",
+      "p_value_metadata": {
+       "method": "bootstrap_ci_inversion",
+       "censored": true,
+       "lower_bound": "0x0.0p+0",
+       "upper_bound": "0x1.2521768a55f00p-8",
+       "supported_alpha_min": "0x1.2521768a55f00p-8",
+       "minimum_tail_draws": 10,
+       "tail_roundoff_rtol": "0x1.0000000000000p-49",
+       "rejection_rule": "p_value < alpha; p_value is a conservative upper bound when censored"
+      },
       "decision": {
        "verdict": "A closer",
        "statistically_distinguishable_from_null": true,
        "null_value": "0x0.0p+0",
        "confidence_level": "0x1.e666666666666p-1",
-       "equivalence_bound": "0x1.3e165605c0962p-12",
+       "equivalence_bound": "0x1.3d9bcc8de30afp-12",
        "equivalence_margin": "0x1.a36e2eb1c432dp-13",
        "equivalence_established": false,
        "equivalence_alpha": "0x1.99999999999a0p-6",
@@ -9408,27 +9665,44 @@
        "method": "paired_item_weighted_bootstrap_bca",
        "ci_method": "bca",
        "confidence_level": "0x1.e666666666666p-1",
-       "lower": "0x1.47cf47fe377d2p-12",
-       "upper": "0x1.5de55e9fed721p-12",
+       "lower": "0x1.4807a7ecb84cbp-12",
+       "upper": "0x1.5d5e9435acf27p-12",
        "standard_error": "0x1.632e0f2acb5a3p-18",
-       "bootstrap_iters": 1000,
-       "contains_zero": false
+       "bootstrap_iters": 5000,
+       "contains_zero": false,
+       "tail_support": {
+        "minimum": 10,
+        "lower": 134,
+        "upper": 117
+       }
       },
-      "bootstrap_std": "0x1.5f67c6dd80473p-18",
-      "p_value": "0x1.05e1d27a3ee9cp-9",
+      "bootstrap_std": "0x1.5c9ea332d208fp-18",
+      "p_value": "0x1.2521768a55e80p-8",
+      "p_value_metadata": {
+       "method": "bootstrap_ci_inversion",
+       "censored": true,
+       "lower_bound": "0x0.0p+0",
+       "upper_bound": "0x1.2521768a55e80p-8",
+       "supported_alpha_min": "0x1.2521768a55e80p-8",
+       "minimum_tail_draws": 10,
+       "tail_roundoff_rtol": "0x1.0000000000000p-49",
+       "rejection_rule": "p_value < alpha; p_value is a conservative upper bound when censored"
+      },
       "decision": {
        "verdict": "A closer",
        "statistically_distinguishable_from_null": true,
        "null_value": "0x0.0p+0",
        "confidence_level": "0x1.e666666666666p-1",
-       "equivalence_bound": "0x1.5de55e9fed721p-12",
+       "equivalence_bound": "0x1.5d5e9435acf27p-12",
        "equivalence_margin": null,
        "equivalence_established": null,
        "equivalence_alpha": null,
-       "reason": "95% CI [+0.000313, +0.000334] excludes 0"
+       "reason": "95% CI [+0.000313, +0.000333] excludes 0"
       },
       "role": "exploratory",
-      "p_value_holm": "0x1.88d2bbb75e5eap-7",
+      "holm_family_size": 6,
+      "p_value_holm": "0x1.6e69d42ceb620p-6",
+      "p_value_holm_is_upper_bound": true,
       "holm_significant": true
      },
      "token_weighted": {
@@ -9449,27 +9723,44 @@
        "method": "paired_item_weighted_bootstrap_bca",
        "ci_method": "bca",
        "confidence_level": "0x1.e666666666666p-1",
-       "lower": "0x1.2a024172be14bp-13",
-       "upper": "0x1.3e165605c0962p-13",
+       "lower": "0x1.2a358162d6172p-13",
+       "upper": "0x1.3d9bcc8de30afp-13",
        "standard_error": "0x1.42e40dc9d0239p-19",
-       "bootstrap_iters": 1000,
-       "contains_zero": false
+       "bootstrap_iters": 5000,
+       "contains_zero": false,
+       "tail_support": {
+        "minimum": 10,
+        "lower": 134,
+        "upper": 117
+       }
       },
-      "bootstrap_std": "0x1.3f759d838be3bp-19",
-      "p_value": "0x1.05e1d27a3ee9cp-9",
+      "bootstrap_std": "0x1.3ced4e8b4a93dp-19",
+      "p_value": "0x1.2521768a55f00p-8",
+      "p_value_metadata": {
+       "method": "bootstrap_ci_inversion",
+       "censored": true,
+       "lower_bound": "0x0.0p+0",
+       "upper_bound": "0x1.2521768a55f00p-8",
+       "supported_alpha_min": "0x1.2521768a55f00p-8",
+       "minimum_tail_draws": 10,
+       "tail_roundoff_rtol": "0x1.0000000000000p-49",
+       "rejection_rule": "p_value < alpha; p_value is a conservative upper bound when censored"
+      },
       "decision": {
        "verdict": "A closer",
        "statistically_distinguishable_from_null": true,
        "null_value": "0x0.0p+0",
        "confidence_level": "0x1.e666666666666p-1",
-       "equivalence_bound": "0x1.3e165605c0962p-13",
+       "equivalence_bound": "0x1.3d9bcc8de30afp-13",
        "equivalence_margin": null,
        "equivalence_established": null,
        "equivalence_alpha": null,
-       "reason": "95% CI [+0.000142, +0.000152] excludes 0"
+       "reason": "95% CI [+0.000142, +0.000151] excludes 0"
       },
       "role": "exploratory",
-      "p_value_holm": "0x1.88d2bbb75e5eap-7",
+      "holm_family_size": 6,
+      "p_value_holm": "0x1.6e69d42ceb620p-6",
+      "p_value_holm_is_upper_bound": true,
       "holm_significant": true
      },
      "token_weighted": {
@@ -9490,27 +9781,44 @@
        "method": "paired_item_weighted_bootstrap_bca",
        "ci_method": "bca",
        "confidence_level": "0x1.e666666666666p-1",
-       "lower": "-0x1.0721fa90e07abp-7",
-       "upper": "-0x1.00c949f1f0b93p-7",
+       "lower": "-0x1.072dfd17f9ca2p-7",
+       "upper": "-0x1.00c5d3c093022p-7",
        "standard_error": "0x1.a2fa6e2e16a33p-15",
-       "bootstrap_iters": 1000,
-       "contains_zero": false
+       "bootstrap_iters": 5000,
+       "contains_zero": false,
+       "tail_support": {
+        "minimum": 10,
+        "lower": 207,
+        "upper": 67
+       }
       },
-      "bootstrap_std": "0x1.9303023f7d819p-15",
-      "p_value": "0x1.792979d1f1b00p-8",
+      "bootstrap_std": "0x1.94236db1b988ep-15",
+      "p_value": "0x1.70199724b9280p-7",
+      "p_value_metadata": {
+       "method": "bootstrap_ci_inversion",
+       "censored": true,
+       "lower_bound": "0x0.0p+0",
+       "upper_bound": "0x1.70199724b9280p-7",
+       "supported_alpha_min": "0x1.70199724b9280p-7",
+       "minimum_tail_draws": 10,
+       "tail_roundoff_rtol": "0x1.0000000000000p-49",
+       "rejection_rule": "p_value < alpha; p_value is a conservative upper bound when censored"
+      },
       "decision": {
        "verdict": "A closer",
        "statistically_distinguishable_from_null": true,
        "null_value": "0x0.0p+0",
        "confidence_level": "0x1.e666666666666p-1",
-       "equivalence_bound": "0x1.0721fa90e07abp-7",
+       "equivalence_bound": "0x1.072dfd17f9ca2p-7",
        "equivalence_margin": null,
        "equivalence_established": null,
        "equivalence_alpha": null,
-       "reason": "95% CI [-0.008030, -0.007836] excludes 0"
+       "reason": "95% CI [-0.008032, -0.007836] excludes 0"
       },
       "role": "exploratory",
-      "p_value_holm": "0x1.1adf1b5d75440p-6",
+      "holm_family_size": 6,
+      "p_value_holm": "0x1.1413315b8ade0p-5",
+      "p_value_holm_is_upper_bound": true,
       "holm_significant": true
      },
      "token_weighted": {
@@ -9534,12 +9842,27 @@
        "lower": "-0x1.0624dd2f1aa00p-9",
        "upper": "-0x1.0624dd2f1aa00p-9",
        "standard_error": "0x0.0p+0",
-       "bootstrap_iters": 1000,
+       "bootstrap_iters": 5000,
        "contains_zero": false,
-       "fallback": "degenerate sample (no usable bias correction or acceleration); percentile interval used instead"
+       "tail_support": {
+        "minimum": 10,
+        "lower": 0,
+        "upper": 0,
+        "exemption": "constant_empirical_distribution"
+       },
+       "fallback": "constant differences (no spread): empirical percentile point-interval convention; this does not establish zero population variance"
       },
       "bootstrap_std": "0x0.0p+0",
-      "p_value": "0x1.05e1d27a3ee9cp-9",
+      "p_value": "0x1.a358b63c4d31bp-12",
+      "p_value_metadata": {
+       "method": "constant_empirical_distribution",
+       "censored": true,
+       "lower_bound": "0x0.0p+0",
+       "upper_bound": "0x1.a358b63c4d31bp-12",
+       "supported_alpha_min": null,
+       "resolution": "0x1.a358b63c4d31bp-12",
+       "rejection_rule": "p_value < alpha; constant-input convention, not a population variance guarantee"
+      },
       "decision": {
        "verdict": "A closer",
        "statistically_distinguishable_from_null": true,
@@ -9552,7 +9875,9 @@
        "reason": "95% CI [-0.002000, -0.002000] excludes 0"
       },
       "role": "exploratory",
-      "p_value_holm": "0x1.88d2bbb75e5eap-7",
+      "holm_family_size": 6,
+      "p_value_holm": "0x1.3a8288ad39e54p-9",
+      "p_value_holm_is_upper_bound": true,
       "holm_significant": true
      },
      "token_weighted": {
@@ -9573,27 +9898,44 @@
        "method": "paired_item_weighted_bootstrap_bca",
        "ci_method": "bca",
        "confidence_level": "0x1.e666666666666p-1",
-       "lower": "0x1.f86d203c379c5p-7",
-       "upper": "0x1.b11f4a08da975p-6",
+       "lower": "0x1.02a5039b47f64p-6",
+       "upper": "0x1.af3c9d9b59b66p-6",
        "standard_error": "0x1.47a6297a981cap-9",
-       "bootstrap_iters": 1000,
-       "contains_zero": false
+       "bootstrap_iters": 5000,
+       "contains_zero": false,
+       "tail_support": {
+        "minimum": 10,
+        "lower": 29,
+        "upper": 314
+       }
       },
-      "bootstrap_std": "0x1.453c1b04a1c6dp-9",
-      "p_value": "0x1.7e4d48994a600p-7",
+      "bootstrap_std": "0x1.40961a95b7fa1p-9",
+      "p_value": "0x1.a74d164a19e20p-6",
+      "p_value_metadata": {
+       "method": "bootstrap_ci_inversion",
+       "censored": true,
+       "lower_bound": "0x0.0p+0",
+       "upper_bound": "0x1.a74d164a19e20p-6",
+       "supported_alpha_min": "0x1.a74d164a19e20p-6",
+       "minimum_tail_draws": 10,
+       "tail_roundoff_rtol": "0x1.0000000000000p-49",
+       "rejection_rule": "p_value < alpha; p_value is a conservative upper bound when censored"
+      },
       "decision": {
        "verdict": "A closer",
        "statistically_distinguishable_from_null": true,
        "null_value": "0x0.0p+0",
        "confidence_level": "0x1.e666666666666p-1",
-       "equivalence_bound": "0x1.b11f4a08da975p-6",
+       "equivalence_bound": "0x1.af3c9d9b59b66p-6",
        "equivalence_margin": null,
        "equivalence_established": null,
        "equivalence_alpha": null,
-       "reason": "95% CI [+0.015394, +0.026436] excludes 0"
+       "reason": "95% CI [+0.015786, +0.026321] excludes 0"
       },
       "role": "exploratory",
-      "p_value_holm": "0x1.7e4d48994a600p-6",
+      "holm_family_size": 6,
+      "p_value_holm": "0x1.26c6001b80920p-5",
+      "p_value_holm_is_upper_bound": true,
       "holm_significant": true
      },
      "token_weighted": {
@@ -9631,9 +9973,9 @@
        "method": "paired_item_weighted_bootstrap_bca",
        "ci_method": "bca",
        "confidence_level": "0x1.e666666666666p-1",
-       "lower": "0x1.009aa23b46156p+0",
-       "upper": "0x1.054aafd0d1a78p+0",
-       "bootstrap_iters": 1000,
+       "lower": "0x1.0093306e5269bp+0",
+       "upper": "0x1.055194386dc4dp+0",
+       "bootstrap_iters": 5000,
        "contains_one": false
       },
       "decision": {
@@ -12606,26 +12948,43 @@
          "method": "paired_item_weighted_bootstrap_bca",
          "ci_method": "bca",
          "confidence_level": "0x1.e666666666666p-1",
-         "lower": "0x1.e621f24887facp-12",
-         "upper": "0x1.1bbb15c283ef5p-11",
+         "lower": "0x1.e8448be9af616p-12",
+         "upper": "0x1.1b83d76c9fd3cp-11",
          "standard_error": "0x1.416986cb723b7p-16",
-         "bootstrap_iters": 1000,
-         "contains_zero": false
+         "bootstrap_iters": 5000,
+         "contains_zero": false,
+         "tail_support": {
+          "minimum": 10,
+          "lower": 165,
+          "upper": 91
+         }
         },
-        "bootstrap_std": "0x1.4468cd87db5d3p-16",
-        "p_value": "0x1.05e1d27a3ee9cp-9",
+        "bootstrap_std": "0x1.3e0141eeabce2p-16",
+        "p_value": "0x1.e4f3ab53ea400p-8",
+        "p_value_metadata": {
+         "method": "bootstrap_ci_inversion",
+         "censored": true,
+         "lower_bound": "0x0.0p+0",
+         "upper_bound": "0x1.e4f3ab53ea400p-8",
+         "supported_alpha_min": "0x1.e4f3ab53ea400p-8",
+         "minimum_tail_draws": 10,
+         "tail_roundoff_rtol": "0x1.0000000000000p-49",
+         "rejection_rule": "p_value < alpha; p_value is a conservative upper bound when censored"
+        },
         "decision": {
          "verdict": "A closer",
          "statistically_distinguishable_from_null": true,
          "null_value": "0x0.0p+0",
          "confidence_level": "0x1.e666666666666p-1",
-         "equivalence_bound": "0x1.1bbb15c283ef5p-11",
+         "equivalence_bound": "0x1.1b83d76c9fd3cp-11",
          "equivalence_margin": null,
          "equivalence_established": null,
          "equivalence_alpha": null,
-         "reason": "95% CI [+0.000464, +0.000541] excludes 0"
+         "reason": "95% CI [+0.000466, +0.000541] excludes 0"
         },
-        "p_value_holm": "0x1.88d2bbb75e5eap-8",
+        "holm_family_size": 3,
+        "p_value_holm": "0x1.6bb6c07eefb00p-6",
+        "p_value_holm_is_upper_bound": true,
         "holm_significant": true
        },
        {
@@ -12643,26 +13002,43 @@
          "method": "paired_item_weighted_bootstrap_bca",
          "ci_method": "bca",
          "confidence_level": "0x1.e666666666666p-1",
-         "lower": "0x1.06340fb0ab67fp-11",
-         "upper": "0x1.3e60496a8cf5cp-11",
+         "lower": "0x1.078ab986ef3cfp-11",
+         "upper": "0x1.3eb9297fadcf5p-11",
          "standard_error": "0x1.cd913b65075a1p-16",
-         "bootstrap_iters": 1000,
-         "contains_zero": false
+         "bootstrap_iters": 5000,
+         "contains_zero": false,
+         "tail_support": {
+          "minimum": 10,
+          "lower": 169,
+          "upper": 89
+         }
         },
-        "bootstrap_std": "0x1.cf501fd53db0bp-16",
-        "p_value": "0x1.05e1d27a3ee9cp-9",
+        "bootstrap_std": "0x1.c4daffc5de4cep-16",
+        "p_value": "0x1.e88c7c5925100p-8",
+        "p_value_metadata": {
+         "method": "bootstrap_ci_inversion",
+         "censored": true,
+         "lower_bound": "0x0.0p+0",
+         "upper_bound": "0x1.e88c7c5925100p-8",
+         "supported_alpha_min": "0x1.e88c7c5925100p-8",
+         "minimum_tail_draws": 10,
+         "tail_roundoff_rtol": "0x1.0000000000000p-49",
+         "rejection_rule": "p_value < alpha; p_value is a conservative upper bound when censored"
+        },
         "decision": {
          "verdict": "A closer",
          "statistically_distinguishable_from_null": true,
          "null_value": "0x0.0p+0",
          "confidence_level": "0x1.e666666666666p-1",
-         "equivalence_bound": "0x1.3e60496a8cf5cp-11",
+         "equivalence_bound": "0x1.3eb9297fadcf5p-11",
          "equivalence_margin": null,
          "equivalence_established": null,
          "equivalence_alpha": null,
-         "reason": "95% CI [+0.000500, +0.000607] excludes 0"
+         "reason": "95% CI [+0.000503, +0.000608] excludes 0"
         },
-        "p_value_holm": "0x1.88d2bbb75e5eap-8",
+        "holm_family_size": 3,
+        "p_value_holm": "0x1.6bb6c07eefb00p-6",
+        "p_value_holm_is_upper_bound": true,
         "holm_significant": true
        },
        {
@@ -12679,26 +13055,43 @@
          "method": "paired_item_weighted_bootstrap_bca",
          "ci_method": "bca",
          "confidence_level": "0x1.e666666666666p-1",
-         "lower": "0x1.08f5d1d441829p-11",
-         "upper": "0x1.476624baae461p-11",
+         "lower": "0x1.0add6e1e45936p-11",
+         "upper": "0x1.48822dcc18ec4p-11",
          "standard_error": "0x1.018bc1be56ec7p-15",
-         "bootstrap_iters": 1000,
-         "contains_zero": false
+         "bootstrap_iters": 5000,
+         "contains_zero": false,
+         "tail_support": {
+          "minimum": 10,
+          "lower": 185,
+          "upper": 78
+         }
         },
-        "bootstrap_std": "0x1.01cc64594c002p-15",
-        "p_value": "0x1.05e1d27a3ee9cp-9",
+        "bootstrap_std": "0x1.f7e9a1e90c26bp-16",
+        "p_value": "0x1.3387f0f9e4bc0p-7",
+        "p_value_metadata": {
+         "method": "bootstrap_ci_inversion",
+         "censored": true,
+         "lower_bound": "0x0.0p+0",
+         "upper_bound": "0x1.3387f0f9e4bc0p-7",
+         "supported_alpha_min": "0x1.3387f0f9e4bc0p-7",
+         "minimum_tail_draws": 10,
+         "tail_roundoff_rtol": "0x1.0000000000000p-49",
+         "rejection_rule": "p_value < alpha; p_value is a conservative upper bound when censored"
+        },
         "decision": {
          "verdict": "A closer",
          "statistically_distinguishable_from_null": true,
          "null_value": "0x0.0p+0",
          "confidence_level": "0x1.e666666666666p-1",
-         "equivalence_bound": "0x1.476624baae461p-11",
+         "equivalence_bound": "0x1.48822dcc18ec4p-11",
          "equivalence_margin": null,
          "equivalence_established": null,
          "equivalence_alpha": null,
-         "reason": "95% CI [+0.000505, +0.000624] excludes 0"
+         "reason": "95% CI [+0.000509, +0.000627] excludes 0"
         },
-        "p_value_holm": "0x1.88d2bbb75e5eap-8",
+        "holm_family_size": 3,
+        "p_value_holm": "0x1.6bb6c07eefb00p-6",
+        "p_value_holm_is_upper_bound": true,
         "holm_significant": true
        }
       ],
@@ -13597,26 +13990,43 @@
         "method": "paired_item_weighted_bootstrap_bca",
         "ci_method": "bca",
         "confidence_level": "0x1.e666666666666p-1",
-        "lower": "0x1.261f537c4ab36p-12",
-        "upper": "0x1.3de53ce5c5b71p-12",
+        "lower": "0x1.25957b65f7e16p-12",
+        "upper": "0x1.3d407bd1d8b4ep-12",
         "standard_error": "0x1.929fd05b2f1e7p-18",
-        "bootstrap_iters": 1000,
-        "contains_zero": false
+        "bootstrap_iters": 5000,
+        "contains_zero": false,
+        "tail_support": {
+         "minimum": 10,
+         "lower": 105,
+         "upper": 148
+        }
        },
-       "bootstrap_std": "0x1.804ec45983f95p-18",
-       "p_value": "0x1.05e1d27a3ee9cp-9",
+       "bootstrap_std": "0x1.843b151155830p-18",
+       "p_value": "0x1.62fe5b0500f80p-8",
+       "p_value_metadata": {
+        "method": "bootstrap_ci_inversion",
+        "censored": true,
+        "lower_bound": "0x0.0p+0",
+        "upper_bound": "0x1.62fe5b0500f80p-8",
+        "supported_alpha_min": "0x1.62fe5b0500f80p-8",
+        "minimum_tail_draws": 10,
+        "tail_roundoff_rtol": "0x1.0000000000000p-49",
+        "rejection_rule": "p_value < alpha; p_value is a conservative upper bound when censored"
+       },
        "decision": {
         "verdict": "A closer",
         "statistically_distinguishable_from_null": true,
         "null_value": "0x0.0p+0",
         "confidence_level": "0x1.e666666666666p-1",
-        "equivalence_bound": "0x1.3de53ce5c5b71p-12",
+        "equivalence_bound": "0x1.3d407bd1d8b4ep-12",
         "equivalence_margin": null,
         "equivalence_established": null,
         "equivalence_alpha": null,
         "reason": "95% CI [+0.000280, +0.000303] excludes 0"
        },
-       "p_value_holm": "0x1.269e0cc986c70p-6",
+       "holm_family_size": 9,
+       "p_value_holm": "0x1.8f5e2665a1170p-5",
+       "p_value_holm_is_upper_bound": true,
        "holm_significant": true
       },
       {
@@ -13634,27 +14044,44 @@
         "method": "paired_item_weighted_bootstrap_bca",
         "ci_method": "bca",
         "confidence_level": "0x1.e666666666666p-1",
-        "lower": "0x1.0a10346a66b07p-12",
-        "upper": "0x1.3b60215126ad0p-12",
+        "lower": "0x1.0b5f020ea3301p-12",
+        "upper": "0x1.3b529eed1cc92p-12",
         "standard_error": "0x1.6f871395fedf9p-17",
-        "bootstrap_iters": 1000,
-        "contains_zero": false
+        "bootstrap_iters": 5000,
+        "contains_zero": false,
+        "tail_support": {
+         "minimum": 10,
+         "lower": 25,
+         "upper": 333
+        }
        },
-       "bootstrap_std": "0x1.5f9c2a49894c3p-17",
-       "p_value": "0x1.07a2dc388e4e0p-6",
+       "bootstrap_std": "0x1.666ae2c95ed04p-17",
+       "p_value": "0x1.da7e5ae1fc7c0p-6",
+       "p_value_metadata": {
+        "method": "bootstrap_ci_inversion",
+        "censored": true,
+        "lower_bound": "0x0.0p+0",
+        "upper_bound": "0x1.da7e5ae1fc7c0p-6",
+        "supported_alpha_min": "0x1.da7e5ae1fc7c0p-6",
+        "minimum_tail_draws": 10,
+        "tail_roundoff_rtol": "0x1.0000000000000p-49",
+        "rejection_rule": "p_value < alpha; p_value is a conservative upper bound when censored"
+       },
        "decision": {
         "verdict": "A closer",
         "statistically_distinguishable_from_null": true,
         "null_value": "0x0.0p+0",
         "confidence_level": "0x1.e666666666666p-1",
-        "equivalence_bound": "0x1.3b60215126ad0p-12",
+        "equivalence_bound": "0x1.3b529eed1cc92p-12",
         "equivalence_margin": null,
         "equivalence_established": null,
         "equivalence_alpha": null,
-        "reason": "95% CI [+0.000254, +0.000301] excludes 0"
+        "reason": "95% CI [+0.000255, +0.000301] excludes 0"
        },
-       "p_value_holm": "0x1.269e0cc986c70p-6",
-       "holm_significant": true
+       "holm_family_size": 9,
+       "p_value_holm": "0x1.288ef8cd3dcd8p-3",
+       "p_value_holm_is_upper_bound": true,
+       "holm_significant": false
       },
       {
        "metric": "kld",
@@ -13667,31 +14094,10 @@
        "baseline_mean": "0x1.3bd932e555555p-10",
        "candidate_mean": "0x1.922995bc71c71p-10",
        "delta_candidate_minus_baseline": "0x1.59418b5c71c71p-12",
-       "ci_delta": {
-        "method": "paired_item_weighted_bootstrap_bca",
-        "ci_method": "bca",
-        "confidence_level": "0x1.e666666666666p-1",
-        "lower": "0x1.53fdb00000000p-12",
-        "upper": "0x1.5d918e31c71c7p-12",
-        "standard_error": "0x1.f6449e608391bp-19",
-        "bootstrap_iters": 1000,
-        "contains_zero": false
-       },
-       "bootstrap_std": "0x1.8cd680b1b81efp-19",
-       "p_value": "0x1.05e1d27a3ee9cp-9",
-       "decision": {
-        "verdict": "A closer",
-        "statistically_distinguishable_from_null": true,
-        "null_value": "0x0.0p+0",
-        "confidence_level": "0x1.e666666666666p-1",
-        "equivalence_bound": "0x1.5d918e31c71c7p-12",
-        "equivalence_margin": null,
-        "equivalence_established": null,
-        "equivalence_alpha": null,
-        "reason": "95% CI [+0.000324, +0.000333] excludes 0"
-       },
-       "p_value_holm": "0x1.269e0cc986c70p-6",
-       "holm_significant": true
+       "inference_status": "unavailable",
+       "requested_ci_method": "bca",
+       "skipped": "bootstrap CI has insufficient endpoint support: 180 and 0 draws strictly outside its endpoints; require 10 per tail. Increase --bootstrap-iters; tied or discrete samples may require a different method such as --ci-method t, with its assumptions assessed.",
+       "holm_family_size": 9
       }
      ],
      "ear": [
@@ -13710,27 +14116,44 @@
         "method": "paired_item_weighted_bootstrap_bca",
         "ci_method": "bca",
         "confidence_level": "0x1.e666666666666p-1",
-        "lower": "-0x1.07819b7e7f726p-7",
-        "upper": "-0x1.f9efe925dd278p-8",
+        "lower": "-0x1.079e33d4d87cfp-7",
+        "upper": "-0x1.faeff97ead900p-8",
         "standard_error": "0x1.533b5080030efp-14",
-        "bootstrap_iters": 1000,
-        "contains_zero": false
+        "bootstrap_iters": 5000,
+        "contains_zero": false,
+        "tail_support": {
+         "minimum": 10,
+         "lower": 94,
+         "upper": 163
+        }
        },
-       "bootstrap_std": "0x1.5522c3329ef59p-14",
-       "p_value": "0x1.05e1d27a3ee9cp-9",
+       "bootstrap_std": "0x1.4d47c79da57f9p-14",
+       "p_value": "0x1.b33e95b198380p-8",
+       "p_value_metadata": {
+        "method": "bootstrap_ci_inversion",
+        "censored": true,
+        "lower_bound": "0x0.0p+0",
+        "upper_bound": "0x1.b33e95b198380p-8",
+        "supported_alpha_min": "0x1.b33e95b198380p-8",
+        "minimum_tail_draws": 10,
+        "tail_roundoff_rtol": "0x1.0000000000000p-49",
+        "rejection_rule": "p_value < alpha; p_value is a conservative upper bound when censored"
+       },
        "decision": {
         "verdict": "A closer",
         "statistically_distinguishable_from_null": true,
         "null_value": "0x0.0p+0",
         "confidence_level": "0x1.e666666666666p-1",
-        "equivalence_bound": "0x1.07819b7e7f726p-7",
+        "equivalence_bound": "0x1.079e33d4d87cfp-7",
         "equivalence_margin": null,
         "equivalence_established": null,
         "equivalence_alpha": null,
-        "reason": "95% CI [-0.008042, -0.007720] excludes 0"
+        "reason": "95% CI [-0.008045, -0.007735] excludes 0"
        },
-       "p_value_holm": "0x1.269e0cc986c70p-6",
-       "holm_significant": true
+       "holm_family_size": 9,
+       "p_value_holm": "0x1.b33e95b198380p-5",
+       "p_value_holm_is_upper_bound": true,
+       "holm_significant": false
       },
       {
        "metric": "ear",
@@ -13743,31 +14166,10 @@
        "baseline_mean": "0x1.f9f91e6b82015p-1",
        "candidate_mean": "0x1.f5b449bdff036p-1",
        "delta_candidate_minus_baseline": "-0x1.11352b60bf76cp-7",
-       "ci_delta": {
-        "method": "paired_item_weighted_bootstrap_bca",
-        "ci_method": "bca",
-        "confidence_level": "0x1.e666666666666p-1",
-        "lower": "-0x1.3928d8cb17224p-7",
-        "upper": "-0x1.048479092468bp-7",
-        "standard_error": "0x1.5dcdff129e0adp-12",
-        "bootstrap_iters": 1000,
-        "contains_zero": false
-       },
-       "bootstrap_std": "0x1.4ae01c840c408p-12",
-       "p_value": "0x1.05e1d27a3ee9cp-9",
-       "decision": {
-        "verdict": "A closer",
-        "statistically_distinguishable_from_null": true,
-        "null_value": "0x0.0p+0",
-        "confidence_level": "0x1.e666666666666p-1",
-        "equivalence_bound": "0x1.3928d8cb17224p-7",
-        "equivalence_margin": null,
-        "equivalence_established": null,
-        "equivalence_alpha": null,
-        "reason": "95% CI [-0.009557, -0.007950] excludes 0"
-       },
-       "p_value_holm": "0x1.269e0cc986c70p-6",
-       "holm_significant": true
+       "inference_status": "unavailable",
+       "requested_ci_method": "bca",
+       "skipped": "bootstrap CI has insufficient endpoint support: 9 and 413 draws strictly outside its endpoints; require 10 per tail. Increase --bootstrap-iters; tied or discrete samples may require a different method such as --ci-method t, with its assumptions assessed.",
+       "holm_family_size": 9
       },
       {
        "metric": "ear",
@@ -13780,31 +14182,10 @@
        "baseline_mean": "0x1.f9a9e3276f313p-1",
        "candidate_mean": "0x1.f589604ba2e8cp-1",
        "delta_candidate_minus_baseline": "-0x1.0820b6f3121abp-7",
-       "ci_delta": {
-        "method": "paired_item_weighted_bootstrap_bca",
-        "ci_method": "bca",
-        "confidence_level": "0x1.e666666666666p-1",
-        "lower": "-0x1.0923da2e8ba40p-7",
-        "upper": "-0x1.072551c71c72bp-7",
-        "standard_error": "0x1.ef3ac5ceb4acfp-16",
-        "bootstrap_iters": 1000,
-        "contains_zero": false
-       },
-       "bootstrap_std": "0x1.9234b0a63f7e9p-16",
-       "p_value": "0x1.0aad37f569400p-9",
-       "decision": {
-        "verdict": "A closer",
-        "statistically_distinguishable_from_null": true,
-        "null_value": "0x0.0p+0",
-        "confidence_level": "0x1.e666666666666p-1",
-        "equivalence_bound": "0x1.0923da2e8ba40p-7",
-        "equivalence_margin": null,
-        "equivalence_established": null,
-        "equivalence_alpha": null,
-        "reason": "95% CI [-0.008091, -0.008031] excludes 0"
-       },
-       "p_value_holm": "0x1.269e0cc986c70p-6",
-       "holm_significant": true
+       "inference_status": "unavailable",
+       "requested_ci_method": "bca",
+       "skipped": "bootstrap CI has insufficient endpoint support: 180 and 0 draws strictly outside its endpoints; require 10 per tail. Increase --bootstrap-iters; tied or discrete samples may require a different method such as --ci-method t, with its assumptions assessed.",
+       "holm_family_size": 9
       }
      ],
      "dp": [
@@ -13823,27 +14204,44 @@
         "method": "paired_item_weighted_bootstrap_bca",
         "ci_method": "bca",
         "confidence_level": "0x1.e666666666666p-1",
-        "lower": "-0x1.7d520f5d0768fp-4",
-        "upper": "-0x1.2f7480b51ecbdp-4",
+        "lower": "-0x1.8085553eab4d2p-4",
+        "upper": "-0x1.2e333c2a452f2p-4",
         "standard_error": "0x1.38835bdbe8dcdp-8",
-        "bootstrap_iters": 1000,
-        "contains_zero": false
+        "bootstrap_iters": 5000,
+        "contains_zero": false,
+        "tail_support": {
+         "minimum": 10,
+         "lower": 36,
+         "upper": 280
+        }
        },
-       "bootstrap_std": "0x1.32702120e2767p-8",
-       "p_value": "0x1.05e1d27a3ee9cp-9",
+       "bootstrap_std": "0x1.309b3a6616487p-8",
+       "p_value": "0x1.6ddb79a4e7420p-6",
+       "p_value_metadata": {
+        "method": "bootstrap_ci_inversion",
+        "censored": true,
+        "lower_bound": "0x0.0p+0",
+        "upper_bound": "0x1.6ddb79a4e7420p-6",
+        "supported_alpha_min": "0x1.6ddb79a4e7420p-6",
+        "minimum_tail_draws": 10,
+        "tail_roundoff_rtol": "0x1.0000000000000p-49",
+        "rejection_rule": "p_value < alpha; p_value is a conservative upper bound when censored"
+       },
        "decision": {
         "verdict": "A closer",
         "statistically_distinguishable_from_null": true,
         "null_value": "0x0.0p+0",
         "confidence_level": "0x1.e666666666666p-1",
-        "equivalence_bound": "0x1.7d520f5d0768fp-4",
+        "equivalence_bound": "0x1.8085553eab4d2p-4",
         "equivalence_margin": null,
         "equivalence_established": null,
         "equivalence_alpha": null,
-        "reason": "95% CI [-0.093096, -0.074086] excludes 0"
+        "reason": "95% CI [-0.093877, -0.073779] excludes 0"
        },
-       "p_value_holm": "0x1.269e0cc986c70p-6",
-       "holm_significant": true
+       "holm_family_size": 9,
+       "p_value_holm": "0x1.12649b3bad718p-3",
+       "p_value_holm_is_upper_bound": true,
+       "holm_significant": false
       },
       {
        "metric": "dp",
@@ -13860,27 +14258,44 @@
         "method": "paired_item_weighted_bootstrap_bca",
         "ci_method": "bca",
         "confidence_level": "0x1.e666666666666p-1",
-        "lower": "-0x1.7f7bb7d17d0bbp-4",
-        "upper": "-0x1.306748bc350c4p-4",
+        "lower": "-0x1.7fa616f793e28p-4",
+        "upper": "-0x1.302384c7bdc0dp-4",
         "standard_error": "0x1.477a5f895ef7dp-8",
-        "bootstrap_iters": 1000,
-        "contains_zero": false
+        "bootstrap_iters": 5000,
+        "contains_zero": false,
+        "tail_support": {
+         "minimum": 10,
+         "lower": 58,
+         "upper": 222
+        }
        },
-       "bootstrap_std": "0x1.3cbd9ed3d0b7dp-8",
-       "p_value": "0x1.05e1d27a3ee9cp-9",
+       "bootstrap_std": "0x1.3ab3cb2cc2ca4p-8",
+       "p_value": "0x1.c0a4a3f269300p-7",
+       "p_value_metadata": {
+        "method": "bootstrap_ci_inversion",
+        "censored": true,
+        "lower_bound": "0x0.0p+0",
+        "upper_bound": "0x1.c0a4a3f269300p-7",
+        "supported_alpha_min": "0x1.c0a4a3f269300p-7",
+        "minimum_tail_draws": 10,
+        "tail_roundoff_rtol": "0x1.0000000000000p-49",
+        "rejection_rule": "p_value < alpha; p_value is a conservative upper bound when censored"
+       },
        "decision": {
         "verdict": "A closer",
         "statistically_distinguishable_from_null": true,
         "null_value": "0x0.0p+0",
         "confidence_level": "0x1.e666666666666p-1",
-        "equivalence_bound": "0x1.7f7bb7d17d0bbp-4",
+        "equivalence_bound": "0x1.7fa616f793e28p-4",
         "equivalence_margin": null,
         "equivalence_established": null,
         "equivalence_alpha": null,
-        "reason": "95% CI [-0.093624, -0.074317] excludes 0"
+        "reason": "95% CI [-0.093664, -0.074253] excludes 0"
        },
-       "p_value_holm": "0x1.269e0cc986c70p-6",
-       "holm_significant": true
+       "holm_family_size": 9,
+       "p_value_holm": "0x1.88900f741c0a0p-4",
+       "p_value_holm_is_upper_bound": true,
+       "holm_significant": false
       },
       {
        "metric": "dp",
@@ -13893,38 +14308,17 @@
        "baseline_mean": "-0x1.886a752cc4868p-4",
        "candidate_mean": "-0x1.45c11a66f3121p-3",
        "delta_candidate_minus_baseline": "-0x1.0317bfa1219dcp-4",
-       "ci_delta": {
-        "method": "paired_item_weighted_bootstrap_bca",
-        "ci_method": "bca",
-        "confidence_level": "0x1.e666666666666p-1",
-        "lower": "-0x1.484e660000000p-4",
-        "upper": "-0x1.b2cd139d6a053p-5",
-        "standard_error": "0x1.25bf39869243dp-7",
-        "bootstrap_iters": 1000,
-        "contains_zero": false
-       },
-       "bootstrap_std": "0x1.d1aa678491576p-8",
-       "p_value": "0x1.05e1d27a3ee9cp-9",
-       "decision": {
-        "verdict": "A closer",
-        "statistically_distinguishable_from_null": true,
-        "null_value": "0x0.0p+0",
-        "confidence_level": "0x1.e666666666666p-1",
-        "equivalence_bound": "0x1.484e660000000p-4",
-        "equivalence_margin": null,
-        "equivalence_established": null,
-        "equivalence_alpha": null,
-        "reason": "95% CI [-0.080153, -0.053076] excludes 0"
-       },
-       "p_value_holm": "0x1.269e0cc986c70p-6",
-       "holm_significant": true
+       "inference_status": "unavailable",
+       "requested_ci_method": "bca",
+       "skipped": "bootstrap CI has insufficient endpoint support: 0 and 180 draws strictly outside its endpoints; require 10 per tail. Increase --bootstrap-iters; tied or discrete samples may require a different method such as --ci-method t, with its assumptions assessed.",
+       "holm_family_size": 9
       }
      ]
     }
    }
   },
   "percentile": {
-   "schema_version": "vlm-paired-compare-v4",
+   "schema_version": "vlm-paired-compare-v5",
    "n_items": 16,
    "confidence_level": "0x1.e666666666666p-1",
    "ci_method": "percentile",
@@ -13939,7 +14333,7 @@
     "alpha": "0x1.99999999999a0p-5",
     "policy": "One confirmatory endpoint whose interval spends the whole alpha; every other item-weighted endpoint is exploratory and carries a Holm-Bonferroni-adjusted p-value over the remaining 6 cells. Holm controls the family-wise error rate under arbitrary dependence: kld/reversed_kld/js_kld are functionals of the same distribution pair. Token-weighted summaries are descriptive only."
    },
-   "bootstrap_iters": 1000,
+   "bootstrap_iters": 5000,
    "seed": 20260824,
    "model_a_label": "A",
    "model_b_label": "B",
@@ -13955,27 +14349,44 @@
        "method": "paired_item_weighted_bootstrap_percentile",
        "ci_method": "percentile",
        "confidence_level": "0x1.e666666666666p-1",
-       "lower": "0x1.362cc27a38bc2p-9",
-       "upper": "0x1.516da093eabd8p-6",
+       "lower": "0x1.2ec9ab3ef1f82p-9",
+       "upper": "0x1.52307e9dc8dd4p-6",
        "standard_error": "0x1.3dd2bcd8fa469p-8",
-       "bootstrap_iters": 1000,
-       "contains_zero": false
+       "bootstrap_iters": 5000,
+       "contains_zero": false,
+       "tail_support": {
+        "minimum": 10,
+        "lower": 125,
+        "upper": 125
+       }
       },
-      "bootstrap_std": "0x1.34f2cb8092918p-8",
-      "p_value": "0x1.6816816816817p-6",
+      "bootstrap_std": "0x1.3339b24a0f778p-8",
+      "p_value": "0x1.11494640a9000p-6",
+      "p_value_metadata": {
+       "method": "bootstrap_ci_inversion",
+       "censored": false,
+       "lower_bound": "0x1.11494640a8fe0p-6",
+       "upper_bound": "0x1.11494640a9000p-6",
+       "supported_alpha_min": "0x1.d7f41e8574500p-9",
+       "minimum_tail_draws": 10,
+       "tail_roundoff_rtol": "0x1.0000000000000p-49",
+       "rejection_rule": "p_value < alpha; p_value is a conservative upper bound when censored"
+      },
       "decision": {
        "verdict": "A closer",
        "statistically_distinguishable_from_null": true,
        "null_value": "0x0.0p+0",
        "confidence_level": "0x1.e666666666666p-1",
-       "equivalence_bound": "0x1.516da093eabd8p-6",
+       "equivalence_bound": "0x1.52307e9dc8dd4p-6",
        "equivalence_margin": null,
        "equivalence_established": null,
        "equivalence_alpha": null,
-       "reason": "95% CI [+0.002366, +0.020595] excludes 0"
+       "reason": "95% CI [+0.002310, +0.020641] excludes 0"
       },
       "role": "exploratory",
-      "p_value_holm": "0x1.6816816816817p-6",
+      "holm_family_size": 6,
+      "p_value_holm": "0x1.26f8931368c60p-6",
+      "p_value_holm_is_upper_bound": true,
       "holm_significant": true
      },
      "token_weighted": {
@@ -13996,20 +14407,35 @@
        "method": "paired_item_weighted_bootstrap_percentile",
        "ci_method": "percentile",
        "confidence_level": "0x1.e666666666666p-1",
-       "lower": "0x1.2946cc972f330p-12",
-       "upper": "0x1.3d6c7b8069283p-12",
+       "lower": "0x1.2a151ed917ce2p-12",
+       "upper": "0x1.3d6eef9f4b48cp-12",
        "standard_error": "0x1.42e40dc9d0239p-18",
-       "bootstrap_iters": 1000,
-       "contains_zero": false
+       "bootstrap_iters": 5000,
+       "contains_zero": false,
+       "tail_support": {
+        "minimum": 10,
+        "lower": 125,
+        "upper": 125
+       }
       },
-      "bootstrap_std": "0x1.3f759d838be3bp-18",
-      "p_value": "0x1.05e1d27a3ee9cp-9",
+      "bootstrap_std": "0x1.3ced4e8b4a93dp-18",
+      "p_value": "0x1.d7f41e8579e00p-9",
+      "p_value_metadata": {
+       "method": "bootstrap_ci_inversion",
+       "censored": true,
+       "lower_bound": "0x0.0p+0",
+       "upper_bound": "0x1.d7f41e8579e00p-9",
+       "supported_alpha_min": "0x1.d7f41e8579e00p-9",
+       "minimum_tail_draws": 10,
+       "tail_roundoff_rtol": "0x1.0000000000000p-49",
+       "rejection_rule": "p_value < alpha; p_value is a conservative upper bound when censored"
+      },
       "decision": {
        "verdict": "A closer",
        "statistically_distinguishable_from_null": true,
        "null_value": "0x0.0p+0",
        "confidence_level": "0x1.e666666666666p-1",
-       "equivalence_bound": "0x1.3d6c7b8069283p-12",
+       "equivalence_bound": "0x1.3d6eef9f4b48cp-12",
        "equivalence_margin": "0x1.a36e2eb1c432dp-13",
        "equivalence_established": false,
        "equivalence_alpha": "0x1.99999999999a0p-6",
@@ -14035,27 +14461,44 @@
        "method": "paired_item_weighted_bootstrap_percentile",
        "ci_method": "percentile",
        "confidence_level": "0x1.e666666666666p-1",
-       "lower": "0x1.4701143fe71e8p-12",
-       "upper": "0x1.5d2a87da0d45dp-12",
+       "lower": "0x1.47e4085533c94p-12",
+       "upper": "0x1.5d2d3ac8d2d02p-12",
        "standard_error": "0x1.632e0f2acb5a3p-18",
-       "bootstrap_iters": 1000,
-       "contains_zero": false
+       "bootstrap_iters": 5000,
+       "contains_zero": false,
+       "tail_support": {
+        "minimum": 10,
+        "lower": 125,
+        "upper": 125
+       }
       },
-      "bootstrap_std": "0x1.5f67c6dd80473p-18",
-      "p_value": "0x1.05e1d27a3ee9cp-9",
+      "bootstrap_std": "0x1.5c9ea332d208fp-18",
+      "p_value": "0x1.d7f41e8579e00p-9",
+      "p_value_metadata": {
+       "method": "bootstrap_ci_inversion",
+       "censored": true,
+       "lower_bound": "0x0.0p+0",
+       "upper_bound": "0x1.d7f41e8579e00p-9",
+       "supported_alpha_min": "0x1.d7f41e8579e00p-9",
+       "minimum_tail_draws": 10,
+       "tail_roundoff_rtol": "0x1.0000000000000p-49",
+       "rejection_rule": "p_value < alpha; p_value is a conservative upper bound when censored"
+      },
       "decision": {
        "verdict": "A closer",
        "statistically_distinguishable_from_null": true,
        "null_value": "0x0.0p+0",
        "confidence_level": "0x1.e666666666666p-1",
-       "equivalence_bound": "0x1.5d2a87da0d45dp-12",
+       "equivalence_bound": "0x1.5d2d3ac8d2d02p-12",
        "equivalence_margin": null,
        "equivalence_established": null,
        "equivalence_alpha": null,
-       "reason": "95% CI [+0.000312, +0.000333] excludes 0"
+       "reason": "95% CI [+0.000313, +0.000333] excludes 0"
       },
       "role": "exploratory",
-      "p_value_holm": "0x1.88d2bbb75e5eap-7",
+      "holm_family_size": 6,
+      "p_value_holm": "0x1.26f8931368c60p-6",
+      "p_value_holm_is_upper_bound": true,
       "holm_significant": true
      },
      "token_weighted": {
@@ -14076,27 +14519,44 @@
        "method": "paired_item_weighted_bootstrap_percentile",
        "ci_method": "percentile",
        "confidence_level": "0x1.e666666666666p-1",
-       "lower": "0x1.2946cc972f330p-13",
-       "upper": "0x1.3d6c7b8069283p-13",
+       "lower": "0x1.2a151ed917ce2p-13",
+       "upper": "0x1.3d6eef9f4b48cp-13",
        "standard_error": "0x1.42e40dc9d0239p-19",
-       "bootstrap_iters": 1000,
-       "contains_zero": false
+       "bootstrap_iters": 5000,
+       "contains_zero": false,
+       "tail_support": {
+        "minimum": 10,
+        "lower": 125,
+        "upper": 125
+       }
       },
-      "bootstrap_std": "0x1.3f759d838be3bp-19",
-      "p_value": "0x1.05e1d27a3ee9cp-9",
+      "bootstrap_std": "0x1.3ced4e8b4a93dp-19",
+      "p_value": "0x1.d7f41e8579e00p-9",
+      "p_value_metadata": {
+       "method": "bootstrap_ci_inversion",
+       "censored": true,
+       "lower_bound": "0x0.0p+0",
+       "upper_bound": "0x1.d7f41e8579e00p-9",
+       "supported_alpha_min": "0x1.d7f41e8579e00p-9",
+       "minimum_tail_draws": 10,
+       "tail_roundoff_rtol": "0x1.0000000000000p-49",
+       "rejection_rule": "p_value < alpha; p_value is a conservative upper bound when censored"
+      },
       "decision": {
        "verdict": "A closer",
        "statistically_distinguishable_from_null": true,
        "null_value": "0x0.0p+0",
        "confidence_level": "0x1.e666666666666p-1",
-       "equivalence_bound": "0x1.3d6c7b8069283p-13",
+       "equivalence_bound": "0x1.3d6eef9f4b48cp-13",
        "equivalence_margin": null,
        "equivalence_established": null,
        "equivalence_alpha": null,
        "reason": "95% CI [+0.000142, +0.000151] excludes 0"
       },
       "role": "exploratory",
-      "p_value_holm": "0x1.88d2bbb75e5eap-7",
+      "holm_family_size": 6,
+      "p_value_holm": "0x1.26f8931368c60p-6",
+      "p_value_holm_is_upper_bound": true,
       "holm_significant": true
      },
      "token_weighted": {
@@ -14117,27 +14577,44 @@
        "method": "paired_item_weighted_bootstrap_percentile",
        "ci_method": "percentile",
        "confidence_level": "0x1.e666666666666p-1",
-       "lower": "-0x1.0787dba74bc5dp-7",
-       "upper": "-0x1.015f36d054c15p-7",
+       "lower": "-0x1.07678d19f205bp-7",
+       "upper": "-0x1.014d2e29fbfffp-7",
        "standard_error": "0x1.a2fa6e2e16a33p-15",
-       "bootstrap_iters": 1000,
-       "contains_zero": false
+       "bootstrap_iters": 5000,
+       "contains_zero": false,
+       "tail_support": {
+        "minimum": 10,
+        "lower": 125,
+        "upper": 125
+       }
       },
-      "bootstrap_std": "0x1.9303023f7d819p-15",
-      "p_value": "0x1.05e1d27a3ee9cp-9",
+      "bootstrap_std": "0x1.94236db1b988ep-15",
+      "p_value": "0x1.d7f41e857a300p-9",
+      "p_value_metadata": {
+       "method": "bootstrap_ci_inversion",
+       "censored": true,
+       "lower_bound": "0x0.0p+0",
+       "upper_bound": "0x1.d7f41e857a300p-9",
+       "supported_alpha_min": "0x1.d7f41e857a300p-9",
+       "minimum_tail_draws": 10,
+       "tail_roundoff_rtol": "0x1.0000000000000p-49",
+       "rejection_rule": "p_value < alpha; p_value is a conservative upper bound when censored"
+      },
       "decision": {
        "verdict": "A closer",
        "statistically_distinguishable_from_null": true,
        "null_value": "0x0.0p+0",
        "confidence_level": "0x1.e666666666666p-1",
-       "equivalence_bound": "0x1.0787dba74bc5dp-7",
+       "equivalence_bound": "0x1.07678d19f205bp-7",
        "equivalence_margin": null,
        "equivalence_established": null,
        "equivalence_alpha": null,
-       "reason": "95% CI [-0.008042, -0.007854] excludes 0"
+       "reason": "95% CI [-0.008038, -0.007852] excludes 0"
       },
       "role": "exploratory",
-      "p_value_holm": "0x1.88d2bbb75e5eap-7",
+      "holm_family_size": 6,
+      "p_value_holm": "0x1.26f8931368c60p-6",
+      "p_value_holm_is_upper_bound": true,
       "holm_significant": true
      },
      "token_weighted": {
@@ -14161,11 +14638,27 @@
        "lower": "-0x1.0624dd2f1aa00p-9",
        "upper": "-0x1.0624dd2f1aa00p-9",
        "standard_error": "0x0.0p+0",
-       "bootstrap_iters": 1000,
-       "contains_zero": false
+       "bootstrap_iters": 5000,
+       "contains_zero": false,
+       "tail_support": {
+        "minimum": 10,
+        "lower": 0,
+        "upper": 0,
+        "exemption": "constant_empirical_distribution"
+       },
+       "fallback": "constant differences (no spread): empirical percentile point-interval convention; this does not establish zero population variance"
       },
       "bootstrap_std": "0x0.0p+0",
-      "p_value": "0x1.05e1d27a3ee9cp-9",
+      "p_value": "0x1.a358b63c4d31bp-12",
+      "p_value_metadata": {
+       "method": "constant_empirical_distribution",
+       "censored": true,
+       "lower_bound": "0x0.0p+0",
+       "upper_bound": "0x1.a358b63c4d31bp-12",
+       "supported_alpha_min": null,
+       "resolution": "0x1.a358b63c4d31bp-12",
+       "rejection_rule": "p_value < alpha; constant-input convention, not a population variance guarantee"
+      },
       "decision": {
        "verdict": "A closer",
        "statistically_distinguishable_from_null": true,
@@ -14178,7 +14671,9 @@
        "reason": "95% CI [-0.002000, -0.002000] excludes 0"
       },
       "role": "exploratory",
-      "p_value_holm": "0x1.88d2bbb75e5eap-7",
+      "holm_family_size": 6,
+      "p_value_holm": "0x1.3a8288ad39e54p-9",
+      "p_value_holm_is_upper_bound": true,
       "holm_significant": true
      },
      "token_weighted": {
@@ -14199,27 +14694,44 @@
        "method": "paired_item_weighted_bootstrap_percentile",
        "ci_method": "percentile",
        "confidence_level": "0x1.e666666666666p-1",
-       "lower": "0x1.20f5a1917ec7cp-6",
-       "upper": "0x1.bac6881284a1fp-6",
+       "lower": "0x1.1d7a10d45176ep-6",
+       "upper": "0x1.b9f9262054649p-6",
        "standard_error": "0x1.47a6297a981cap-9",
-       "bootstrap_iters": 1000,
-       "contains_zero": false
+       "bootstrap_iters": 5000,
+       "contains_zero": false,
+       "tail_support": {
+        "minimum": 10,
+        "lower": 125,
+        "upper": 125
+       }
       },
-      "bootstrap_std": "0x1.453c1b04a1c6dp-9",
-      "p_value": "0x1.05e1d27a3ee9cp-9",
+      "bootstrap_std": "0x1.40961a95b7fa1p-9",
+      "p_value": "0x1.d7f41e8574700p-9",
+      "p_value_metadata": {
+       "method": "bootstrap_ci_inversion",
+       "censored": true,
+       "lower_bound": "0x0.0p+0",
+       "upper_bound": "0x1.d7f41e8574700p-9",
+       "supported_alpha_min": "0x1.d7f41e8574700p-9",
+       "minimum_tail_draws": 10,
+       "tail_roundoff_rtol": "0x1.0000000000000p-49",
+       "rejection_rule": "p_value < alpha; p_value is a conservative upper bound when censored"
+      },
       "decision": {
        "verdict": "A closer",
        "statistically_distinguishable_from_null": true,
        "null_value": "0x0.0p+0",
        "confidence_level": "0x1.e666666666666p-1",
-       "equivalence_bound": "0x1.bac6881284a1fp-6",
+       "equivalence_bound": "0x1.b9f9262054649p-6",
        "equivalence_margin": null,
        "equivalence_established": null,
        "equivalence_alpha": null,
-       "reason": "95% CI [+0.017637, +0.027025] excludes 0"
+       "reason": "95% CI [+0.017424, +0.026976] excludes 0"
       },
       "role": "exploratory",
-      "p_value_holm": "0x1.88d2bbb75e5eap-7",
+      "holm_family_size": 6,
+      "p_value_holm": "0x1.26f8931368c60p-6",
+      "p_value_holm_is_upper_bound": true,
       "holm_significant": true
      },
      "token_weighted": {
@@ -14257,9 +14769,9 @@
        "method": "paired_item_weighted_bootstrap_percentile",
        "ci_method": "percentile",
        "confidence_level": "0x1.e666666666666p-1",
-       "lower": "0x1.009b4564c8e76p+0",
-       "upper": "0x1.0553b51e3280ep+0",
-       "bootstrap_iters": 1000,
+       "lower": "0x1.009791a281bb6p+0",
+       "upper": "0x1.0556d0d34d8bdp+0",
+       "bootstrap_iters": 5000,
        "contains_one": false
       },
       "decision": {
@@ -17232,26 +17744,43 @@
          "method": "paired_item_weighted_bootstrap_percentile",
          "ci_method": "percentile",
          "confidence_level": "0x1.e666666666666p-1",
-         "lower": "0x1.e521d92245a20p-12",
-         "upper": "0x1.1b7d3b7d3f7cbp-11",
+         "lower": "0x1.e5fb6b87851ebp-12",
+         "upper": "0x1.199d7b0d851e6p-11",
          "standard_error": "0x1.416986cb723b7p-16",
-         "bootstrap_iters": 1000,
-         "contains_zero": false
+         "bootstrap_iters": 5000,
+         "contains_zero": false,
+         "tail_support": {
+          "minimum": 10,
+          "lower": 125,
+          "upper": 125
+         }
         },
-        "bootstrap_std": "0x1.4468cd87db5d3p-16",
-        "p_value": "0x1.05e1d27a3ee9cp-9",
+        "bootstrap_std": "0x1.3e0141eeabce2p-16",
+        "p_value": "0x1.d7f41e8574b00p-9",
+        "p_value_metadata": {
+         "method": "bootstrap_ci_inversion",
+         "censored": true,
+         "lower_bound": "0x0.0p+0",
+         "upper_bound": "0x1.d7f41e8574b00p-9",
+         "supported_alpha_min": "0x1.d7f41e8574b00p-9",
+         "minimum_tail_draws": 10,
+         "tail_roundoff_rtol": "0x1.0000000000000p-49",
+         "rejection_rule": "p_value < alpha; p_value is a conservative upper bound when censored"
+        },
         "decision": {
          "verdict": "A closer",
          "statistically_distinguishable_from_null": true,
          "null_value": "0x0.0p+0",
          "confidence_level": "0x1.e666666666666p-1",
-         "equivalence_bound": "0x1.1b7d3b7d3f7cbp-11",
+         "equivalence_bound": "0x1.199d7b0d851e6p-11",
          "equivalence_margin": null,
          "equivalence_established": null,
          "equivalence_alpha": null,
-         "reason": "95% CI [+0.000463, +0.000541] excludes 0"
+         "reason": "95% CI [+0.000463, +0.000537] excludes 0"
         },
-        "p_value_holm": "0x1.88d2bbb75e5eap-8",
+        "holm_family_size": 3,
+        "p_value_holm": "0x1.61f716e417840p-7",
+        "p_value_holm_is_upper_bound": true,
         "holm_significant": true
        },
        {
@@ -17269,26 +17798,43 @@
          "method": "paired_item_weighted_bootstrap_percentile",
          "ci_method": "percentile",
          "confidence_level": "0x1.e666666666666p-1",
-         "lower": "0x1.04e33bd956d5dp-11",
-         "upper": "0x1.3d3fc362374c4p-11",
+         "lower": "0x1.05b2a9ad78037p-11",
+         "upper": "0x1.3cdae6037b4aap-11",
          "standard_error": "0x1.cd913b65075a1p-16",
-         "bootstrap_iters": 1000,
-         "contains_zero": false
+         "bootstrap_iters": 5000,
+         "contains_zero": false,
+         "tail_support": {
+          "minimum": 10,
+          "lower": 125,
+          "upper": 125
+         }
         },
-        "bootstrap_std": "0x1.cf501fd53db0bp-16",
-        "p_value": "0x1.05e1d27a3ee9cp-9",
+        "bootstrap_std": "0x1.c4daffc5de4cep-16",
+        "p_value": "0x1.d7f41e8577000p-9",
+        "p_value_metadata": {
+         "method": "bootstrap_ci_inversion",
+         "censored": true,
+         "lower_bound": "0x0.0p+0",
+         "upper_bound": "0x1.d7f41e8577000p-9",
+         "supported_alpha_min": "0x1.d7f41e8577000p-9",
+         "minimum_tail_draws": 10,
+         "tail_roundoff_rtol": "0x1.0000000000000p-49",
+         "rejection_rule": "p_value < alpha; p_value is a conservative upper bound when censored"
+        },
         "decision": {
          "verdict": "A closer",
          "statistically_distinguishable_from_null": true,
          "null_value": "0x0.0p+0",
          "confidence_level": "0x1.e666666666666p-1",
-         "equivalence_bound": "0x1.3d3fc362374c4p-11",
+         "equivalence_bound": "0x1.3cdae6037b4aap-11",
          "equivalence_margin": null,
          "equivalence_established": null,
          "equivalence_alpha": null,
-         "reason": "95% CI [+0.000498, +0.000605] excludes 0"
+         "reason": "95% CI [+0.000499, +0.000604] excludes 0"
         },
-        "p_value_holm": "0x1.88d2bbb75e5eap-8",
+        "holm_family_size": 3,
+        "p_value_holm": "0x1.61f716e417840p-7",
+        "p_value_holm_is_upper_bound": true,
         "holm_significant": true
        },
        {
@@ -17305,26 +17851,43 @@
          "method": "paired_item_weighted_bootstrap_percentile",
          "ci_method": "percentile",
          "confidence_level": "0x1.e666666666666p-1",
-         "lower": "0x1.0747b6acccccdp-11",
-         "upper": "0x1.462d90d666666p-11",
+         "lower": "0x1.0837f11000000p-11",
+         "upper": "0x1.45a04d9999999p-11",
          "standard_error": "0x1.018bc1be56ec7p-15",
-         "bootstrap_iters": 1000,
-         "contains_zero": false
+         "bootstrap_iters": 5000,
+         "contains_zero": false,
+         "tail_support": {
+          "minimum": 10,
+          "lower": 125,
+          "upper": 125
+         }
         },
-        "bootstrap_std": "0x1.01cc64594c002p-15",
-        "p_value": "0x1.05e1d27a3ee9cp-9",
+        "bootstrap_std": "0x1.f7e9a1e90c26bp-16",
+        "p_value": "0x1.d7f41e85a5800p-9",
+        "p_value_metadata": {
+         "method": "bootstrap_ci_inversion",
+         "censored": true,
+         "lower_bound": "0x0.0p+0",
+         "upper_bound": "0x1.d7f41e85a5800p-9",
+         "supported_alpha_min": "0x1.d7f41e85a5800p-9",
+         "minimum_tail_draws": 10,
+         "tail_roundoff_rtol": "0x1.0000000000000p-49",
+         "rejection_rule": "p_value < alpha; p_value is a conservative upper bound when censored"
+        },
         "decision": {
          "verdict": "A closer",
          "statistically_distinguishable_from_null": true,
          "null_value": "0x0.0p+0",
          "confidence_level": "0x1.e666666666666p-1",
-         "equivalence_bound": "0x1.462d90d666666p-11",
+         "equivalence_bound": "0x1.45a04d9999999p-11",
          "equivalence_margin": null,
          "equivalence_established": null,
          "equivalence_alpha": null,
-         "reason": "95% CI [+0.000502, +0.000622] excludes 0"
+         "reason": "95% CI [+0.000504, +0.000621] excludes 0"
         },
-        "p_value_holm": "0x1.88d2bbb75e5eap-8",
+        "holm_family_size": 3,
+        "p_value_holm": "0x1.61f716e417840p-7",
+        "p_value_holm_is_upper_bound": true,
         "holm_significant": true
        }
       ],
@@ -18223,26 +18786,43 @@
         "method": "paired_item_weighted_bootstrap_percentile",
         "ci_method": "percentile",
         "confidence_level": "0x1.e666666666666p-1",
-        "lower": "0x1.25cef38513128p-12",
-        "upper": "0x1.3dd8e63670576p-12",
+        "lower": "0x1.261608aabea9cp-12",
+        "upper": "0x1.3db74e2fd0000p-12",
         "standard_error": "0x1.929fd05b2f1e7p-18",
-        "bootstrap_iters": 1000,
-        "contains_zero": false
+        "bootstrap_iters": 5000,
+        "contains_zero": false,
+        "tail_support": {
+         "minimum": 10,
+         "lower": 125,
+         "upper": 125
+        }
        },
-       "bootstrap_std": "0x1.804ec45983f95p-18",
-       "p_value": "0x1.05e1d27a3ee9cp-9",
+       "bootstrap_std": "0x1.843b151155830p-18",
+       "p_value": "0x1.d7f41e8575400p-9",
+       "p_value_metadata": {
+        "method": "bootstrap_ci_inversion",
+        "censored": true,
+        "lower_bound": "0x0.0p+0",
+        "upper_bound": "0x1.d7f41e8575400p-9",
+        "supported_alpha_min": "0x1.d7f41e8575400p-9",
+        "minimum_tail_draws": 10,
+        "tail_roundoff_rtol": "0x1.0000000000000p-49",
+        "rejection_rule": "p_value < alpha; p_value is a conservative upper bound when censored"
+       },
        "decision": {
         "verdict": "A closer",
         "statistically_distinguishable_from_null": true,
         "null_value": "0x0.0p+0",
         "confidence_level": "0x1.e666666666666p-1",
-        "equivalence_bound": "0x1.3dd8e63670576p-12",
+        "equivalence_bound": "0x1.3db74e2fd0000p-12",
         "equivalence_margin": null,
         "equivalence_established": null,
         "equivalence_alpha": null,
         "reason": "95% CI [+0.000280, +0.000303] excludes 0"
        },
-       "p_value_holm": "0x1.269e0cc986c70p-6",
+       "holm_family_size": 9,
+       "p_value_holm": "0x1.0979512b117f0p-5",
+       "p_value_holm_is_upper_bound": true,
        "holm_significant": true
       },
       {
@@ -18260,26 +18840,43 @@
         "method": "paired_item_weighted_bootstrap_percentile",
         "ci_method": "percentile",
         "confidence_level": "0x1.e666666666666p-1",
-        "lower": "0x1.14c0943920175p-12",
-        "upper": "0x1.3eedc1c763495p-12",
+        "lower": "0x1.1395bde867ed2p-12",
+        "upper": "0x1.3e8e601c769e1p-12",
         "standard_error": "0x1.6f871395fedf9p-17",
-        "bootstrap_iters": 1000,
-        "contains_zero": false
+        "bootstrap_iters": 5000,
+        "contains_zero": false,
+        "tail_support": {
+         "minimum": 10,
+         "lower": 125,
+         "upper": 125
+        }
        },
-       "bootstrap_std": "0x1.5f9c2a49894c3p-17",
-       "p_value": "0x1.05e1d27a3ee9cp-9",
+       "bootstrap_std": "0x1.666ae2c95ed04p-17",
+       "p_value": "0x1.d7f41e8576b00p-9",
+       "p_value_metadata": {
+        "method": "bootstrap_ci_inversion",
+        "censored": true,
+        "lower_bound": "0x0.0p+0",
+        "upper_bound": "0x1.d7f41e8576b00p-9",
+        "supported_alpha_min": "0x1.d7f41e8576b00p-9",
+        "minimum_tail_draws": 10,
+        "tail_roundoff_rtol": "0x1.0000000000000p-49",
+        "rejection_rule": "p_value < alpha; p_value is a conservative upper bound when censored"
+       },
        "decision": {
         "verdict": "A closer",
         "statistically_distinguishable_from_null": true,
         "null_value": "0x0.0p+0",
         "confidence_level": "0x1.e666666666666p-1",
-        "equivalence_bound": "0x1.3eedc1c763495p-12",
+        "equivalence_bound": "0x1.3e8e601c769e1p-12",
         "equivalence_margin": null,
         "equivalence_established": null,
         "equivalence_alpha": null,
-        "reason": "95% CI [+0.000264, +0.000304] excludes 0"
+        "reason": "95% CI [+0.000263, +0.000304] excludes 0"
        },
-       "p_value_holm": "0x1.269e0cc986c70p-6",
+       "holm_family_size": 9,
+       "p_value_holm": "0x1.0979512b117f0p-5",
+       "p_value_holm_is_upper_bound": true,
        "holm_significant": true
       },
       {
@@ -18293,31 +18890,10 @@
        "baseline_mean": "0x1.3bd932e555555p-10",
        "candidate_mean": "0x1.922995bc71c71p-10",
        "delta_candidate_minus_baseline": "0x1.59418b5c71c71p-12",
-       "ci_delta": {
-        "method": "paired_item_weighted_bootstrap_percentile",
-        "ci_method": "percentile",
-        "confidence_level": "0x1.e666666666666p-1",
-        "lower": "0x1.53fdb00000000p-12",
-        "upper": "0x1.60edb88000000p-12",
-        "standard_error": "0x1.f6449e608391bp-19",
-        "bootstrap_iters": 1000,
-        "contains_zero": false
-       },
-       "bootstrap_std": "0x1.8cd680b1b81efp-19",
-       "p_value": "0x1.05e1d27a3ee9cp-9",
-       "decision": {
-        "verdict": "A closer",
-        "statistically_distinguishable_from_null": true,
-        "null_value": "0x0.0p+0",
-        "confidence_level": "0x1.e666666666666p-1",
-        "equivalence_bound": "0x1.60edb88000000p-12",
-        "equivalence_margin": null,
-        "equivalence_established": null,
-        "equivalence_alpha": null,
-        "reason": "95% CI [+0.000324, +0.000337] excludes 0"
-       },
-       "p_value_holm": "0x1.269e0cc986c70p-6",
-       "holm_significant": true
+       "inference_status": "unavailable",
+       "requested_ci_method": "percentile",
+       "skipped": "bootstrap CI has insufficient endpoint support: 0 and 0 draws strictly outside its endpoints; require 10 per tail. Increase --bootstrap-iters; tied or discrete samples may require a different method such as --ci-method t, with its assumptions assessed.",
+       "holm_family_size": 9
       }
      ],
      "ear": [
@@ -18336,26 +18912,43 @@
         "method": "paired_item_weighted_bootstrap_percentile",
         "ci_method": "percentile",
         "confidence_level": "0x1.e666666666666p-1",
-        "lower": "-0x1.074d61ff73d34p-7",
-        "upper": "-0x1.f9e194728f5c2p-8",
+        "lower": "-0x1.0733374123456p-7",
+        "upper": "-0x1.fa6a4703fb72dp-8",
         "standard_error": "0x1.533b5080030efp-14",
-        "bootstrap_iters": 1000,
-        "contains_zero": false
+        "bootstrap_iters": 5000,
+        "contains_zero": false,
+        "tail_support": {
+         "minimum": 10,
+         "lower": 125,
+         "upper": 125
+        }
        },
-       "bootstrap_std": "0x1.5522c3329ef59p-14",
-       "p_value": "0x1.05e1d27a3ee9cp-9",
+       "bootstrap_std": "0x1.4d47c79da57f9p-14",
+       "p_value": "0x1.d7f41e8576700p-9",
+       "p_value_metadata": {
+        "method": "bootstrap_ci_inversion",
+        "censored": true,
+        "lower_bound": "0x0.0p+0",
+        "upper_bound": "0x1.d7f41e8576700p-9",
+        "supported_alpha_min": "0x1.d7f41e8576700p-9",
+        "minimum_tail_draws": 10,
+        "tail_roundoff_rtol": "0x1.0000000000000p-49",
+        "rejection_rule": "p_value < alpha; p_value is a conservative upper bound when censored"
+       },
        "decision": {
         "verdict": "A closer",
         "statistically_distinguishable_from_null": true,
         "null_value": "0x0.0p+0",
         "confidence_level": "0x1.e666666666666p-1",
-        "equivalence_bound": "0x1.074d61ff73d34p-7",
+        "equivalence_bound": "0x1.0733374123456p-7",
         "equivalence_margin": null,
         "equivalence_established": null,
         "equivalence_alpha": null,
-        "reason": "95% CI [-0.008035, -0.007719] excludes 0"
+        "reason": "95% CI [-0.008032, -0.007727] excludes 0"
        },
-       "p_value_holm": "0x1.269e0cc986c70p-6",
+       "holm_family_size": 9,
+       "p_value_holm": "0x1.0979512b117f0p-5",
+       "p_value_holm_is_upper_bound": true,
        "holm_significant": true
       },
       {
@@ -18373,26 +18966,43 @@
         "method": "paired_item_weighted_bootstrap_percentile",
         "ci_method": "percentile",
         "confidence_level": "0x1.e666666666666p-1",
-        "lower": "-0x1.2804da708e95bp-7",
-        "upper": "-0x1.025ecae53144fp-7",
+        "lower": "-0x1.28d9d43f86157p-7",
+        "upper": "-0x1.0266530e6ac9ep-7",
         "standard_error": "0x1.5dcdff129e0adp-12",
-        "bootstrap_iters": 1000,
-        "contains_zero": false
+        "bootstrap_iters": 5000,
+        "contains_zero": false,
+        "tail_support": {
+         "minimum": 10,
+         "lower": 125,
+         "upper": 125
+        }
        },
-       "bootstrap_std": "0x1.4ae01c840c408p-12",
-       "p_value": "0x1.05e1d27a3ee9cp-9",
+       "bootstrap_std": "0x1.529d06a84ca0fp-12",
+       "p_value": "0x1.d7f41e8577200p-9",
+       "p_value_metadata": {
+        "method": "bootstrap_ci_inversion",
+        "censored": true,
+        "lower_bound": "0x0.0p+0",
+        "upper_bound": "0x1.d7f41e8577200p-9",
+        "supported_alpha_min": "0x1.d7f41e8577200p-9",
+        "minimum_tail_draws": 10,
+        "tail_roundoff_rtol": "0x1.0000000000000p-49",
+        "rejection_rule": "p_value < alpha; p_value is a conservative upper bound when censored"
+       },
        "decision": {
         "verdict": "A closer",
         "statistically_distinguishable_from_null": true,
         "null_value": "0x0.0p+0",
         "confidence_level": "0x1.e666666666666p-1",
-        "equivalence_bound": "0x1.2804da708e95bp-7",
+        "equivalence_bound": "0x1.28d9d43f86157p-7",
         "equivalence_margin": null,
         "equivalence_established": null,
         "equivalence_alpha": null,
-        "reason": "95% CI [-0.009034, -0.007885] excludes 0"
+        "reason": "95% CI [-0.009059, -0.007886] excludes 0"
        },
-       "p_value_holm": "0x1.269e0cc986c70p-6",
+       "holm_family_size": 9,
+       "p_value_holm": "0x1.0979512b117f0p-5",
+       "p_value_holm_is_upper_bound": true,
        "holm_significant": true
       },
       {
@@ -18406,31 +19016,10 @@
        "baseline_mean": "0x1.f9a9e3276f313p-1",
        "candidate_mean": "0x1.f589604ba2e8cp-1",
        "delta_candidate_minus_baseline": "-0x1.0820b6f3121abp-7",
-       "ci_delta": {
-        "method": "paired_item_weighted_bootstrap_percentile",
-        "ci_method": "percentile",
-        "confidence_level": "0x1.e666666666666p-1",
-        "lower": "-0x1.0923da2e8ba40p-7",
-        "upper": "-0x1.0631aaaaaaac0p-7",
-        "standard_error": "0x1.ef3ac5ceb4acfp-16",
-        "bootstrap_iters": 1000,
-        "contains_zero": false
-       },
-       "bootstrap_std": "0x1.9234b0a63f7e9p-16",
-       "p_value": "0x1.05e1d27a3ee9cp-9",
-       "decision": {
-        "verdict": "A closer",
-        "statistically_distinguishable_from_null": true,
-        "null_value": "0x0.0p+0",
-        "confidence_level": "0x1.e666666666666p-1",
-        "equivalence_bound": "0x1.0923da2e8ba40p-7",
-        "equivalence_margin": null,
-        "equivalence_established": null,
-        "equivalence_alpha": null,
-        "reason": "95% CI [-0.008091, -0.008002] excludes 0"
-       },
-       "p_value_holm": "0x1.269e0cc986c70p-6",
-       "holm_significant": true
+       "inference_status": "unavailable",
+       "requested_ci_method": "percentile",
+       "skipped": "bootstrap CI has insufficient endpoint support: 0 and 0 draws strictly outside its endpoints; require 10 per tail. Increase --bootstrap-iters; tied or discrete samples may require a different method such as --ci-method t, with its assumptions assessed.",
+       "holm_family_size": 9
       }
      ],
      "dp": [
@@ -18449,26 +19038,43 @@
         "method": "paired_item_weighted_bootstrap_percentile",
         "ci_method": "percentile",
         "confidence_level": "0x1.e666666666666p-1",
-        "lower": "-0x1.7347f602b3c14p-4",
-        "upper": "-0x1.2970e2dd8e266p-4",
+        "lower": "-0x1.73d737f67bccdp-4",
+        "upper": "-0x1.290c34fa40851p-4",
         "standard_error": "0x1.38835bdbe8dcdp-8",
-        "bootstrap_iters": 1000,
-        "contains_zero": false
+        "bootstrap_iters": 5000,
+        "contains_zero": false,
+        "tail_support": {
+         "minimum": 10,
+         "lower": 125,
+         "upper": 125
+        }
        },
-       "bootstrap_std": "0x1.32702120e2767p-8",
-       "p_value": "0x1.05e1d27a3ee9cp-9",
+       "bootstrap_std": "0x1.309b3a6616487p-8",
+       "p_value": "0x1.d7f41e8574e00p-9",
+       "p_value_metadata": {
+        "method": "bootstrap_ci_inversion",
+        "censored": true,
+        "lower_bound": "0x0.0p+0",
+        "upper_bound": "0x1.d7f41e8574e00p-9",
+        "supported_alpha_min": "0x1.d7f41e8574e00p-9",
+        "minimum_tail_draws": 10,
+        "tail_roundoff_rtol": "0x1.0000000000000p-49",
+        "rejection_rule": "p_value < alpha; p_value is a conservative upper bound when censored"
+       },
        "decision": {
         "verdict": "A closer",
         "statistically_distinguishable_from_null": true,
         "null_value": "0x0.0p+0",
         "confidence_level": "0x1.e666666666666p-1",
-        "equivalence_bound": "0x1.7347f602b3c14p-4",
+        "equivalence_bound": "0x1.73d737f67bccdp-4",
         "equivalence_margin": null,
         "equivalence_established": null,
         "equivalence_alpha": null,
-        "reason": "95% CI [-0.090645, -0.072617] excludes 0"
+        "reason": "95% CI [-0.090781, -0.072521] excludes 0"
        },
-       "p_value_holm": "0x1.269e0cc986c70p-6",
+       "holm_family_size": 9,
+       "p_value_holm": "0x1.0979512b117f0p-5",
+       "p_value_holm_is_upper_bound": true,
        "holm_significant": true
       },
       {
@@ -18486,26 +19092,43 @@
         "method": "paired_item_weighted_bootstrap_percentile",
         "ci_method": "percentile",
         "confidence_level": "0x1.e666666666666p-1",
-        "lower": "-0x1.7974bc05b719cp-4",
-        "upper": "-0x1.2d421e762aa0ap-4",
+        "lower": "-0x1.77fa96a2dce29p-4",
+        "upper": "-0x1.2b7346e9a98a5p-4",
         "standard_error": "0x1.477a5f895ef7dp-8",
-        "bootstrap_iters": 1000,
-        "contains_zero": false
+        "bootstrap_iters": 5000,
+        "contains_zero": false,
+        "tail_support": {
+         "minimum": 10,
+         "lower": 125,
+         "upper": 125
+        }
        },
-       "bootstrap_std": "0x1.3cbd9ed3d0b7dp-8",
-       "p_value": "0x1.05e1d27a3ee9cp-9",
+       "bootstrap_std": "0x1.3ab3cb2cc2ca4p-8",
+       "p_value": "0x1.d7f41e8574700p-9",
+       "p_value_metadata": {
+        "method": "bootstrap_ci_inversion",
+        "censored": true,
+        "lower_bound": "0x0.0p+0",
+        "upper_bound": "0x1.d7f41e8574700p-9",
+        "supported_alpha_min": "0x1.d7f41e8574700p-9",
+        "minimum_tail_draws": 10,
+        "tail_roundoff_rtol": "0x1.0000000000000p-49",
+        "rejection_rule": "p_value < alpha; p_value is a conservative upper bound when censored"
+       },
        "decision": {
         "verdict": "A closer",
         "statistically_distinguishable_from_null": true,
         "null_value": "0x0.0p+0",
         "confidence_level": "0x1.e666666666666p-1",
-        "equivalence_bound": "0x1.7974bc05b719cp-4",
+        "equivalence_bound": "0x1.77fa96a2dce29p-4",
         "equivalence_margin": null,
         "equivalence_established": null,
         "equivalence_alpha": null,
-        "reason": "95% CI [-0.092152, -0.073549] excludes 0"
+        "reason": "95% CI [-0.091792, -0.073108] excludes 0"
        },
-       "p_value_holm": "0x1.269e0cc986c70p-6",
+       "holm_family_size": 9,
+       "p_value_holm": "0x1.0979512b117f0p-5",
+       "p_value_holm_is_upper_bound": true,
        "holm_significant": true
       },
       {
@@ -18519,31 +19142,10 @@
        "baseline_mean": "-0x1.886a752cc4868p-4",
        "candidate_mean": "-0x1.45c11a66f3121p-3",
        "delta_candidate_minus_baseline": "-0x1.0317bfa1219dcp-4",
-       "ci_delta": {
-        "method": "paired_item_weighted_bootstrap_percentile",
-        "ci_method": "percentile",
-        "confidence_level": "0x1.e666666666666p-1",
-        "lower": "-0x1.484e660000000p-4",
-        "upper": "-0x1.96758911745d0p-5",
-        "standard_error": "0x1.25bf39869243dp-7",
-        "bootstrap_iters": 1000,
-        "contains_zero": false
-       },
-       "bootstrap_std": "0x1.d1aa678491576p-8",
-       "p_value": "0x1.05e1d27a3ee9cp-9",
-       "decision": {
-        "verdict": "A closer",
-        "statistically_distinguishable_from_null": true,
-        "null_value": "0x0.0p+0",
-        "confidence_level": "0x1.e666666666666p-1",
-        "equivalence_bound": "0x1.484e660000000p-4",
-        "equivalence_margin": null,
-        "equivalence_established": null,
-        "equivalence_alpha": null,
-        "reason": "95% CI [-0.080153, -0.049617] excludes 0"
-       },
-       "p_value_holm": "0x1.269e0cc986c70p-6",
-       "holm_significant": true
+       "inference_status": "unavailable",
+       "requested_ci_method": "percentile",
+       "skipped": "bootstrap CI has insufficient endpoint support: 0 and 0 draws strictly outside its endpoints; require 10 per tail. Increase --bootstrap-iters; tied or discrete samples may require a different method such as --ci-method t, with its assumptions assessed.",
+       "holm_family_size": 9
       }
      ]
     }

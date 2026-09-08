@@ -11,7 +11,8 @@ import math
 # format" line is kind-aware now, but that is renderer-only). Numeric metric
 # blocks are unchanged from v1.
 # v4: token-weighted blocks are descriptive; no inference fields or weighting consensus.
-SCHEMA_VERSION = "vlm-paired-compare-v4"
+# v5: bootstrap CI inversion bounds and explicit unavailable exploratory cells.
+SCHEMA_VERSION = "vlm-paired-compare-v5"
 
 DEFAULT_METRICS = ("nll", "kld", "reversed_kld", "js_kld", "ear",
                    "ear_20", "ear_10", "ear_5",
@@ -84,37 +85,23 @@ TOKEN_ANNOTATION_COLUMNS = ("target",)
 CI_METHODS = ("t", "studentized", "bca", "percentile")
 DEFAULT_CI_METHOD = "t"
 BOOTSTRAP_CI_METHODS = tuple(m for m in CI_METHODS if m != "t")
+BOOTSTRAP_MIN_TAIL_DRAWS = 10
 
 
 def min_bootstrap_iters(confidence_level: float,
                         ci_method: str = DEFAULT_CI_METHOD) -> int:
-    """Smallest --bootstrap-iters that can carry a CI at this level; 0 for
-    the t interval, which draws no replicates at all.
+    """Nominal resample prefilter; actual CI tails are checked after resampling.
 
-    The percentile endpoints are the empirical alpha/2 and 1-alpha/2
-    quantiles of the replicate sample, so they are only meaningful when a
-    decent number of replicates fall strictly BEYOND each endpoint. We
-    require at least 10 (hence ceil(10 / (alpha/2))) and never fewer than
-    200 replicates overall. Below that the "interval" degenerates towards
-    the min/max of the replicates: at --bootstrap-iters 1 lower == upper,
-    which excludes 0 for every metric and prints a significant verdict for
-    all of them.
-
-    The two corrected methods double the floor. BCa's bias/skew correction
-    routinely pushes the requested levels FURTHER into the tails than
-    alpha/2 (a typical right-skewed per-item delta at n=25 lands near
-    0.06 / 0.994); the studentized interval reads the same alpha/2 levels
-    but of a t* distribution with much heavier tails, so those quantiles
-    are noisier. Both want more replicates out there than percentile does.
-
-    At the 0.95 default this is 400 (percentile) / 800 (bca, studentized);
-    at 0.99, 2000 / 4000. It is a floor, not a recommendation -- 2000+ is
-    the usual working number and the CLI warns below it.
+    Require ten nominal tail draws, at least 200 overall, and twice that floor for BCa/bootstrap-t. Corrected or tied endpoints may still have fewer than ten strict-outside draws and fail the later support check. Neither this floor nor a larger sample guarantees population coverage.
     """
+    if ci_method not in CI_METHODS:
+        raise ValueError(f"ci_method must be one of {CI_METHODS}")
+    if not 0.0 < confidence_level < 1.0:
+        raise ValueError("confidence_level must be in (0, 1)")
     if ci_method == "t":
         return 0
     alpha = 1.0 - confidence_level
-    floor = max(200, math.ceil(10.0 / (alpha / 2.0)))
+    floor = max(200, math.ceil(BOOTSTRAP_MIN_TAIL_DRAWS / (alpha / 2.0)))
     return floor * 2 if ci_method in ("bca", "studentized") else floor
 
 
@@ -139,3 +126,7 @@ class MissingMetricError(ValueError):
 
 
 # --------------------------------------------------------------------------- #
+
+
+class InferenceUnavailableError(ValueError):
+    """Valid data cannot support the requested bootstrap interval."""
