@@ -34,7 +34,9 @@ Reports keep empirical power separate from Gaussian directional nuisance sensiti
 
 Supported metrics are `kld`, `reversed_kld`, `js_kld` and `nll`. This tool writes its human-readable report to stdout; it has no `--out` option. It needs at least three paired items and two scored positions per item.
 
-Use the observed effect, variance and prefix curves to understand the pilot. The between/within-item decomposition is approximate and does not assume that longer continuations are stationary or independent. An observed-effect sample-size calculation is a diagnostic, not prospective power. A flat curve can also reflect early EOS; it is not proof that per-token information has saturated. See [nonstationary variance](../knowledge/variance-estimation-nonstationarity-theory.md).
+Use the observed effect, variance and prefix curves to understand the pilot. The empirical curve does not assume a 1/K variance law. The separate proxy `mean(s_i^2/T_i)` requires independent token residuals with a common conditional mean to represent a variance component; position profiles and token covariance invalidate that interpretation. The report preserves the raw residual `Var(d_i) - proxy`, including negative values, and suppresses the infinite-length floor and cost-based K* when that residual is nonpositive. Positive residuals and a fitted cost model do not validate the assumptions. Cost fits with nonfinite inputs, unidentified coefficients or negative costs are rejected.
+
+The SNR interval inverts the noncentral-t distribution for IID normal item deltas. N_obs searches the exact two-sided normal-model t power using the observed standardized effect; it is a diagnostic, not prospective power. Counts beyond exactly representable float64 integers (`2**53`) and unresolved numerical results are unavailable. Zero observed variance does not establish a finite required size. The calculation uses [SciPy's noncentral-t distribution](https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.nct.html) and [Brent root finding](https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.brentq.html). A flat empirical curve can also reflect early EOS; it is not proof that per-token information has saturated. See [nonstationary variance](../knowledge/variance-estimation-nonstationarity-theory.md).
 
 ## Stability within the finite pilot
 
@@ -45,7 +47,9 @@ Use the observed effect, variance and prefix curves to understand the pilot. The
   --out "$REPORTS/stability.md" --output-json "$REPORTS/stability.json"
 ```
 
-Use sizes that fit the actual aligned pilot. The default samples without replacement and measures agreement with the full pilot's verdict. It uses all saved positions, mutually available base metrics and Student-t inference. It has no token-cap, metric-selection or alternative CI-method option. The legacy `--mode power` is conditional replication using the observed pilot effect; use `power_analysis.py --sesoi` for prospective planning. The retained `--bootstrap-iters` compatibility option does not change Student-t inference.
+Use sizes that fit the actual aligned pilot. The default samples without replacement and measures agreement with each full-pilot nominal, unadjusted per-metric CI verdict. Exploratory Holm-controlled decisions are not counted. It uses all saved positions, mutually available base metrics and Student-t inference. It has no token-cap, metric-selection or alternative CI-method option. The legacy `--mode power` samples with replacement for conditional agreement using the observed pilot effect; use `power_analysis.py --sesoi` for prospective planning. The retained `--bootstrap-iters` compatibility option does not change Student-t inference.
+
+The first evaluated size whose Wilson lower bound clears the target is a pointwise Monte Carlo diagnostic. It is not a minimum required sample size: searching many metrics or sizes can select a false crossing, and later sizes can fall below the target. `--mc-confidence-level` controls the pointwise Wilson interval separately from the paired-test `--confidence-level`. JSON records both levels, the target and the inference scope. These intervals condition on the fixed pilot and omit uncertainty from sampling that pilot.
 
 ## Plan with the correct sampling unit
 

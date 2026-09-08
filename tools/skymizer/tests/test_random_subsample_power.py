@@ -7,8 +7,8 @@ biases compound there: a size-N draw's mean carries variance
 sigma^2/N with no finite-population correction (so N == N_pop reproduces the
 verdict by construction), and the target verdict is an observed one, so a
 significant population conditions the curve on an inflated effect. These
-tests pin the separation of the two modes and the conservative first
-crossing.
+tests pin the separation of the two modes and the pointwise first-crossing
+semantics.
 """
 
 import json
@@ -69,6 +69,48 @@ def test_wilson_lower_gates_the_first_crossing():
     assert rsp.wilson_lower(90, 100) >= 0.80
 
 
+def test_first_crossing_is_labeled_pointwise_and_can_reverse():
+    from scipy.stats import binom
+
+    args = rsp.parse_args(['--candidate-a','A','--candidate-b','B','--mode','power','--out','unused.md'])
+    key = ('kld','item_weighted')
+    truth = {key:'A closer'}
+    counts = {key:{10:{'A closer':90,'inconclusive':10},20:{'A closer':40,'inconclusive':60}}}
+    effect = dict(metric='kld',weighting='item',estimate=.1,ci_lower=.01,ci_upper=.19,verdict='A closer')
+    report, crossing = rsp._render_report(args,30,[10,20],truth,counts,effect)
+    # Pointwise Wilson can cross on an unlucky binomial draw below the target.
+    threshold = next(k for k in range(101) if rsp.wilson_lower(k,100) >= .8)
+    assert binom.sf(threshold-1,100,.799) > .02
+    assert crossing[key] == 10
+    assert 'no simultaneous coverage' in report
+    assert 'later evaluated sizes can fall below' in report
+    assert 'lucky first crossing cannot' not in report
+
+
+@pytest.mark.parametrize('option,value', [('--reps','0'),('--reps','-1'),('--seed','-1'),
+    ('--power-target','nan'),('--power-target','0'),('--power-target','1'),
+    ('--confidence-level','inf'),('--mc-confidence-level','nan'),
+    ('--mc-confidence-level',str(np.nextafter(1.,0.)))])
+def test_invalid_numeric_options_fail_before_loading(tmp_path, monkeypatch, option, value):
+    def forbidden(*args):
+        raise AssertionError('invalid options must not read collections')
+    monkeypatch.setattr(rsp,'load_population',forbidden)
+    with pytest.raises(SystemExit, match='must be'):
+        rsp.main(['--candidate-a','A','--candidate-b','B','--out',str(tmp_path/'out.md'),option,value])
+
+
+def test_nonfinite_mc_interval_cannot_silently_become_no_crossing(monkeypatch):
+    monkeypatch.setattr(rsp,'wilson_interval',lambda *args:(float('nan'),float('nan')))
+    with pytest.raises(ValueError, match='not numerically representable'):
+        rsp.wilson_lower(8,10)
+
+
+def test_empty_eligible_size_grid_is_rejected(tmp_path, monkeypatch):
+    monkeypatch.setattr(rsp,'load_population',lambda *args:_population(n=3))
+    with pytest.raises(SystemExit, match='no eligible sample sizes'):
+        rsp.main(['--candidate-a','A','--candidate-b','B','--sizes','100','--out',str(tmp_path/'out.md')])
+
+
 # --------------------------------------------------------------------------- #
 # modes
 # --------------------------------------------------------------------------- #
@@ -101,12 +143,31 @@ def test_power_mode_resamples_with_replacement_and_may_exceed_the_pool(
     assert payload["power_scope"] == "conditional_on_observed_pilot_effect"
     assert payload["ci_method"] == "t"
     assert payload["bootstrap_iters_used"] == 0
+    assert payload['verdict_scope'] == 'nominal_unadjusted_per_metric_ci_agreement'
+    assert payload['mc_interval_method'] == 'wilson'
+    assert payload['mc_confidence_level'] == .95
+    assert payload['mc_interval_scope'] == 'pointwise_conditional_on_fixed_pilot'
+    assert payload['power_target'] == .8
     assert payload["sizes"] == [20, 60]        # 60 > the 30-item pool
     assert all(key.endswith("/item_weighted") for key in payload["full_population_verdicts"])
     report = out.read_text()
     assert "WITH replacement" in report
     assert "paired Student-t" in report
     assert "paired bootstrap" not in report
+    assert 'unadjusted per-metric CI verdict agreement' in report
+
+
+def test_exploratory_nominal_target_does_not_pretend_to_apply_holm():
+    import math
+    residual = np.arange(10)-4.5
+    shift = 2.3*residual.std(ddof=1)/math.sqrt(10)
+    a = [{m:10. for m in DEFAULT_METRICS} for _ in residual]
+    b = [{m:10.+(0 if m=='kld' else .1*shift)+.1*x for m in DEFAULT_METRICS} for x in residual]
+    result = rsp.compare_items(a,b,[3]*10,metrics=DEFAULT_METRICS,confidence_level=.95,
+                               bootstrap_iters=0,seed=1,model_a_label='A',model_b_label='B')
+    block = result['metrics']['nll']['item_weighted']
+    assert block['p_value'] < .05 < block['p_value_holm']
+    assert rsp.verdicts_of(result)[('nll','item_weighted')] == 'A closer'
 
 
 @pytest.mark.statistical

@@ -8,6 +8,7 @@ Use power_analysis.py with an external SESOI for prospective collection planning
 
 import argparse
 import json
+import math
 import sys
 from pathlib import Path
 
@@ -40,6 +41,8 @@ def parse_args(argv=None):
     p.add_argument("--bootstrap-iters", type=int, default=2000,
                    help="legacy option; ignored by the paired Student-t test")
     p.add_argument("--confidence-level", type=float, default=0.95)
+    p.add_argument("--mc-confidence-level", type=float, default=0.95,
+                   help="pointwise Monte Carlo Wilson interval confidence (default: 0.95)")
     p.add_argument("--seed", type=int, default=7,
                    help="master seed for item resampling; the Student-t test is deterministic")
     p.add_argument("--mode", choices=("reproducibility", "power"),
@@ -51,7 +54,7 @@ def parse_args(argv=None):
                         "replacement conditional on the observed pilot effect. "
                         "Use power_analysis.py --sesoi for prospective planning.")
     p.add_argument("--power-target", type=float, default=0.80,
-                   help="target rate for the 'smallest N' line (default 0.80)")
+                   help="target agreement rate for the first evaluated crossing (default 0.80)")
     p.add_argument("--out", required=True, type=Path)
     p.add_argument("--output-json", type=Path, default=None)
     return p.parse_args(argv)
@@ -92,11 +95,14 @@ def wilson_lower(hits: int, n: int, confidence_level: float = 0.95) -> float:
     """
     if n == 0 and hits == 0:
         return 0.0
-    return wilson_interval(hits, n, confidence_level)[0]
+    lower, upper = wilson_interval(hits, n, confidence_level)
+    if not (math.isfinite(lower) and math.isfinite(upper) and 0.0 <= lower <= upper <= 1.0):
+        raise ValueError("Wilson interval is not numerically representable")
+    return lower
 
 
 def verdicts_of(result):
-    """{(metric, weighting): verdict} for the base (non-derived) metrics."""
+    """Nominal unadjusted per-metric CI verdicts; exploratory Holm is not applied."""
     out = {}
     for met, m in result["metrics"].items():
         if met not in DEFAULT_METRICS:
@@ -122,9 +128,9 @@ def _count_resampled_verdicts(args, scores_a, scores_b, weights, sizes, truth, b
                 [weights[i] for i in idx],
                 metrics=base_metrics,
                 confidence_level=args.confidence_level,
-                bootstrap_iters=args.bootstrap_iters,
+                bootstrap_iters=0,
                 seed=int(rng.integers(0, 2**31 - 1)),
-                model_a_label="A", model_b_label="B")
+                model_a_label="A", model_b_label="B", ci_method="t")
             for k, v in verdicts_of(res).items():
                 counts[k][n][v] = counts[k][n].get(v, 0) + 1
         print(f"size {n}: {args.reps} reps done", file=sys.stderr)
@@ -139,7 +145,7 @@ def _render_report(args, pop, sizes, truth, counts, effect):
         return hits(k, n) / args.reps
 
     is_power = args.mode == "power"
-    title = ("Random-resample power curve" if is_power
+    title = ("Random-resample conditional verdict agreement curve" if is_power
              else "Random-subsample verdict REPRODUCIBILITY curve")
     lines = []
     lines.append(f"# {title}\n")
@@ -153,6 +159,8 @@ def _render_report(args, pop, sizes, truth, counts, effect):
                  "(--bootstrap-iters and per-draw seeds are ignored by this "
                  "CI method)")
     lines.append(f"- master seed: {args.seed}")
+    lines.append("- Scope: nominal unadjusted per-metric CI verdict agreement; exploratory Holm decisions are not counted.")
+    lines.append(f"- Monte Carlo intervals: pointwise {args.mc_confidence_level:.0%} Wilson; no simultaneous coverage across metrics or sizes.")
     lines.append("")
     if is_power:
         lines.append(
@@ -190,7 +198,7 @@ def _render_report(args, pop, sizes, truth, counts, effect):
     lines.append("")
     lines.append("Each cell: % of draws reproducing the full-population "
                  "verdict (shown per row). Rows whose population verdict is "
-                 "`inconclusive` or `EQUIVALENT` are agreement with the NULL, "
+                 "`inconclusive` or `EQUIVALENT` count agreement with that verdict, "
                  "never a detection rate.")
     lines.append("")
     header = ("| metric | weighting | full-pop verdict | "
@@ -203,24 +211,23 @@ def _render_report(args, pop, sizes, truth, counts, effect):
         cells = []
         for n in sizes:
             cells.append(f"{100 * rate(k, n):.0f}%")
-            # CONSERVATIVE first crossing: the Wilson lower bound, not the
-            # point estimate, must clear the target.
+            # This is a pointwise bound, not a simultaneous search guarantee.
             if (truth[k] not in _NULL_VERDICTS and k not in min_n
-                    and wilson_lower(hits(k, n), args.reps) >= args.power_target):
+                    and wilson_lower(hits(k, n), args.reps, args.mc_confidence_level) >= args.power_target):
                 min_n[k] = n
         lines.append(f"| {met} | {wt.split('_')[0]} | {truth[k]} | "
                      + " | ".join(cells) + " |")
     lines.append("")
     if is_power:
-        lines.append(f"## Smallest N with estimated power >= "
+        lines.append(f"## First evaluated N with conditional verdict agreement >= "
                      f"{args.power_target:.0%}\n")
         lines.append("A size counts only when the LOWER end of the Wilson "
-                     f"interval on {args.reps} draws clears the target, so a "
-                     "lucky first crossing cannot report an N that is too "
-                     "small. These are still estimates for the OBSERVED "
-                     "effect - see the note above.\n")
+                     f"pointwise interval on {args.reps} draws clears the target. "
+                     "Searching many sizes can still select a false crossing, "
+                     "and later evaluated sizes can fall below the target. "
+                     "This is not a required sample size or a simultaneous guarantee.\n")
     else:
-        lines.append("## Smallest N reproducing the full-population verdict "
+        lines.append("## First evaluated N reproducing the full-population verdict "
                      f">= {args.power_target:.0%}\n")
         lines.append("> [!CAUTION]\n"
                      "> **This is not a required sample size.** It is the "
@@ -242,6 +249,16 @@ def _render_report(args, pop, sizes, truth, counts, effect):
 
 def main(argv=None) -> int:
     args = parse_args(argv)
+    if args.reps < 1:
+        sys.exit("--reps must be >= 1")
+    if args.seed < 0:
+        sys.exit("--seed must be >= 0")
+    for name in ("confidence_level", "mc_confidence_level", "power_target"):
+        value = getattr(args, name)
+        if not math.isfinite(value) or not 0.0 < value < 1.0:
+            sys.exit(f"--{name.replace('_', '-')} must be finite and in (0, 1)")
+    if 1.0 - (1.0 - args.mc_confidence_level)/2.0 == 1.0:
+        sys.exit("--mc-confidence-level must be representable by SciPy's Wilson interval")
     if args.mode == "power":
         print(
             "WARNING: --mode power is a legacy conditional-replication "
@@ -265,6 +282,8 @@ def main(argv=None) -> int:
         limit = "N >= 2" if args.mode == "power" else f"2 <= N <= {pop}"
         print(f"WARNING: skipping sizes {skipped} (population is {pop}, "
               f"need {limit})", file=sys.stderr)
+    if not sizes:
+        sys.exit("no eligible sample sizes remain after applying the population limits")
 
     # Restrict to the metrics every item actually carries: v1 metric dumps
     # predate the `ear` column, and this sweep's verdict counting only needs
@@ -284,8 +303,8 @@ def main(argv=None) -> int:
     full = compare_items(
         scores_a, scores_b, weights, metrics=base_metrics,
         confidence_level=args.confidence_level,
-        bootstrap_iters=max(args.bootstrap_iters, 5000), seed=args.seed,
-        model_a_label="A", model_b_label="B")
+        bootstrap_iters=0, seed=args.seed,
+        model_a_label="A", model_b_label="B", ci_method="t")
     truth = verdicts_of(full)
 
     # The effect the power curve conditions on, with its own uncertainty:
@@ -320,6 +339,12 @@ def main(argv=None) -> int:
                 "conditional_on_observed_pilot_effect"
                 if is_power else "finite_pilot_verdict_reproducibility"
             ),
+            "verdict_scope": "nominal_unadjusted_per_metric_ci_agreement",
+            "mc_interval_method": "wilson",
+            "mc_confidence_level": args.mc_confidence_level,
+            "mc_interval_scope": "pointwise_conditional_on_fixed_pilot",
+            "crossing_scope": "first_evaluated_size_pointwise_bound_no_simultaneous_or_monotonic_guarantee",
+            "power_target": args.power_target,
             "ci_method": "t",
             "bootstrap_iters_used": 0,
             "population": pop,
@@ -337,7 +362,7 @@ def main(argv=None) -> int:
                 {f"{m}/{w}": {str(n): c for n, c in per_n.items()}
                  for (m, w), per_n in counts.items()},
         }
-        args.output_json.write_text(json.dumps(payload, indent=2) + "\n",
+        args.output_json.write_text(json.dumps(payload, indent=2, allow_nan=False) + "\n",
                                     encoding="utf-8")
         print(f"wrote json -> {args.output_json}", file=sys.stderr)
     return 0
