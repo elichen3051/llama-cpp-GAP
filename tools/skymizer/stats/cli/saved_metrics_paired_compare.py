@@ -38,6 +38,10 @@ def parse_args(argv=None):
                    help="completed metric collection for the ref-vs-A run")
     p.add_argument("--candidate-b", required=True, type=Path,
                    help="completed metric collection for the ref-vs-B run (same reference)")
+    p.add_argument("--pilot-candidate-a", type=Path,
+                   help="optional completed pilot100 A collection; candidate-a then supplies tail400")
+    p.add_argument("--pilot-candidate-b", type=Path,
+                   help="matching pilot100 B collection; requires an explicit common token prefix")
     add_shared_paired_args(
         p,
         num_eval_tokens_help=(
@@ -127,8 +131,18 @@ def main(argv=None) -> int:
     validate_shared_paired_args(args)
     if args.block_windows < 1:
         sys.exit("--block-windows must be >= 1")
+    if bool(args.pilot_candidate_a) != bool(args.pilot_candidate_b):
+        sys.exit("both --pilot-candidate-a and --pilot-candidate-b are required together")
+    roots = [args.candidate_a, args.candidate_b]
+    if args.pilot_candidate_a:
+        roots += [args.pilot_candidate_a, args.pilot_candidate_b]
+        if len({p.resolve() for p in roots}) != 4:
+            sys.exit("pilot/tail requires four distinct collection directories")
+        for output in (args.out, args.output_json):
+            if output and any(Path(output).resolve().is_relative_to(root.resolve()) for root in roots):
+                sys.exit("pilot/tail report outputs must be outside all source collection directories")
     try:
-        with comparison_locks((args.candidate_a, args.candidate_b)):
+        with comparison_locks(roots):
             return _main_locked(args, argv_for_metadata)
     except ValueError as error:
         sys.exit(str(error))
@@ -144,28 +158,38 @@ def _main_locked(args, argv_for_metadata):
             sys.exit(f"{flag}: {d} has no metrics/ subdir — not a "
                      "collect_kld.py output dir?")
 
-    try:
-        a_meta, b_meta, warnings, common_budget_skips = validate_collection_pair(args.candidate_a, args.candidate_b)
-    except (AlignmentError, ValueError) as error:
-        sys.exit(str(error))
-
     metrics = resolve_metrics(args)
+    parts = None
+    if args.pilot_candidate_a:
+        from stats.collection_parts import compose_pilot_tail
+        records, parts, warnings = compose_pilot_tail(args)
+        a_meta, b_meta = parts[1]["candidate_a_meta"], parts[1]["candidate_b_meta"]
+        matched = [record[0] for record in records]
+        drops = {"candidate-a": [], "candidate-b": []}
+        common_budget_skips = [f"{part['part']}:{idx}" for part in parts
+                               for idx in part["common_skipped_over_budget"]]
+    else:
+        try:
+            a_meta, b_meta, warnings, common_budget_skips = validate_collection_pair(args.candidate_a, args.candidate_b)
+        except (AlignmentError, ValueError) as error:
+            sys.exit(str(error))
 
-    matched, drops = aligned_metric_items(args.candidate_a, args.candidate_b, allow_interaction=args.allow_interaction)
-    if not matched:
-        def _describe(d):
-            n_npz = len(list((Path(d) / "metrics").glob("*.npz")))
-            n_bin = len(list((Path(d) / "metrics").glob("*.bin")))
-            extra = (f" (+{n_bin} unconverted .bin — an interrupted/incomplete "
-                     "collection; re-collect those rows into a fresh --out)") if n_bin else ""
-            return f"{d}: {n_npz} .npz{extra}"
-        sys.exit("no items present in both metrics dirs:\n"
-                 f"  {_describe(args.candidate_a)}\n"
-                 f"  {_describe(args.candidate_b)}")
-    end, end_warning = resolve_item_end(args.end, len(matched))
-    if end_warning:
-        print(end_warning, file=sys.stderr)
-    matched = matched[args.start:end]
+        matched, drops = aligned_metric_items(args.candidate_a, args.candidate_b, allow_interaction=args.allow_interaction)
+        if not matched:
+            def _describe(d):
+                n_npz = len(list((Path(d) / "metrics").glob("*.npz")))
+                n_bin = len(list((Path(d) / "metrics").glob("*.bin")))
+                extra = (f" (+{n_bin} unconverted .bin — an interrupted/incomplete "
+                         "collection; re-collect those rows into a fresh --out)") if n_bin else ""
+                return f"{d}: {n_npz} .npz{extra}"
+            sys.exit("no items present in both metrics dirs:\n"
+                     f"  {_describe(args.candidate_a)}\n"
+                     f"  {_describe(args.candidate_b)}")
+        end, end_warning = resolve_item_end(args.end, len(matched))
+        if end_warning:
+            print(end_warning, file=sys.stderr)
+        matched = matched[args.start:end]
+        records = [(key, key, args.candidate_a, args.candidate_b, None) for key in matched]
 
     corpus_protocol, corpus_windows, groups = None, None, None
     if a_meta.get("perplexity_window"):
@@ -208,9 +232,12 @@ def _main_locked(args, argv_for_metadata):
         weights.append(keep)
         used.append(key)
 
-    for key in matched:
+    for key, local_key, a_root, b_root, expected_header in records:
         try:
-            ma, ha, mb, hb = load_item_pair(key, args.candidate_a, args.candidate_b)
+            ma, ha, mb, hb = load_item_pair(local_key, a_root, b_root)
+            if expected_header is not None and any(ha[field] != value or hb[field] != value
+                                                   for field, value in expected_header.items()):
+                raise AlignmentError(f"{key}: stored header differs from native vocabulary/length and scoring cap")
             sa, sb, tok_a, tok_b, keep, finite, drift, versions = score_records(
                 key, ma, ha, mb, hb, args.num_eval_tokens)
         except AlignmentError as e:
@@ -323,6 +350,10 @@ def _main_locked(args, argv_for_metadata):
         "split":   ref_meta.get("split") if ref_meta else None,
         "sort_by": ref_meta.get("sort_by") if ref_meta else None,
     }
+    if parts is not None:
+        result["inputs"].update(dataset="pilot100+tail400", subset=None, sort_by=None,
+                                parts=parts, comparison_token_prefix=args.num_eval_tokens)
+        warnings.append("pilot100 + tail400: inference assumes independent items and is conditional on both native eligible cohorts; generation caps and repetition exclusions may differ; source ID disjointness alone does not establish image independence")
     result["execution"] = build_execution_metadata(
         args, argv_for_metadata, device="cpu", jobs=1,
         omit_host_metadata=args.omit_host_metadata)
