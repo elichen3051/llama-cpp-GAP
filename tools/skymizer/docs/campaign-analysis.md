@@ -48,6 +48,21 @@ Collection paths are relative to the plan file. `item_key` identifies the stored
 
 An optional `analysis_item_ids` list selects a fixed, declared cohort from the complete roster. `fixed_analysis_n` must equal its length. For example, a 40-ID list can analyze a frozen subset of an existing 500-item collection. The code cannot establish that this list, correction method or sample size was chosen before looking at outcomes. A plan hash records integrity, not temporal preregistration. Repeated outcome-dependent looks at 20/30/40 items require a sequential procedure or a separately justified error budget, which this fixed-N tool does not provide.
 
+## Verified reference rosters
+
+Use the producer's local native `Dataset.save_to_disk` directory to avoid manually assigning 500 artifact keys and image clusters. The first command works while KLD collection is still running; it exports an unbound identity audit without artifact keys. The second requires completed successful collection records and emits `cell_fields` containing the verified `roster`, `dataset_content_hash` and reference `mode` for a campaign cell.
+
+```sh
+uv run --python 3.12 python stats/cli/reference_roster.py --reference /study/reference/dataset --out identities.json
+uv run --python 3.12 python stats/cli/reference_roster.py --reference /study/reference/dataset --collection /study/collections/q3 --out bound-roster.json
+```
+
+The output must be a new file. `--split` selects a saved DatasetDict split. This command reads local native v2 references; it does not download Hub datasets. `--source-field` defaults to the native `source` quota stratum. The tool validates the native row contract, binds the mode to request/default fields covered by the dataset hash, and recomputes SHA256 from each encoded image, then uses SciPy connected components for transitive multi-image links. Repeated image slots within one item do not create extra samples. Image-free rows remain separate components. Counts and cluster membership are included in the audit.
+
+Binding reproduces the collector's recorded sort, compares the full ordered dataset hash, acquires a reader lock, and joins completed manifest rows by both index and stable ID. Partial collections require `--expected-item-ids expected.json`, a JSON list declaring their exact expected cohort. The full reference must still be supplied for its content hash. Missing, failed, skipped or actively collected rows cannot silently reduce that cohort. Copy `cell_fields` into the intended campaign cell, retain the audit, and declare the analysis IDs, fixed sample size, quantization variants and model-family labels separately. The campaign loader still verifies metric contents and all candidate alignments.
+
+Encoded-byte matching does not detect recompressed, cropped or related source images. Additional known dependencies require broader cluster declarations. Cluster IDs are stable across row permutations of the same full pool, but component membership can change when the pool changes; do not treat the nested 100 and 500 pools as separate independent cohorts. The current training selector requires one item per cluster and rejects repeated-image pools; whole-cluster selection with exact size and source quotas requires a separate algorithm.
+
 ## Inference and interpretation
 
 The estimand is the equal-item mean of `KLD_B - KLD_A`. Token-weighted inference is rejected. Items sharing an image or other dependent source belong to the same cluster. For multi-image items, use connected components of shared image hashes. The validator rejects splitting a declared shared image across clusters. Hashes and cluster assignments in the plan remain user declarations; stored metric alignment alone cannot establish image independence. Absence of exact image duplicates also does not establish independent source content.

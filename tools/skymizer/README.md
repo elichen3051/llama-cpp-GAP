@@ -158,6 +158,7 @@ The default primary endpoint is item-weighted forward KLD with a paired Student-
 | `saved_metrics_paired_compare.py` | Paired differences, intervals, equivalence decisions and exploratory tails | `--metrics`, `--weighting`, `--ci-method`, `--equivalence-margin`, `--num-eval-tokens` |
 | Same comparison tool | Text-window, article or contiguous-block aggregation | `--unit window`, `--unit article`, `--unit block --block-windows 8` |
 | `campaign_compare.py` | Global quant-pair correction, cluster inference and training-only benchmark selection | `analyze` / `select`, `--manifest`, `--out`; [campaign design](docs/campaign-analysis.md) |
+| `reference_roster.py` | Verify native reference images and bind campaign roster fields to completed collection rows | `--reference`, `--collection`, `--out`; [roster preparation](docs/campaign-analysis.md#verified-reference-rosters) |
 | `power_analysis.py` | Prospective sample-size/token-cap planning; plug-in precision and Gaussian directional MDE without an assumed effect | `--token-caps`, `--sample-sizes`, `--sesoi`, `--reps`, `--outer-reps` |
 | `variance_decomposition.py` | Observed prefix length, effect and variance diagnostics | `--metric kld`, `--num-eval-tokens`, `--output-json` |
 | `random_subsample_power.py` | Verdict stability within an already observed finite pilot | `--mode reproducibility`, `--sizes`, `--reps` |

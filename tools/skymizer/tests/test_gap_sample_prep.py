@@ -1174,3 +1174,210 @@ def test_upload_cli_defaults_to_private(upload_run, monkeypatch, flags):
     monkeypatch.setattr(sys, 'argv', ['upload_reference.py', '--run', str(run), '--model', 'test-model', '--mode', 'instruct', '--profiles', str(profile_path), *flags])
     upload.main()
     assert observed == [True]
+
+
+def roster_reference_row(item_id, colors):
+    import hashlib
+    import io
+    from PIL import Image
+    row = native_row(with_image=False)
+    images, chunks, prefix = [], [], [1]
+    chunks.append({"type": "text", "start": 0, "n_tokens": 1, "n_pos": 1, "tokens": [1]})
+    for color in colors:
+        stream = io.BytesIO()
+        Image.new("RGB", (2, 2), color).save(stream, format="PNG")
+        images.append({"bytes": stream.getvalue(), "path": None})
+        chunks.append({"type": "image", "start": len(prefix), "n_tokens": 2, "n_pos": 1, "grid_x": 2, "grid_y": 1, "grid_t": 1})
+        prefix.extend([-1, -1])
+    chunks.append({"type": "text", "start": len(prefix), "n_tokens": 1, "n_pos": 1, "tokens": [2]})
+    prefix.append(2)
+    n_pre, n_pos = len(prefix), len(colors) + 2
+    row.update(id=item_id, item_id=item_id, source="fixture-source", images=images, num_images=len(colors),
+               image_bytes_sha256=[hashlib.sha256(image["bytes"]).hexdigest() for image in images],
+               input_ids=prefix + [3, 4], labels=[-100] * n_pre + [3, 4], input_tokens_len=n_pre + 2,
+               n_prefill_tokens=n_pre, llamacpp_tokens_evaluated=n_pre, llamacpp_n_past_prefill=n_pos,
+               llamacpp_prompt_layout=json.dumps({"n_tokens": n_pre, "n_pos": n_pos, "chunks": chunks}),
+               per_image_vision_token_counts=[2] * len(colors), per_image_n_pos=[1] * len(colors),
+               per_image_grid=[[2, 1]] * len(colors), sum_vision_tokens=2 * len(colors), max_vision_tokens=2 if colors else 0,
+               llamacpp_prompt_string="<__media__>" * len(colors) + "What color?")
+    request = json.loads(row["generation_request"])
+    request["id"] = item_id
+    request["enable_thinking"] = False
+    row["generation_request"] = json.dumps(request)
+    return row
+
+
+def test_reference_roster_transitive_images_and_stable_components():
+    from stats.reference_roster import reference_identities
+    rows = [roster_reference_row(key, colors) for key, colors in (
+        ("a", ["red"]), ("b", ["red", "blue"]), ("c", ["blue"]),
+        ("d", ["green", "green"]), ("text1", []), ("text2", []))]
+    result = reference_identities(rows)
+    groups = {}
+    for row in result["items"]:
+        groups.setdefault(row["cluster_id"], set()).add(row["item_id"])
+        assert "item_key" not in row
+    assert {frozenset(group) for group in groups.values()} == {frozenset("abc"), frozenset("d"), frozenset(["text1"]), frozenset(["text2"])}
+    assert (result["n_items"], result["n_clusters"], result["n_image_occurrences"], result["n_unique_images"]) == (6, 4, 6, 3)
+    assert len(result["items"][3]["image_hashes"]) == 1
+    reverse = reference_identities(rows[::-1])
+    assert result["identity_sha256"] == reverse["identity_sha256"]
+    assert result["reference_content_hash"] != reverse["reference_content_hash"]
+
+
+@pytest.mark.parametrize("corruption", ["hash", "duplicate", "source", "mode", "mixed_mode", "id"])
+def test_reference_roster_rejects_invalid_identities(corruption):
+    from stats.reference_roster import reference_identities
+    rows = [roster_reference_row("a", ["red"]), roster_reference_row("b", [])]
+    if corruption == "hash":
+        rows[0]["image_bytes_sha256"] = ["0" * 64]
+    elif corruption == "duplicate":
+        rows[1] = rows[0]
+    elif corruption == "source":
+        rows[0]["source"] = ""
+    elif corruption == "mode":
+        rows[0]["generation_enable_thinking"] = 0
+    elif corruption == "mixed_mode":
+        rows[0]["generation_enable_thinking"] = True
+    else:
+        rows[0]["item_id"] = "different"
+    with pytest.raises(ValueError):
+        reference_identities(rows)
+
+
+def roster_collection_fixture(tmp_path, selected_indices=None, descending=False):
+    from datasets import Dataset
+    from lib.reference_dataset import reference_features
+    from tests.fakes import completed_collection
+    rows = [roster_reference_row("text", []), roster_reference_row("two", ["red", "blue"]), roster_reference_row("one", ["green"])]
+    dataset = Dataset.from_list(rows, features=reference_features())
+    sorted_ds = dataset.sort(["num_images"], reverse=descending)
+    root = tmp_path / "collection"
+    (root / "metrics").mkdir(parents=True)
+    selected_indices = range(3) if selected_indices is None else selected_indices
+    keys = [f"{i:03d}_{sorted_ds[i]['item_id']}" for i in selected_indices]
+    for key in keys:
+        (root / "metrics" / f"{key}.npz").touch()
+    completed_collection(root, keys)
+    meta = {"kind": "vlm_kld_metrics", "sort_by": "num_images", "sort_desc": descending, "dataset_content_hash": dataset_content_hash(sorted_ds)}
+    (root / "collect_meta.json").write_text(json.dumps(meta))
+    return dataset, root, keys
+
+
+@pytest.mark.parametrize("descending", [False, True])
+def test_reference_roster_binds_recorded_sort_and_stable_ids(tmp_path, descending):
+    from stats.reference_roster import bind_reference_roster
+    dataset, root, keys = roster_collection_fixture(tmp_path, descending=descending)
+    result = bind_reference_roster(dataset, root)
+    assert [row["item_key"] for row in result["cell_fields"]["roster"]] == keys
+    assert result["cell_fields"]["dataset_content_hash"] == json.loads((root / "collect_meta.json").read_text())["dataset_content_hash"]
+    assert result["binding_status"] == "completed_collection_verified"
+    with pytest.raises(ValueError, match="content/order"):
+        bind_reference_roster(dataset.select([0, 1]), root)
+
+
+def test_reference_roster_partial_collection_needs_explicit_cohort(tmp_path):
+    from stats.reference_roster import bind_reference_roster
+    dataset, root, keys = roster_collection_fixture(tmp_path, selected_indices=[1, 2])
+    with pytest.raises(ValueError, match="expected item cohort"):
+        bind_reference_roster(dataset, root)
+    result = bind_reference_roster(dataset, root, ["two", "one"])
+    assert result["n_items"] == 3
+    assert (result["n_bound_items"], result["n_bound_clusters"]) == (2, 2)
+    assert [row["item_key"] for row in result["cell_fields"]["roster"]] == keys
+    assert result["cell_fields"]["dataset_content_hash"] != dataset_content_hash(dataset.select([1, 2]))
+
+
+@pytest.mark.parametrize("corruption", ["sort", "hash", "manifest", "duplicate_manifest", "pending", "skipped"])
+def test_reference_roster_rejects_unverified_collection_binding(tmp_path, corruption):
+    from stats.reference_roster import bind_reference_roster
+    dataset, root, keys = roster_collection_fixture(tmp_path)
+    meta_path = root / "collect_meta.json"
+    if corruption in ("sort", "hash"):
+        meta = json.loads(meta_path.read_text())
+        meta["sort_by" if corruption == "sort" else "dataset_content_hash"] = None
+        meta_path.write_text(json.dumps(meta))
+    elif corruption in ("manifest", "duplicate_manifest"):
+        path = root / "manifest.csv"
+        text = path.read_text()
+        path.write_text(text.replace("one", "missing") if corruption == "manifest" else text + text.splitlines()[1] + "\n")
+    elif corruption == "pending":
+        from lib.collection_state import CollectionAttempt
+        CollectionAttempt(root, 0, 3)
+    else:
+        from tests.fakes import completed_collection
+        completed_collection(root, keys, skipped=[1])
+        (root / "metrics" / f"{keys[1]}.npz").unlink()
+    with pytest.raises(ValueError):
+        bind_reference_roster(dataset, root)
+
+
+def test_reference_roster_refuses_active_collector(tmp_path):
+    from lib.collect_common import acquire_out_lock
+    from stats.reference_roster import bind_reference_roster
+    dataset, root, _ = roster_collection_fixture(tmp_path)
+    with acquire_out_lock(root), pytest.raises(ValueError, match="still active"):
+        bind_reference_roster(dataset, root)
+
+
+def test_reference_roster_accepts_completed_retry_history(tmp_path):
+    import csv
+    from lib.collection_state import CollectionAttempt
+    from stats.reference_roster import bind_reference_roster
+    dataset, root, keys = roster_collection_fixture(tmp_path)
+    prior = next((root / ".attempts").iterdir())
+    state = json.loads((prior / "state.json").read_text())
+    state["state"] = "failed"
+    (prior / "state.json").write_text(json.dumps(state))
+    statuses = [json.loads(line) for line in (prior / "statuses.jsonl").read_text().splitlines()]
+    statuses[0]["status"] = "FAIL_RuntimeError"
+    (prior / "statuses.jsonl").write_text("".join(json.dumps(row) + "\n" for row in statuses))
+    with (root / "manifest.csv").open("w", newline="") as stream:
+        writer = csv.DictWriter(stream, fieldnames=["row_idx", "item_id", "status"])
+        writer.writeheader()
+        writer.writerows(statuses)
+    retry_row = {**statuses[0], "status": "OK"}
+    retry = CollectionAttempt(root, 0, 1)
+    retry.declare([(0, retry_row["item_id"])])
+    retry.record(retry_row)
+    retry.finish()
+    with (root / "manifest.csv").open("a", newline="") as stream:
+        csv.DictWriter(stream, fieldnames=["row_idx", "item_id", "status"]).writerow(retry_row)
+    result = bind_reference_roster(dataset, root)
+    assert [row["item_key"] for row in result["cell_fields"]["roster"]] == keys
+
+
+@pytest.mark.parametrize("mode_source", ["request", "requested_default", "native_default"])
+def test_reference_roster_mode_is_bound_to_dataset_hash(mode_source):
+    from stats.reference_roster import reference_identities
+    row = roster_reference_row("a", ["red"])
+    if mode_source != "request":
+        request = json.loads(row["generation_request"])
+        del request["enable_thinking"]
+        row["generation_request"] = json.dumps(request)
+        metadata = json.loads(row["generation_metadata"])
+        metadata["requested_enable_thinking" if mode_source == "requested_default" else "default_enable_thinking"] = False
+        row["generation_metadata"] = json.dumps(metadata)
+    original_hash = dataset_content_hash([row])
+    assert reference_identities([row])["mode"] == "instruct"
+    row["generation_enable_thinking"] = True
+    assert dataset_content_hash([row]) == original_hash
+    with pytest.raises(ValueError, match="mode must match"):
+        reference_identities([row])
+
+
+def test_reference_roster_cli_local_export_and_binding(tmp_path):
+    from stats.cli.reference_roster import main
+    dataset, root, keys = roster_collection_fixture(tmp_path)
+    reference = tmp_path / "reference"
+    dataset.save_to_disk(str(reference))
+    output = tmp_path / "identities.json"
+    assert main(["--reference", str(reference), "--out", str(output)]) == 0
+    identity = json.loads(output.read_text())
+    assert identity["binding_status"] == "unbound" and "cell_fields" not in identity
+    with pytest.raises(SystemExit):
+        main(["--reference", str(reference), "--out", str(output)])
+    assert json.loads(output.read_text()) == identity
+    output = tmp_path / "bound.json"
+    assert main(["--reference", str(reference), "--collection", str(root), "--out", str(output)]) == 0
+    assert [row["item_key"] for row in json.loads(output.read_text())["cell_fields"]["roster"]] == keys
