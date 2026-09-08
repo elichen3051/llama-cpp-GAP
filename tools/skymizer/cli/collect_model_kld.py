@@ -26,6 +26,8 @@ def parse_args(argv=None):
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--study", required=True, type=Path)
     p.add_argument("--size", type=int, choices=[100, 500], default=100)
+    p.add_argument("--tail-400", action="store_true",
+                   help="use published tail400 views with --size 500 and a NEW study directory")
     p.add_argument("--profiles", type=Path, required=True, help="explicit pilot100 or collect500 profile JSON from profiles/")
     p.add_argument("--model", required=True)
     p.add_argument("--source", required=True)
@@ -39,6 +41,10 @@ def parse_args(argv=None):
     p.add_argument("--dataset", type=Path, help="optional local native dataset; default is the published reference config")
     p.add_argument("--dry-run", action="store_true")
     args = p.parse_args(argv)
+    if args.tail_400 and args.size != 500:
+        p.error("--tail-400 requires --size 500 and its collect500 profiles")
+    if args.tail_400 and args.dataset:
+        p.error("--tail-400 requires the published filtered config; --dataset would bypass its filter")
     if not args.gpu or "," in args.gpu or args.gpu == "-1":
         p.error("--gpu must identify one GPU")
     if re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]*", args.candidate) is None:
@@ -48,16 +54,20 @@ def parse_args(argv=None):
 
 def build_command(args, plan, profiles, scripts):
     validate_reference_cohort(profiles, plan["size"])
+    if plan.get("reference_tail_400") and (plan["size"] != 500 or args.dataset):
+        raise ValueError("tail400 studies require the published filtered config and collect500 profile")
     for value, key in ((args.model, "models"), (args.source, "sources"), (args.mode, "modes")):
         if value not in plan[key]:
             raise ValueError(f"{value!r} is not in the study's {key}")
     runtime = kld_runtime(profiles, args.model, args.mode, plan["hardware"])
     profile = profiles["models"][args.model]
     model_root = (args.models_dir or Path(plan["models_dir"])).expanduser().resolve()
-    subset = f"{args.source}-subsample-{plan['size']}-" + ("ins" if args.mode == "instruct" else "think")
+    cohort = "tail-400" if plan.get("reference_tail_400") else f"subsample-{plan['size']}"
+    subset = f"{args.source}-{cohort}-" + ("ins" if args.mode == "instruct" else "think")
     out = args.study.expanduser().resolve() / "artifacts" / args.model / subset / "kld" / args.candidate
     dataset = str(args.dataset.expanduser().resolve()) if args.dataset else (
-        f"elichen-skymizer/{args.model}-" + ("pilot" if plan["size"] == 100 else "collect-500"))
+        f"elichen-skymizer/{args.model}-" + ("collect-400" if plan.get("reference_tail_400") else
+                                           "pilot" if plan["size"] == 100 else "collect-500"))
     command = [sys.executable, str(scripts / "cli/collect_kld.py"),
                "--dataset", dataset, "--subset", "" if args.dataset else subset, "--split", "train",
                "--ref-model", str(model_root / profile["model"]), "--ref-mmproj", str(model_root / profile["mmproj"]),
@@ -106,6 +116,8 @@ def prepare_study(args):
         plan = {"stage": "kld", "hardware": "pro6000", "size": args.size, "num_samples": None,
                 "models_dir": str(model_root), "models": list(profiles["models"]),
                 "sources": profiles["sources"], "modes": ["instruct", "thinking"]}
+        if args.tail_400:
+            plan["reference_tail_400"] = True
         path = study / "plan.json"
         if path.exists() and json.loads(path.read_text()) != plan:
             raise ValueError("study settings differ; use a new KLD study directory")

@@ -58,7 +58,8 @@ def kld_runtime(profiles, model, mode, hardware):
 def study_overview(profiles, plan):
     model_root = Path(plan["models_dir"])
     requested_modes = plan["modes"]
-    suffix = "pilot" if plan["size"] == 100 else "collect-500"
+    suffix = "collect-400" if plan.get("reference_tail_400") else "pilot" if plan["size"] == 100 else "collect-500"
+    cohort = "tail-400" if plan.get("reference_tail_400") else f"subsample-{plan['size']}"
     models = {}
     for name in plan["models"]:
         profile = profiles["models"][name]
@@ -80,8 +81,8 @@ def study_overview(profiles, plan):
             models[name]["mtp_head"] = str(model_root / profile["head"])
     return {
         "schema": "skymizer-reference-study-v1", "stage": plan.get("stage", "reference"), "hardware": plan["hardware"],
-        "source": {**profiles["dataset"], "split": "train", "requested_per_job": plan["num_samples"] or plan["size"]},
-        "subsets": [f"{source}-subsample-{plan['size']}-" + ("ins" if mode == "instruct" else "think")
+        "source": {**profiles["dataset"], "split": "train", "requested_per_job": 400 if plan.get("reference_tail_400") else plan["num_samples"] or plan["size"]},
+        "subsets": [f"{source}-{cohort}-" + ("ins" if mode == "instruct" else "think")
                     for source in plan["sources"] for mode in requested_modes],
         "generation_caps": {mode: profiles["generation_caps"][mode] for mode in requested_modes},
         "reference_common": {"gpu_layers": "all", "flash_attn": "on", "cache_type_k": "f16",
