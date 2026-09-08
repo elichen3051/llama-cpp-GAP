@@ -56,7 +56,7 @@ The validated Python environment uses Python 3.12.3, NumPy 2.5.2, datasets 5.0.1
 
 For local CPU statistics and tests, run `uv sync --python 3.12 --locked --group dev` from `tools/skymizer`. With `UV_PROJECT_ENVIRONMENT` unset, this creates `.venv`; use `.venv/bin/python` or activate it with `source .venv/bin/activate`.
 
-Student-t tests, t distribution functions and Wilson intervals use SciPy. Function docstrings carry API references; [statistical APIs and verification](docs/statistical-apis.md) records MATLAB, Julia and Wolfram correspondences and independent checks. Token-weighted results are descriptive only.
+Student-t tests, distribution functions, percentile/BCa intervals and Wilson intervals use SciPy. Holm/BH/BY corrections use statsmodels. Function docstrings carry API references; [statistical APIs and verification](docs/statistical-apis.md) records MATLAB, Julia and Wolfram correspondences and independent checks. Token-weighted results are descriptive only.
 
 The KLD acceptance environment used CUDA 13.2.51 and an RTX PRO 6000 Blackwell Server Edition. Python pins do not pin CUDA, compiler flags, model files or GPU behavior: retain native binary/backend hashes and runtime metadata with every study. The optional `hf-tokenizer` extra is for legacy HF/vLLM references and was not used by the native reference/KLD run; its lockfile entries are not evidence of native-run validation. `scripts/setup.sh` automates setup and checks; inspect its options before running it.
 
@@ -157,6 +157,7 @@ The default primary endpoint is item-weighted forward KLD with a paired Student-
 | --- | --- | --- |
 | `saved_metrics_paired_compare.py` | Paired differences, intervals, equivalence decisions and exploratory tails | `--metrics`, `--weighting`, `--ci-method`, `--equivalence-margin`, `--num-eval-tokens` |
 | Same comparison tool | Text-window, article or contiguous-block aggregation | `--unit window`, `--unit article`, `--unit block --block-windows 8` |
+| `campaign_compare.py` | Global quant-pair correction, cluster inference and training-only benchmark selection | `analyze` / `select`, `--manifest`, `--out`; [campaign design](docs/campaign-analysis.md) |
 | `power_analysis.py` | Prospective sample-size/token-cap planning; plug-in precision and Gaussian directional MDE without an assumed effect | `--token-caps`, `--sample-sizes`, `--sesoi`, `--reps`, `--outer-reps` |
 | `variance_decomposition.py` | Observed prefix length, effect and variance diagnostics | `--metric kld`, `--num-eval-tokens`, `--output-json` |
 | `random_subsample_power.py` | Verdict stability within an already observed finite pilot | `--mode reproducibility`, `--sizes`, `--reps` |

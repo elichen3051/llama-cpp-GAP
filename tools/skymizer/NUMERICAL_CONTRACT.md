@@ -130,3 +130,7 @@ Promote both stored float32 operands to float64 before forming token deltas. The
 ## 11. Bootstrap CI inversion (comparison schema v5)
 
 SciPy supplies percentile and BCa intervals with the existing paired-item RNG stream. Bootstrap-t rejects every unusable pivot rather than deleting draws. Nonconstant two-item inference and unsupported actual tails are unavailable. Inverted p-values carry finite-resample support and censoring metadata; decisions use strict p < alpha. Censored Holm results are labeled upper bounds on the fixed empirical inversion. Optional unavailable cells retain descriptive values and internal p=1 family membership, never displayed as measured p-values. Primary inference failures and invalid data remain fatal.
+
+## 12. Declared campaign inference
+
+The campaign family contains all unordered quantization pairs from every declared cell. Statsmodels supplies Holm/BH/BY, with strong-FWER and FDR targets kept distinct. Equal-item mean KLD differences use intercept-only CRV1 covariance, explicit small-sample correction and G-1 t reference; this is approximate cluster inference. Pointwise and global Bonferroni intervals are reported separately. The training-only selector records its source/image identities, rule, observed model provenance and selected IDs, and validation rejects overlaps in family labels or observed model identity. Completed artifact identities bind each stable item ID to its metrics. Hashes do not prove preregistration, image independence, model taxonomy or unknown-family transfer.

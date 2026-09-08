@@ -260,3 +260,9 @@ def test_adjustment_rejects_matrix_and_unknown_method():
         adjust_pvalues([[.01, .02]])
     with pytest.raises(ValueError, match="method"):
         adjust_pvalues([.01], "auto")
+
+
+def test_p_values_reject_complex_instead_of_discarding_imaginary_parts():
+    from stats.multiplicity import adjust_pvalues
+    with pytest.raises(ValueError, match="real"):
+        adjust_pvalues(np.array([.001+1j, .05+2j]))

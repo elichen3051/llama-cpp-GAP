@@ -18,6 +18,8 @@ def adjust_pvalues(p_values, method="holm"):
     """
     if method not in ("holm", "fdr_bh", "fdr_by"):
         raise ValueError("method must be holm, fdr_bh or fdr_by")
+    if np.iscomplexobj(p_values):
+        raise ValueError("p-values must be real")
     p = np.asarray(p_values, dtype=float)
     if p.ndim != 1 or not np.all(np.isfinite(p)) or np.any((p < 0) | (p > 1)):
         raise ValueError("p-values must be 1-D, finite and in [0, 1]")

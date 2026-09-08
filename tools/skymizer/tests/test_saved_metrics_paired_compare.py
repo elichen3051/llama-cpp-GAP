@@ -1301,3 +1301,230 @@ def test_self_paired_smoke_consumes_descriptive_token_schema(tmp_path, monkeypat
     (tmp_path / "self-paired.json").write_text(json.dumps(report))
     with pytest.raises(AssertionError):
         smoke_kld.main()
+
+
+def _campaign_inputs(n=24, variants=9, cells=2):
+    plan = {"schema_version": "skymizer-campaign-plan-v1", "family_id": "global", "metric": "kld", "weighting": "item", "sampling_plan": "fixed_n", "prespecification_status": "user_declared", "alpha": .05, "correction": "holm", "cells": []}
+    loaded = {}
+    rng = np.random.default_rng(812)
+    for c in range(cells):
+        cid = f"cell{c}"
+        roster = [{"item_id": f"item{i}", "item_key": f"{i:03}_item{i}", "cluster_id": f"image{i}", "source_id": "source", "image_hashes": [f"hash{i}"]} for i in range(n)]
+        plan["cells"].append({"cell_id": cid, "dataset_id": "dataset", "dataset_content_hash": "ds-v2:same", "mode": "instruct", "model_family": f"family{c}", "model_id": f"model{c}", "fixed_analysis_n": n, "roster": roster, "variants": [{"quant_id": f"q{k}", "collection_dir": f"{cid}/q{k}"} for k in range(variants)]})
+        scores = 1 + rng.normal(0, .02, (n, variants)) + .1*np.arange(variants)
+        loaded[cid] = {"scores": scores, "provenance": [{"quant_id": f"q{k}", "collection_dir": f"/{cid}/q{k}", "collect_meta_sha256": f"{cid}/meta{k}", "reference_fingerprint_sha256": f"{cid}/ref"} for k in range(variants)]}
+    return plan, loaded
+
+
+def test_campaign_global_family_and_simultaneous_best_set():
+    from stats.campaign import analyze_campaign
+    from stats.multiplicity import adjust_pvalues
+    plan, loaded = _campaign_inputs()
+    result = analyze_campaign(plan, loaded)
+    assert result["family_size"] == 72
+    assert len(result["pairs"]) == 72
+    assert [p["p_adjusted"] for p in result["pairs"]] == pytest.approx(adjust_pvalues([p["p_value"] for p in result["pairs"]]))
+    assert all(c["unique_best_by_simultaneous_intervals"] == "q0" for c in result["cells"])
+    assert all(p["ci_bonferroni"][0] <= p["ci_pointwise"][0] <= p["ci_pointwise"][1] <= p["ci_bonferroni"][1] for p in result["pairs"])
+    plan["weighting"] = "token"
+    with pytest.raises(ValueError, match="weighting=item"):
+        analyze_campaign(plan, loaded)
+
+
+def test_clustered_mean_preserves_item_weights_and_scalar_covariance():
+    from stats.campaign import clustered_mean_test
+    from scipy.stats import t
+    d = np.array([1., 1., 1., 8.])
+    result = clustered_mean_test(d, [0, 0, 0, 1], .05, 36)
+    assert result["estimate"] == pytest.approx(2.75)
+    assert result["standard_error"] == pytest.approx(2.625)
+    assert result["degrees_of_freedom"] == 1
+    assert result["p_value"] == pytest.approx(2 * t.sf(2.75/2.625, 1))
+    iid = clustered_mean_test(d, list(range(4)), .05, 1)
+    assert iid["standard_error"] == pytest.approx(d.std(ddof=1)/2)
+    for bad_alpha, bad_family in [(float("nan"), 1), (.05, 0), (.05, 1.2)]:
+        with pytest.raises(ValueError):
+            clustered_mean_test(d, list(range(4)), bad_alpha, bad_family)
+    with pytest.raises(ValueError, match="unresolved"):
+        clustered_mean_test(np.array([1, 1, 3, 3])*np.nextafter(0., 1.), list(range(4)), .05, 1)
+
+
+def test_campaign_rejects_missing_cells_bad_clusters_and_undeclared_bh():
+    from stats.campaign import analyze_campaign
+    plan, loaded = _campaign_inputs()
+    with pytest.raises(ValueError, match="exactly"):
+        analyze_campaign(plan, {"cell0": loaded["cell0"]})
+    plan["cells"][0]["roster"][1]["image_hashes"] = ["hash0"]
+    with pytest.raises(ValueError, match="sharing an image"):
+        analyze_campaign(plan, loaded)
+    plan["cells"][0]["roster"][1]["cluster_id"] = "image0"
+    plan["correction"] = "fdr_bh"
+    with pytest.raises(ValueError, match="BH requires"):
+        analyze_campaign(plan, loaded)
+    plan["dependence_assumption"] = "independent_or_prds"
+    assert analyze_campaign(plan, loaded)["error_control"] == "FDR"
+
+
+def test_campaign_loader_cli_and_frozen_prefix(tmp_path):
+    from stats.campaign import analyze_campaign, load_campaign
+    from stats.cli.campaign_compare import main
+    a, b = _make_pair(tmp_path, n_items=8)
+    for root in (a, b):
+        path = root / "collect_meta.json"
+        meta = json.loads(path.read_text())
+        meta.update(cand_model_fingerprint=f"candidate-{root.name}", cand_mmproj_fingerprint="projector")
+        path.write_text(json.dumps(meta))
+    plan, _ = _campaign_inputs(n=8, variants=2, cells=1)
+    cell = plan["cells"][0]
+    cell["variants"][0]["collection_dir"] = str(a)
+    cell["variants"][1]["collection_dir"] = str(b)
+    cell["analysis_item_ids"] = [r["item_id"] for r in cell["roster"][:4]]
+    cell["fixed_analysis_n"] = 4
+    loaded = load_campaign(plan)
+    result = analyze_campaign(plan, loaded)
+    assert result["pairs"][0]["n_items"] == 4
+    assert len(result["cells"][0]["input_provenance"]) == 2
+    manifest = tmp_path / "plan.json"
+    manifest.write_text(json.dumps(plan))
+    out, output_json = tmp_path / "report.md", tmp_path / "result.json"
+    assert main(["analyze", "--manifest", str(manifest), "--out", str(out), "--output-json", str(output_json)]) == 0
+    assert json.loads(output_json.read_text())["family_size"] == 1
+    assert "Clusters" in out.read_text()
+    meta = json.loads((b / "collect_meta.json").read_text())
+    missing_fingerprint = dict(meta)
+    missing_fingerprint.pop("cand_model_fingerprint")
+    (b / "collect_meta.json").write_text(json.dumps(missing_fingerprint))
+    with pytest.raises(ValueError, match="candidate model/projector fingerprints"):
+        load_campaign(plan)
+    meta["dataset_content_hash"] = "changed"
+    (b / "collect_meta.json").write_text(json.dumps(meta))
+    with pytest.raises(ValueError):
+        load_campaign(plan)
+
+
+def test_selection_receipt_fixes_pool_and_withheld_families():
+    import copy
+    from stats.campaign import analyze_campaign, content_hash, select_benchmark
+    plan, loaded = _campaign_inputs(n=10, variants=3)
+    rule = {"algorithm": "greedy_backward_maximin_snr_v1", "size": 6, "training_families": ["family0", "family1"], "heldout_families": ["family2", "family3"], "source_min_counts": {"source": 6}}
+    receipt = select_benchmark(plan, loaded, rule)
+    assert len(receipt["selected_item_ids"]) == 6
+    assert receipt["candidate_subsets_evaluated"] == 10+9+8+7
+    assert receipt == select_benchmark(plan, loaded, rule)
+    validation = copy.deepcopy(plan)
+    validation["selection_receipt"] = receipt
+    for i, cell in enumerate(validation["cells"]):
+        cell["model_family"] = f"family{i+2}"
+        cell["analysis_item_ids"] = receipt["selected_item_ids"]
+        cell["fixed_analysis_n"] = 6
+    with pytest.raises(ValueError, match="reuse the same resolved path"):
+        analyze_campaign(validation, loaded)
+    loaded = copy.deepcopy(loaded)
+    for value in loaded.values():
+        for record in value["provenance"]:
+            for field in ("collection_dir", "collect_meta_sha256", "reference_fingerprint_sha256"):
+                record[field] += "heldout"
+    assert analyze_campaign(validation, loaded)["pairs"][0]["n_items"] == 6
+    bad = copy.deepcopy(validation)
+    bad["cells"] = bad["cells"][:1]
+    with pytest.raises(ValueError, match="every declared heldout"):
+        analyze_campaign(bad, {"cell0": loaded["cell0"]})
+    bad = copy.deepcopy(validation)
+    bad["cells"][0]["mode"] = "thinking"
+    with pytest.raises(ValueError, match="mode"):
+        analyze_campaign(bad, loaded)
+    bad = copy.deepcopy(validation)
+    bad["selection_receipt"]["selected_item_ids_sha256"] = "wrong"
+    bad["selection_receipt"]["receipt_sha256"] = content_hash({k:v for k,v in bad["selection_receipt"].items() if k != "receipt_sha256"})
+    with pytest.raises(ValueError, match="hash"):
+        analyze_campaign(bad, loaded)
+    bad = copy.deepcopy(plan)
+    bad["cells"][0]["model_family"] = "family2"
+    with pytest.raises(ValueError, match="training families"):
+        select_benchmark(bad, loaded, rule)
+
+
+def test_selector_does_not_turn_cancelling_deltas_into_absolute_effects():
+    from stats.campaign import select_benchmark
+    plan, loaded = _campaign_inputs(n=8, variants=2, cells=1)
+    d = np.array([-1., 1., -2., 2., -3., 3., -4., 4.])
+    loaded["cell0"]["scores"] = np.column_stack([np.full(8, 5.), 5+d])
+    rule = {"algorithm": "greedy_backward_maximin_snr_v1", "size": 4, "training_families": ["family0"], "heldout_families": ["heldout"]}
+    result = select_benchmark(plan, loaded, rule)
+    idx = [int(key.removeprefix("item")) for key in result["selected_item_ids"]]
+    assert result["training_objective"] == pytest.approx(abs(d[idx].mean())/d[idx].std(ddof=1))
+
+
+def test_selected_benchmark_can_run_on_only_selected_rows_and_blocks_copied_provenance():
+    import copy
+    from stats.campaign import analyze_campaign, content_hash, select_benchmark
+    plan, loaded = _campaign_inputs(n=9, variants=2, cells=1)
+    loaded["cell0"]["provenance"] = [{"quant_id": f"q{k}", "collection_dir": f"/training/{k}", "collect_meta_sha256": f"trainingmeta{k}", "reference_fingerprint_sha256": "trainingref"} for k in range(2)]
+    rule = {"algorithm": "greedy_backward_maximin_snr_v1", "size": 5, "training_families": ["family0"], "heldout_families": ["heldout"]}
+    receipt = select_benchmark(plan, loaded, rule)
+    validation = copy.deepcopy(plan)
+    validation["selection_receipt"] = receipt
+    cell = validation["cells"][0]
+    cell["model_family"] = "heldout"
+    idx = [i for i,r in enumerate(cell["roster"]) if r["item_id"] in receipt["selected_item_ids"]]
+    cell["roster"] = [cell["roster"][i] for i in idx]
+    cell["fixed_analysis_n"] = 5
+    heldout = {"cell0": {"scores": loaded["cell0"]["scores"][idx], "provenance": [{"quant_id": f"q{k}", "collection_dir": f"/heldout/{k}", "collect_meta_sha256": f"heldoutmeta{k}", "reference_fingerprint_sha256": "heldoutref"} for k in range(2)]}}
+    assert analyze_campaign(validation, heldout)["pairs"][0]["n_items"] == 5
+    heldout["cell0"]["provenance"][0]["reference_fingerprint_sha256"] = "trainingref"
+    with pytest.raises(ValueError, match="share model provenance"):
+        analyze_campaign(validation, heldout)
+
+
+def test_selector_resolves_small_subset_after_removing_large_outlier():
+    from stats.campaign import select_benchmark
+    plan, loaded = _campaign_inputs(n=4, variants=2, cells=1)
+    loaded["cell0"]["scores"] = np.column_stack([np.zeros(4), [1e-20, 2e-20, 3e-20, 1.]])
+    rule = {"algorithm": "greedy_backward_maximin_snr_v1", "size": 3, "training_families": ["family0"], "heldout_families": ["heldout"]}
+    result = select_benchmark(plan, loaded, rule)
+    assert result["selected_item_ids"] == ["item0", "item1", "item2"]
+    assert result["training_objective"] == pytest.approx(2.)
+    loaded["cell0"]["provenance"] = []
+    with pytest.raises(ValueError, match="complete observed"):
+        select_benchmark(plan, loaded, rule)
+
+
+def test_campaign_cli_defaults_json_without_overwriting_plan_and_preflights_selection(tmp_path, monkeypatch):
+    import stats.cli.campaign_compare as cli
+    plan, loaded = _campaign_inputs(n=8, variants=2, cells=1)
+    manifest = tmp_path / "campaign.json"
+    original = json.dumps(plan)
+    manifest.write_text(original)
+    monkeypatch.setattr(cli, "load_campaign", lambda *args: loaded)
+    out = tmp_path / "campaign.md"
+    assert cli.main(["analyze", "--manifest", str(manifest), "--out", str(out)]) == 0
+    assert manifest.read_text() == original
+    assert (tmp_path / "campaign.md.json").is_file()
+    with pytest.raises(SystemExit):
+        cli.main(["analyze", "--manifest", str(manifest), "--out", str(out), "--output-json", str(manifest)])
+    def forbidden_load(*args):
+        pytest.fail("heldout scores must not be loaded by selection")
+    monkeypatch.setattr(cli, "load_campaign", forbidden_load)
+    plan["selection_rule"] = {"algorithm": "greedy_backward_maximin_snr_v1", "size": 4, "training_families": ["training"], "heldout_families": ["family0"]}
+    manifest.write_text(json.dumps(plan))
+    with pytest.raises(SystemExit):
+        cli.main(["select", "--manifest", str(manifest), "--out", str(out)])
+
+
+def test_campaign_rejects_reassigned_artifact_to_stable_item_binding():
+    from stats.campaign import validate_plan
+    plan, _ = _campaign_inputs(n=8, variants=2, cells=1)
+    roster = plan["cells"][0]["roster"]
+    roster[0]["item_key"], roster[1]["item_key"] = roster[1]["item_key"], roster[0]["item_key"]
+    with pytest.raises(ValueError, match="collected ID"):
+        validate_plan(plan)
+
+
+def test_campaign_rejects_complex_scores_and_differences():
+    from stats.campaign import analyze_campaign, clustered_mean_test
+    plan, loaded = _campaign_inputs(n=8, variants=2, cells=1)
+    loaded["cell0"]["scores"] = loaded["cell0"]["scores"].astype(complex) + 1j
+    with pytest.raises(ValueError, match="real"):
+        analyze_campaign(plan, loaded)
+    with pytest.raises(ValueError, match="real"):
+        clustered_mean_test(np.array([1+1j, 2+1j, 3+1j]), [0, 1, 2], .05, 1)
