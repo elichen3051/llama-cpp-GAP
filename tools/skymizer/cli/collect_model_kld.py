@@ -27,7 +27,11 @@ def parse_args(argv=None):
     p.add_argument("--study", required=True, type=Path)
     p.add_argument("--size", type=int, choices=[100, 500], default=100)
     p.add_argument("--tail-400", action="store_true",
-                   help="use published tail400 views with --size 500 and a NEW study directory")
+                   help="freeze a pinned materialized tail400 config with --size 500 in a NEW study")
+    p.add_argument("--reference-revision", help="exact 40-character Hub commit; required with --tail-400")
+    p.add_argument("--reference-cache-dir", type=Path, help="optional Hub download cache for --tail-400")
+    p.add_argument("--freeze-only", action="store_true", help="validate and freeze tail400 without starting the scorer")
+    p.add_argument("--metric-threads", type=int, help="CPU metric workers; default is the archived profile value")
     p.add_argument("--profiles", type=Path, required=True, help="explicit pilot100 or collect500 profile JSON from profiles/")
     p.add_argument("--model", required=True)
     p.add_argument("--source", required=True)
@@ -44,7 +48,15 @@ def parse_args(argv=None):
     if args.tail_400 and args.size != 500:
         p.error("--tail-400 requires --size 500 and its collect500 profiles")
     if args.tail_400 and args.dataset:
-        p.error("--tail-400 requires the published filtered config; --dataset would bypass its filter")
+        p.error("--tail-400 requires a pinned materialized config; --dataset would bypass its validation")
+    if args.tail_400 and not re.fullmatch(r"[0-9a-f]{40}", args.reference_revision or ""):
+        p.error("--tail-400 requires --reference-revision with an exact 40-character Hub commit")
+    if not args.tail_400 and (args.reference_revision or args.reference_cache_dir or args.freeze_only):
+        p.error("reference freeze options require --tail-400")
+    if args.freeze_only and args.dry_run:
+        p.error("--freeze-only and --dry-run are mutually exclusive")
+    if args.metric_threads is not None and args.metric_threads < 1:
+        p.error("--metric-threads must be positive")
     if not args.gpu or "," in args.gpu or args.gpu == "-1":
         p.error("--gpu must identify one GPU")
     if re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]*", args.candidate) is None:
@@ -54,12 +66,15 @@ def parse_args(argv=None):
 
 def build_command(args, plan, profiles, scripts):
     validate_reference_cohort(profiles, plan["size"])
-    if plan.get("reference_tail_400") and (plan["size"] != 500 or args.dataset):
-        raise ValueError("tail400 studies require the published filtered config and collect500 profile")
+    if plan.get("reference_tail_400") and (plan["size"] != 500 or args.dataset
+            or not re.fullmatch(r"[0-9a-f]{40}", args.reference_revision or "")):
+        raise ValueError("tail400 studies require a pinned materialized config and collect500 profile")
     for value, key in ((args.model, "models"), (args.source, "sources"), (args.mode, "modes")):
         if value not in plan[key]:
             raise ValueError(f"{value!r} is not in the study's {key}")
     runtime = kld_runtime(profiles, args.model, args.mode, plan["hardware"])
+    if "metric_threads" in plan:
+        runtime["metric_threads"] = plan["metric_threads"]
     profile = profiles["models"][args.model]
     model_root = (args.models_dir or Path(plan["models_dir"])).expanduser().resolve()
     cohort = "tail-400" if plan.get("reference_tail_400") else f"subsample-{plan['size']}"
@@ -68,8 +83,10 @@ def build_command(args, plan, profiles, scripts):
     dataset = str(args.dataset.expanduser().resolve()) if args.dataset else (
         f"elichen-skymizer/{args.model}-" + ("collect-400" if plan.get("reference_tail_400") else
                                            "pilot" if plan["size"] == 100 else "collect-500"))
+    if plan.get("reference_tail_400"):
+        dataset = str(args.study.expanduser().resolve() / "references" / args.model / subset / "dataset")
     command = [sys.executable, str(scripts / "cli/collect_kld.py"),
-               "--dataset", dataset, "--subset", "" if args.dataset else subset, "--split", "train",
+               "--dataset", dataset, "--subset", "" if args.dataset or plan.get("reference_tail_400") else subset, "--split", "train",
                "--ref-model", str(model_root / profile["model"]), "--ref-mmproj", str(model_root / profile["mmproj"]),
                "--cand-model", str(args.cand_model.expanduser().resolve()),
                "--cand-mmproj", str(args.cand_mmproj.expanduser().resolve() if args.cand_mmproj else model_root / profile["mmproj"]),
@@ -118,6 +135,8 @@ def prepare_study(args):
                 "sources": profiles["sources"], "modes": ["instruct", "thinking"]}
         if args.tail_400:
             plan["reference_tail_400"] = True
+        if args.metric_threads is not None:
+            plan["metric_threads"] = args.metric_threads
         path = study / "plan.json"
         if path.exists() and json.loads(path.read_text()) != plan:
             raise ValueError("study settings differ; use a new KLD study directory")
@@ -148,8 +167,22 @@ def main():
     command, out = build_command(args, plan, profiles, scripts)
     print(shlex.join([f"CUDA_VISIBLE_DEVICES={args.gpu}", *command]), flush=True)
     if args.dry_run:
+        if plan.get("reference_tail_400"):
+            print(f"dry run: reference {args.reference_revision} has not been frozen or validated", flush=True)
         return 0
+    receipt = None
+    if plan.get("reference_tail_400"):
+        from lib.reference_freeze import freeze_reference
+        subset = out.parents[1].name
+        receipt = freeze_reference(scripts / "profiles/reference_model_profiles.json", args.model,
+                                   f"elichen-skymizer/{args.model}-collect-400", args.reference_revision,
+                                   subset, study / "references" / args.model / subset, args.reference_cache_dir)
+        if args.freeze_only:
+            print(json.dumps(receipt), flush=True)
+            return 0
     out.mkdir(parents=True, exist_ok=False)
+    if receipt is not None:
+        atomic_json(out / "reference-freeze.json", receipt)
     stopped = threading.Event()
     previous = {s: signal.signal(s, lambda *_: stopped.set()) for s in (signal.SIGINT, signal.SIGTERM)}
     code, state, error = 1, "failed", None

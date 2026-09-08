@@ -871,14 +871,16 @@ def test_load_dataset_sorted_reads_a_local_save_to_disk_dir(tmp_path):
     load_from_disk (no Hub round trip), sorted like a Hub dataset, --subset
     rejected because it has no meaning for a local dir."""
     datasets = pytest.importorskip("datasets")
-    ds = datasets.Dataset.from_dict({"id": ["b", "a", "c"], "num_images": [2, 1, 3]})
+    ds = datasets.Dataset.from_dict({"id": ["b", "a", "c", "d", "e"], "num_images": [2, 1, 3, 1, None]})
     ds.save_to_disk(str(tmp_path / "gt"))
+    before = {p.name: p.read_bytes() for p in (tmp_path / "gt").iterdir()}
     got = prep.load_dataset_sorted(str(tmp_path / "gt"), None, "train", "num_images")
-    assert got["id"] == ["a", "b", "c"]
+    assert got["id"] == ["a", "d", "b", "c", "e"]
     got = prep.load_dataset_sorted(str(tmp_path / "gt"), None, "train", "num_images", sort_desc=True)
-    assert got["id"] == ["c", "b", "a"]
+    assert got["id"] == ["c", "b", "a", "d", "e"]
+    assert {p.name: p.read_bytes() for p in (tmp_path / "gt").iterdir()} == before
     with pytest.raises(ValueError, match="--subset"):
         prep.load_dataset_sorted(str(tmp_path / "gt"), "smoke7-x", "train", "num_images")
     datasets.DatasetDict({"train": ds}).save_to_disk(str(tmp_path / "gtdict"))
     got = prep.load_dataset_sorted(str(tmp_path / "gtdict"), None, "train", None)
-    assert got["id"] == ["b", "a", "c"]
+    assert got["id"] == ["b", "a", "c", "d", "e"]

@@ -42,6 +42,8 @@ def parse_args(argv=None):
                    help="optional completed pilot100 A collection; candidate-a then supplies tail400")
     p.add_argument("--pilot-candidate-b", type=Path,
                    help="matching pilot100 B collection; requires an explicit common token prefix")
+    p.add_argument("--cross-part-execution-policy", choices=("strict", "same-gpu-model-v1"), default="strict",
+                   help="pilot/tail scorer identity policy; same-gpu-model-v1 permits a different UUID for one GPU of the same model and driver, plus positive token metric worker counts; all other identity fields stay unchanged")
     add_shared_paired_args(
         p,
         num_eval_tokens_help=(
@@ -133,6 +135,8 @@ def main(argv=None) -> int:
         sys.exit("--block-windows must be >= 1")
     if bool(args.pilot_candidate_a) != bool(args.pilot_candidate_b):
         sys.exit("both --pilot-candidate-a and --pilot-candidate-b are required together")
+    if args.cross_part_execution_policy != "strict" and not args.pilot_candidate_a:
+        sys.exit("--cross-part-execution-policy requires both pilot candidate collections")
     roots = [args.candidate_a, args.candidate_b]
     if args.pilot_candidate_a:
         roots += [args.pilot_candidate_a, args.pilot_candidate_b]
@@ -352,7 +356,8 @@ def _main_locked(args, argv_for_metadata):
     }
     if parts is not None:
         result["inputs"].update(dataset="pilot100+tail400", subset=None, sort_by=None,
-                                parts=parts, comparison_token_prefix=args.num_eval_tokens)
+                                parts=parts, comparison_token_prefix=args.num_eval_tokens,
+                                cross_part_execution_policy=args.cross_part_execution_policy)
         warnings.append("pilot100 + tail400: inference assumes independent items and is conditional on both native eligible cohorts; generation caps and repetition exclusions may differ; source ID disjointness alone does not establish image independence")
     result["execution"] = build_execution_metadata(
         args, argv_for_metadata, device="cpu", jobs=1,

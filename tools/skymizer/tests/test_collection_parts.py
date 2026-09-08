@@ -207,3 +207,100 @@ def test_reject_same_wrong_vocabulary_on_both_pilot_sides(combined):
         arrays["vocab"]=np.array(22)
         np.savez(path,**arrays)
     with pytest.raises(SystemExit,match="stored header differs"): cli.main(args)
+
+
+@pytest.fixture
+def cross_host_combined(combined):
+    roots, args, output = combined
+    for name, root in roots.items():
+        path = root / "collect_meta.json"
+        meta = json.loads(path.read_text())
+        digit = "1" if name.startswith("pilot") else "2"
+        meta["execution_identity"].update(
+            libraries=[{"name": "libggml.so", "sha256": "a" * 64}],
+            gpu=[f"NVIDIA RTX PRO 6000 Blackwell Server Edition, GPU-{digit * 8}-1111-1111-1111-111111111111, 595.71.05"])
+        path.write_text(json.dumps(meta))
+    return roots, args, output
+
+
+def test_cross_host_composition_requires_opt_in_and_retains_raw_metadata(cross_host_combined):
+    roots, args, output = cross_host_combined
+    before = {name: (root / "collect_meta.json").read_bytes() for name, root in roots.items()}
+    with pytest.raises(SystemExit, match="identity differs"):
+        cli.main(args)
+    assert cli.main([*args, "--cross-part-execution-policy", "same-gpu-model-v1"]) == 0
+    result = json.loads(output.read_text())
+    assert result["inputs"]["cross_part_execution_policy"] == "same-gpu-model-v1"
+    for part in result["inputs"]["parts"]:
+        for side in ("a", "b"):
+            assert part[f"candidate_{side}_meta"] == json.loads(before[part["part"] + side])
+    assert "does not establish numerical or bitwise equivalence" in output.with_suffix(".txt").read_text()
+    assert before == {name: (root / "collect_meta.json").read_bytes() for name, root in roots.items()}
+
+
+def test_cross_host_opt_in_never_relaxes_within_part_pairing(cross_host_combined):
+    roots, args, _ = cross_host_combined
+    path = roots["tailb"] / "collect_meta.json"
+    meta = json.loads(path.read_text())
+    meta["execution_identity"]["gpu"][0] = meta["execution_identity"]["gpu"][0].replace("22222222", "33333333")
+    path.write_text(json.dumps(meta))
+    with pytest.raises(SystemExit, match="identity differs"):
+        cli.main([*args, "--cross-part-execution-policy", "same-gpu-model-v1"])
+
+
+@pytest.mark.parametrize("field,value", [("ref_model", "/relocated/ref.gguf"), ("ref_mmproj", "/relocated/mmproj.gguf"),
+                                       ("tf_chunk", 32), ("n_threads", 12), ("cand_model_fingerprint", "changed")])
+def test_cross_host_opt_in_keeps_path_model_and_scoring_guards(cross_host_combined, field, value):
+    roots, args, _ = cross_host_combined
+    for side in ("a", "b"):
+        path = roots["tail" + side] / "collect_meta.json"
+        meta = json.loads(path.read_text())
+        meta[field] = value
+        path.write_text(json.dumps(meta))
+    with pytest.raises(SystemExit, match="pilot/tail"):
+        cli.main([*args, "--cross-part-execution-policy", "same-gpu-model-v1"])
+
+
+def test_cross_host_policy_requires_pilot_collections(combined):
+    _, args, _ = combined
+    args = [*args[:4], *args[8:], "--cross-part-execution-policy", "same-gpu-model-v1"]
+    with pytest.raises(SystemExit, match="requires both pilot"):
+        cli.main(args)
+
+
+def test_cross_part_metric_worker_counts_require_opt_in(cross_host_combined):
+    roots, args, output = cross_host_combined
+    for side in ("a", "b"):
+        pilot = json.loads((roots["pilot" + side] / "collect_meta.json").read_text())
+        path = roots["tail" + side] / "collect_meta.json"
+        meta = json.loads(path.read_text())
+        meta["execution_identity"] = pilot["execution_identity"]
+        meta["metric_threads"] = 12
+        path.write_text(json.dumps(meta))
+    with pytest.raises(SystemExit, match="scoring configuration differs: metric_threads"):
+        cli.main(args)
+    assert cli.main([*args, "--cross-part-execution-policy", "same-gpu-model-v1"]) == 0
+    parts = json.loads(output.read_text())["inputs"]["parts"]
+    assert [p["candidate_a_meta"]["metric_threads"] for p in parts] == [8, 12]
+
+
+@pytest.mark.parametrize("count", [-1, 0, True, "12"])
+def test_cross_part_metric_worker_counts_must_be_positive_integers(cross_host_combined, count):
+    roots, args, _ = cross_host_combined
+    for side in ("a", "b"):
+        path = roots["tail" + side] / "collect_meta.json"
+        meta = json.loads(path.read_text())
+        meta["metric_threads"] = count
+        path.write_text(json.dumps(meta))
+    with pytest.raises(SystemExit, match="requires positive metric_threads"):
+        cli.main([*args, "--cross-part-execution-policy", "same-gpu-model-v1"])
+
+
+def test_cross_part_metric_worker_exception_never_relaxes_within_part_pairing(cross_host_combined):
+    roots, args, _ = cross_host_combined
+    path = roots["tailb"] / "collect_meta.json"
+    meta = json.loads(path.read_text())
+    meta["metric_threads"] = 12
+    path.write_text(json.dumps(meta))
+    with pytest.raises(SystemExit, match="collect_meta mismatch on 'metric_threads'"):
+        cli.main([*args, "--cross-part-execution-policy", "same-gpu-model-v1"])

@@ -6,7 +6,7 @@ import math
 import re
 
 from lib.collect_common import dump_stem, SKIP_OVER_BUDGET
-from lib.collect_meta_provenance import require_execution_alignment
+from lib.collect_meta_provenance import require_cross_part_execution_alignment
 from lib.reference_cohort import canonical_digest, tail_cohort, validate_cohort
 from lib.reference_dataset import reference_provenance
 from stats.collection_io import (
@@ -60,10 +60,15 @@ def _observed_reference(root, keys, size):
     return metadata, rows, observed
 
 
-def _same_candidate(pilot, tail, cap):
+def _same_candidate(pilot, tail, cap, execution_policy="strict"):
     """Retain scorer/runtime identity while allowing distinct reference views."""
-    require_execution_alignment(pilot, tail)
+    require_cross_part_execution_alignment(pilot, tail, execution_policy)
     view_fields = {"dataset", "subset", "sort_by", "sort_desc", "num_eval_tokens"}
+    if execution_policy == "same-gpu-model-v1":
+        for meta in (pilot, tail):
+            if type(meta.get("metric_threads")) is not int or meta["metric_threads"] < 1:
+                raise ValueError("same-gpu-model-v1 requires positive metric_threads in both parts")
+        view_fields.add("metric_threads")
     for field in (set(META_MUST_MATCH) - view_fields) | {"allow_vocab_attr_mismatch", "allow_prefix_drift"}:
         if field not in pilot or field not in tail:
             raise ValueError(f"pilot/tail scoring configuration missing: {field}")
@@ -139,8 +144,11 @@ def compose_pilot_tail(args):
                       "source": ga["dataset_source"], "generator_sha256": canonical_digest(ga),
                       "generation_cap": ga["n_predict"], "n_used": len(keys),
                       "common_skipped_over_budget": skips})
+    policy = args.cross_part_execution_policy
     for side in ("candidate_a_meta", "candidate_b_meta"):
-        _same_candidate(parts[0][side], parts[1][side], args.num_eval_tokens)
+        _same_candidate(parts[0][side], parts[1][side], args.num_eval_tokens, policy)
+    if policy != "strict":
+        warnings.append("cross-part execution policy same-gpu-model-v1: only the physical GPU UUID may differ between pilot and tail; model, driver, binary, libraries, environment and decoder settings must match; positive token metric worker counts may differ; this does not establish numerical or bitwise equivalence across GPUs, and A/B alignment remains strict within each part")
     gp, rp = native[0]
     gt, rt = native[1]
     source_p, source_t = gp["dataset_source"], gt["dataset_source"]

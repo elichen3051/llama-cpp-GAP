@@ -116,7 +116,8 @@ def load_dataset_sorted(dataset, subset, split, sort_by, sort_desc=False):
     existing index-keyed artifact dir valid."""
     from datasets import load_dataset
     local = Path(dataset)
-    if (local / "state.json").is_file() or (local / "dataset_dict.json").is_file():
+    is_local = (local / "state.json").is_file() or (local / "dataset_dict.json").is_file()
+    if is_local:
         from datasets import DatasetDict, load_from_disk
         if subset:
             raise ValueError(f"--subset {subset!r} does not apply to the local dataset dir {dataset}")
@@ -127,7 +128,14 @@ def load_dataset_sorted(dataset, subset, split, sort_by, sort_desc=False):
         ds = (load_dataset(dataset, subset, split=split) if subset
               else load_dataset(dataset, split=split))
     if sort_by:
-        if sort_desc:
+        if is_local:
+            import pyarrow.compute as pc
+            # Dataset.sort writes a cache beside disk-backed reference files.
+            column = ds.select_columns([sort_by]).with_format("arrow")[:]
+            order = "descending" if sort_desc else "ascending"
+            indices = pc.sort_indices(column, sort_keys=[(sort_by, order)], null_placement="at_end")
+            ds = ds.select(indices, keep_in_memory=True)
+        elif sort_desc:
             ds = ds.sort([sort_by], reverse=True)
         else:
             ds = ds.sort([sort_by])

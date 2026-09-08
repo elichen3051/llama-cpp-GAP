@@ -93,3 +93,31 @@ def require_execution_alignment(a_meta, b_meta):
         identities.append(identity)
     if identities[0] != identities[1]:
         raise ValueError("executed scorer/build/backend identity differs; re-collect both candidates with the same execution environment")
+
+
+def require_cross_part_execution_alignment(pilot_meta, tail_meta, policy="strict"):
+    """Allow an explicit physical GPU UUID difference only between completed parts."""
+    if policy == "strict":
+        return require_execution_alignment(pilot_meta, tail_meta)
+    if policy != "same-gpu-model-v1":
+        raise ValueError(f"unknown cross-part execution policy: {policy}")
+    normalized = []
+    for meta in (pilot_meta, tail_meta):
+        require_execution_alignment(meta, meta)
+        identity = meta["execution_identity"]
+        libraries, environment = identity["libraries"], identity.get("environment")
+        if (not libraries or any(not isinstance(record, dict) or not record.get("name")
+                or not re.fullmatch(r"[0-9a-f]{64}", str(record.get("sha256", ""))) for record in libraries)
+                or not isinstance(environment, dict)
+                or any(not isinstance(k, str) or not isinstance(v, str) for k, v in environment.items())):
+            raise ValueError("same-gpu-model-v1 requires complete library hashes and execution environment")
+        gpu = identity.get("gpu")
+        if not isinstance(gpu, list) or len(gpu) != 1 or not isinstance(gpu[0], str):
+            raise ValueError("same-gpu-model-v1 requires exactly one recorded GPU")
+        fields = gpu[0].split(", ")
+        if (len(fields) != 3 or not fields[0] or fields[0].lower() in ("unknown", "n/a")
+                or not re.fullmatch(r"GPU-[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}", fields[1])
+                or not re.fullmatch(r"[0-9]+(?:\.[0-9]+)+", fields[2])):
+            raise ValueError("same-gpu-model-v1 requires a recorded GPU model, UUID and driver version")
+        normalized.append({"execution_identity": {**identity, "gpu": [fields[0] + ", " + fields[2]]}})
+    require_execution_alignment(*normalized)

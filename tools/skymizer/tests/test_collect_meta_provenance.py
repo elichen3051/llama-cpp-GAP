@@ -827,3 +827,56 @@ def test_campaign_checks_uploader_again_after_generation(campaign_fixture, monke
     assert campaign.run_campaign(args) == 2
     assert not list(args.out.glob("artifacts/*/*/upload-*.log"))
     assert not list(args.out.glob("artifacts/*/*/attempt-*/upload/receipt.json"))
+
+
+@pytest.fixture
+def single_gpu_meta():
+    return {"execution_identity": {
+        "scheme": "skymizer-execution-sha256-v2", "binary_sha256": "a" * 64,
+        "libraries": [{"name": "libggml.so", "sha256": "b" * 64}],
+        "gpu": ["NVIDIA RTX PRO 6000 Blackwell Server Edition, GPU-11111111-1111-1111-1111-111111111111, 595.71.05"],
+        "environment": {"CUDA_VISIBLE_DEVICES": "0", "OMP_NUM_THREADS": "8", "LD_LIBRARY_PATH": "/runtime/lib"}}}
+
+
+def test_cross_part_uuid_policy_is_explicit_and_preserves_provenance(single_gpu_meta):
+    import copy
+    cmp = _provenance_module()
+    tail = copy.deepcopy(single_gpu_meta)
+    tail["execution_identity"]["gpu"][0] = tail["execution_identity"]["gpu"][0].replace("11111111", "22222222")
+    before = copy.deepcopy((single_gpu_meta, tail))
+    with pytest.raises(ValueError, match="identity differs"):
+        cmp.require_cross_part_execution_alignment(single_gpu_meta, tail)
+    cmp.require_cross_part_execution_alignment(single_gpu_meta, tail, "same-gpu-model-v1")
+    assert (single_gpu_meta, tail) == before
+    with pytest.raises(ValueError, match="identity differs"):
+        cmp.require_execution_alignment(single_gpu_meta, tail)
+
+
+@pytest.mark.parametrize("field,value", [
+    ("binary_sha256", "c" * 64),
+    ("libraries", [{"name": "libggml.so", "sha256": "c" * 64}]),
+    ("libraries", []),
+    ("libraries", [{"name": "libggml.so", "sha256": "unknown"}]),
+    ("environment", {"CUDA_VISIBLE_DEVICES": "1", "OMP_NUM_THREADS": "8", "LD_LIBRARY_PATH": "/runtime/lib"}),
+    ("environment", {"CUDA_VISIBLE_DEVICES": "0", "OMP_NUM_THREADS": "4", "LD_LIBRARY_PATH": "/runtime/lib"}),
+    ("environment", {"CUDA_VISIBLE_DEVICES": "0", "OMP_NUM_THREADS": "8", "LD_LIBRARY_PATH": "/new/lib"}),
+    ("environment", None),
+    ("gpu", ["NVIDIA H100, GPU-22222222-1111-1111-1111-111111111111, 595.71.05"]),
+    ("gpu", ["NVIDIA RTX PRO 6000 Blackwell Server Edition, GPU-22222222-1111-1111-1111-111111111111, 595.91.07"]),
+    ("gpu", ["unknown"]),
+    ("gpu", []),
+    ("gpu", ["GPU 0", "GPU 1"]),
+    ("gpu", ["NVIDIA RTX PRO 6000 Blackwell Server Edition, unknown, 595.71.05"]),
+])
+def test_cross_part_uuid_policy_keeps_other_execution_guards(single_gpu_meta, field, value):
+    import copy
+    cmp = _provenance_module()
+    tail = copy.deepcopy(single_gpu_meta)
+    tail["execution_identity"][field] = value
+    with pytest.raises(ValueError, match="identity differs|requires"):
+        cmp.require_cross_part_execution_alignment(single_gpu_meta, tail, "same-gpu-model-v1")
+
+
+def test_cross_part_unknown_policy_rejected(single_gpu_meta):
+    with pytest.raises(ValueError, match="unknown cross-part"):
+        _provenance_module().require_cross_part_execution_alignment(single_gpu_meta, single_gpu_meta, "ignore")

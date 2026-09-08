@@ -79,6 +79,10 @@ def study_overview(profiles, plan):
         }
         if profile.get("head") and any(runtime[m]["draft_max"] for m in modes):
             models[name]["mtp_head"] = str(model_root / profile["head"])
+    if "metric_threads" in plan:
+        for model in models.values():
+            for runtime in model["kld_runtime"].values():
+                runtime["metric_threads"] = plan["metric_threads"]
     return {
         "schema": "skymizer-reference-study-v1", "stage": plan.get("stage", "reference"), "hardware": plan["hardware"],
         "source": {**profiles["dataset"], "split": "train", "requested_per_job": 400 if plan.get("reference_tail_400") else plan["num_samples"] or plan["size"]},

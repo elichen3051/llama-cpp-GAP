@@ -6,29 +6,37 @@ positions101..500 of the prepared500 pool by stable item ID. Generation
 exclusions remain exclusions; the logical dataset can contain fewer than400
 rows. Pilot exclusions remain authoritative for positions1..100.
 
-These are standard Hugging Face **filtered views**. Load them using
-`datasets.load_dataset(repo, config, split="train")`. Their physical Parquet
-files are unchanged copies of the parent500 files; reading those files directly
-bypasses the filter. Viewer is disabled because its native-Parquet shortcut
-can bypass builder filters. The composition manifest pins the parent and pilot
-commits and records exact requested, eligible and excluded IDs. The original
-pilot and collect500 repositories remain unchanged.
+The current nine repositories contain 105 materialized configs. Each Parquet holds only the eligible tail rows, with original encoded images, generated tokens and parent500 row metadata preserved. The requested tail size is 400; exclusions can reduce the eligible count. `composition.json` binds each config to its exact parent and pilot cohorts, audit copies and full Parquet SHA256. The deleted parent repositories are not needed to freeze or load these materialized snapshots. Older filtered-view revisions are deliberately rejected by the new freeze path.
 
-Use a new KLD study with the existing collect500 profile and add `--tail-400`:
+Use a new KLD study with the existing collect500 profile, `--tail-400`, and the exact collect400 Hub commit from the handover dataset lock. `--size 500` selects the parent scoring protocol; it does not collect 500 rows. First run the complete data validation without starting the scorer:
 
 ```bash
 .venv/bin/python cli/collect_model_kld.py \
   --study /path/to/new-tail400-study --size 500 --tail-400 \
-  --profiles profiles/small-collect500.json \
-  --model qwen3.5-4b --source mmstar --mode instruct \
+  --reference-revision 00700fec8cbdfbcad8406e8911c54f6b6284426c \
+  --profiles profiles/snr-collect500.json \
+  --model qwen3.6-35b-a3b --source mmstar --mode instruct \
   --candidate Q4_K_M --cand-model /models/Q4_K_M.gguf \
-  --llama-vlm-kld /path/to/llama-vlm-kld --gpu 0
+  --models-dir /models --metric-threads 12 \
+  --llama-vlm-kld /path/to/accepted/llama-vlm-kld --gpu 0 \
+  --freeze-only
 ```
 
-Keep the pilot's scoring machine, model/projector files, scorer build, loaded
-libraries and numerical runtime settings compatible. The comparison verifies
-the recorded execution identity, including GPU identity. An archived old study
-executes its original scripts; create a new study to use the new tail option.
+After model-file and execution-environment preflight, repeat the same command without `--freeze-only` to collect. The example revision applies only to Qwen3.6; use the corresponding model's locked revision for other repositories. `--reference-cache-dir` optionally selects the Hub cache. The model/scorer arguments remain required with `--freeze-only`, but their files are not loaded by that mode. `--dry-run` only displays the command and does not validate or freeze data.
+
+The launcher downloads composition/audits at the exact commit, verifies the full Parquet SHA256, validates native row/image/token contracts and the exact eligible-ID order, and saves a local dataset in `references/<model>/<config>/dataset`. Its `freeze-receipt.json` includes the revision, profile hash, source identities and hashes of all frozen files. Each collection also gets a copy as `reference-freeze.json`. Repeat invocations recheck the complete frozen files and rows before reuse; they reject a changed revision/profile or incomplete freeze. Preserve a failed freeze for diagnosis and use a fresh study path. Do not edit frozen files or bypass validation with a local `--dataset` argument in tail mode.
+
+`--metric-threads 12` changes only CPU metric workers; decoder threads remain 8. The override is stored in the study plan and overview, so repeat it on every command for that study. Omitting it keeps the profile default of 8. Changing it later requires a new study. The native CPU test compares all record bytes for 1, 4, 8 and 12 workers; this establishes worker-count invariance for the same input logits and execution environment, not a throughput gain or equivalence between different machines.
+
+Keep the pilot's model/projector files, scorer binary, loaded libraries and decoder settings identical. By default the comparison also requires identical GPU UUIDs. An archived old study executes its original scripts; create a new study to use the new tail option.
+
+To collect the tail on another machine, preserve the original absolute reference model/projector paths, `CUDA_CACHE_PATH`, `LD_LIBRARY_PATH`, device selectors and every other recorded execution environment value. The full loaded-library list and SHA256 values must match, including the system loader, libc, libcuda, CUDA, cuBLAS and NCCL; copying only the scorer executable is insufficient. The new machine must record exactly one GPU with the same model name and driver version. Multiple recorded GPUs, unknown GPU identities and driver or library changes are rejected.
+
+For an approved transfer meeting these conditions, add `--cross-part-execution-policy same-gpu-model-v1` to the comparison command below. This permits only a different physical GPU UUID between the pilot and tail scorer identities. Every A/B pair within each part still requires the complete original execution identity and bit-identical reference columns. Reference paths, all four model/projector fingerprints, decoder settings and environment values are not relaxed. The report records the selected policy, a warning and all four original metadata records; the source collections and generator provenance are never rewritten.
+
+The same opt-in permits different positive `metric_threads` values across parts, for example pilot 8 and tail 12. This worker count only distributes independent token metric records; each token keeps its original vocabulary reduction order. The decoder's `n_threads`, batches and Flash Attention setting still must match. Within-part A/B metric worker counts and collection resume identity remain strict. Automatic or nonpositive metric worker counts are rejected by this policy.
+
+This opt-in does not establish numerical or bitwise equivalence across physical GPUs, and the legacy identity does not record all host hardware details. GPU model/driver equality is a bounded compatibility check, not a hardware equivalence proof. Any broader hardware, path or runtime change needs a separately reviewed policy before collecting data for this composition.
 
 Compare a pair by supplying its two pilot collections and two tail collections:
 
@@ -67,7 +75,7 @@ below found no exact repeated images within a single500 config. Broader source
 dependence and selection based on observed SNR still need the campaign protocol,
 appropriate clusters and held-out evaluation.
 
-## Production source and reference audit,2026-09-08
+## Historical prepared-source audit, 2026-09-08
 
 Source revision:
 [`6cb6a4d65fcb2c8d788f68aaa0aa92c5ceca408b`](https://huggingface.co/datasets/elichen-skymizer/vlm-prepared-dataset/tree/6cb6a4d65fcb2c8d788f68aaa0aa92c5ceca408b).
@@ -84,16 +92,11 @@ and vision also share all500 underlying item IDs and answers despite different
 image presentation. Do not treat the two representations as independent items
 in a pooled campaign. Encoded-byte clustering alone misses these relationships.
 
-The pinned reference inventory contains105 pilot configs and85 matching
-collect500 configs across nine model repositories. All85 satisfy the exact
-requested-ID prefix rule. They provide8,440 eligible pilot items and33,712
-eligible tail items in total across configs. These are reference availability
-counts, not evidence that every production KLD collection has finished or passes
-the scorer compatibility checks.
+The earlier inventory below the source audit covered 85 matching collect500 configs. The current materialized delivery supersedes that inventory: nine repositories, 105 tail configs, 42,000 requested and 41,704 eligible tail rows across model/source/mode configs. These counts do not mean distinct source images or completed KLD collections. Readiness of an actual KLD comparison still requires the scorer and artifact checks above.
 
-## Publishing another completed parent snapshot
+## Historical filtered-view publisher
 
-Stage and inspect locally, then publish a new private sibling repository:
+The existing publisher below creates the older filtered-view format, not the materialized format required by the new freeze path. It cannot recreate or update the current nine repositories after their parents were deleted. These commands are retained only to explain historical publications, and are not part of the current collection workflow:
 
 ```bash
 .venv/bin/python cli/publish_collect400.py \

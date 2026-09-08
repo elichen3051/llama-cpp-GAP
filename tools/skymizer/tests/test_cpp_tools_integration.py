@@ -471,3 +471,41 @@ int main(int argc, char ** argv) {
     subprocess.run([*command, str(source), "-o", str(exe)], check=True)
     result = subprocess.run([str(exe), str(tmp_path)], capture_output=True, text=True)
     assert result.returncode == 0, result.stderr
+
+
+def test_metric_worker_counts_preserve_record_bytes(tmp_path):
+    if shutil.which("g++") is None:
+        pytest.skip("g++ unavailable")
+    source = tmp_path / "metric-workers.cpp"
+    source.write_text(r'''
+#include "skymizer-vlmk-kernel.h"
+#include <cassert>
+int main() {
+    const int rows = 31, vocab = 257;
+    std::vector<std::vector<float>> ref(rows, std::vector<float>(vocab));
+    std::vector<std::vector<float>> cand = ref;
+    std::vector<const float *> rp, cp;
+    std::vector<int32_t> targets;
+    for (int i = 0; i < rows; ++i) {
+        for (int j = 0; j < vocab; ++j) {
+            ref[i][j] = float((i * 19 + j * 7) % 101 - 50) / 9;
+            cand[i][j] = ref[i][j] + float((i + j) % 11 - 5) / 100;
+        }
+        rp.push_back(ref[i].data());
+        cp.push_back(cand[i].data());
+        targets.push_back(i % vocab);
+    }
+    std::vector<kld_record> serial(rows), parallel(rows);
+    compute_records_parallel(rp, cp, targets, vocab, 1, serial.data());
+    for (int threads : {4, 8, 12, 64}) {
+        compute_records_parallel(rp, cp, targets, vocab, threads, parallel.data());
+        assert(std::memcmp(serial.data(), parallel.data(), rows * sizeof(kld_record)) == 0);
+    }
+}
+''')
+    exe = tmp_path / "metric-workers"
+    command = ["g++", "-std=c++17", "-O2", "-pthread", "-ffunction-sections", "-fdata-sections", "-Wl,--gc-sections"]
+    for directory in (SKYMIZER / "core", REPO / "include", REPO / "ggml/include", REPO / "common", REPO / "vendor"):
+        command += ["-I", str(directory)]
+    subprocess.run([*command, str(source), "-o", str(exe)], check=True)
+    subprocess.run([str(exe)], check=True)
