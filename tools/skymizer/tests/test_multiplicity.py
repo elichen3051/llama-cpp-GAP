@@ -231,3 +231,32 @@ def test_unavailable_cells_retain_family_and_censored_bounds():
     boundary = [{"p_value": 1 - .95}]
     _adjust_exploratory_cells(boundary, .95)
     assert not boundary[0]["holm_significant"]
+
+
+@pytest.mark.parametrize("method, expected", [
+    ("holm", [.04, .09, .09, .2]),
+    ("fdr_bh", [.04, .16/3, .16/3, .2]),
+    ("fdr_by", [1/12, 1/9, 1/9, 5/12]),
+])
+def test_package_adjustments_against_hand_calculated_family(method, expected):
+    from stats.multiplicity import adjust_pvalues
+    p = [.01, .04, .03, .2]
+    assert adjust_pvalues(p, method) == pytest.approx(expected)
+    order = [3, 1, 0, 2]
+    assert adjust_pvalues([p[i] for i in order], method) == pytest.approx([expected[i] for i in order])
+
+
+@pytest.mark.parametrize("method", ["fdr_bh", "fdr_by"])
+def test_fdr_package_matches_independent_scipy_api(method):
+    from scipy.stats import false_discovery_control
+    from stats.multiplicity import adjust_pvalues
+    p = [0, .001, .01, .03, .05, .05, .5, 1]
+    assert adjust_pvalues(p, method) == pytest.approx(false_discovery_control(p, method=method[4:]), abs=1e-15)
+
+
+def test_adjustment_rejects_matrix_and_unknown_method():
+    from stats.multiplicity import adjust_pvalues
+    with pytest.raises(ValueError, match="1-D"):
+        adjust_pvalues([[.01, .02]])
+    with pytest.raises(ValueError, match="method"):
+        adjust_pvalues([.01], "auto")

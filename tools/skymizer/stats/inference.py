@@ -242,29 +242,13 @@ def _bootstrap_ci_inference(interval_at, confidence_level: float, bootstrap_iter
 
 
 def holm_adjust(p_values: Sequence[float]) -> list[float]:
-    """Holm-Bonferroni step-down adjustment, returned in input order.
+    """Holm adjustment over the complete family using statsmodels.
 
-    Controls the FAMILY-WISE error rate under ARBITRARY dependence, which is
-    what this family needs: kld / reversed_kld / js_kld are three
-    functionals of the same pair of distributions. Nothing here is
-    independent, so Benjamini-Hochberg's assumptions do not hold and
-    Holm's do.
-
-    p_adj_(k) = max_{j <= k} (m - j) * p_(j), clipped to 1 -- the running max
-    enforces monotonicity, so a cell can never be adjusted below one that had
-    a smaller raw p."""
-    if any(not math.isfinite(p) or not 0.0 <= p <= 1.0 for p in p_values):
-        raise ValueError("Holm p-values must be finite and in [0, 1]")
-    m = len(p_values)
-    if m == 0:
-        return []
-    order = sorted(range(m), key=lambda i: p_values[i])
-    out = [0.0] * m
-    running = 0.0
-    for rank, i in enumerate(order):
-        running = max(running, (m - rank) * p_values[i])
-        out[i] = min(1.0, running)
-    return out
+    API: https://www.statsmodels.org/v0.14.6/generated/statsmodels.stats.multitest.multipletests.html
+    Strong FWER under arbitrary dependence: Holm (1979), https://www.jstor.org/stable/4615733
+    """
+    from stats.multiplicity import adjust_pvalues
+    return adjust_pvalues(p_values, "holm")
 
 
 def _bootstrap_item_indices(seed: int | None, n_items: int, iters: int):
