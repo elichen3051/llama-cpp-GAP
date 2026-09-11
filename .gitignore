@@ -100,7 +100,7 @@ __pycache__/
 poetry.toml
 poetry.lock
 uv.lock
-!tools/skymizer/uv.lock
+!tools/gap/uv.lock
 
 # Nix
 

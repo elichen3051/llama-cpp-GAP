@@ -1,0 +1,41 @@
+[project]
+name = "company"
+version = "0.2.0"
+description = "VLM/LLM KLD metric collection and paired comparison helpers for llama.cpp"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "datasets==5.0.1",
+    "numpy==2.5.2",
+    "scipy==1.18.1",
+    "pillow==12.3.0",
+    "huggingface-hub==1.30.0",
+    "pyarrow==25.0.1",
+    "statsmodels==0.14.6",
+]
+
+[project.optional-dependencies]
+# Only legacy HF/vLLM datasets need an HF tokenizer to reconstruct prompts.
+hf-tokenizer = ["transformers>=5.5.1", "tiktoken>=0.14.0", "blobfile>=3.0.0"]
+
+# Repository-local scripts; do not discover flat-layout installable packages.
+[tool.uv]
+package = false
+
+# Native collection and CPU numerical validation use the same pinned environment.
+[dependency-groups]
+dev = [
+    "pytest==9.1.1",
+    "pytest-timeout==2.4.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# -p no:cacheprovider: no .pytest_cache (its lastfailed went 100% stale once
+# and misled a review). --strict-markers: an unregistered mark is an error.
+addopts = "-ra --strict-markers -p no:cacheprovider"
+markers = [
+    "statistical: Monte Carlo / repeated statistical validation (~39s of the suite; deselect with -m 'not statistical' while iterating)",
+    "integration: crosses process/file/binary boundaries",
+    "external_model: requires model assets, HF datasets, or an external repo",
+]

@@ -1,0 +1,637 @@
+{
+  "schema_version": 1,
+  "production_group": "final_eval",
+  "cohort_size": 100,
+  "cohort_name": "pilot100",
+  "measured_on": "RTX PRO6000: five new-pin reference lanes passed; Muse21-row new-pin capacity passed; full100/500 not executed.",
+  "dataset": {
+    "repo": "user-company/vlm-prepared-dataset",
+    "revision": "6cb6a4d65fcb2c8d788f68aaa0aa92c5ceca408b"
+  },
+  "sources": [
+    "blink-val",
+    "mathvision-test",
+    "mmmu-pro-standard-10",
+    "mmmu-pro-vision",
+    "mmstar",
+    "ocrbench-v1",
+    "ocrbench-v2"
+  ],
+  "seed": 1234,
+  "generation_caps": {
+    "instruct": 2048,
+    "thinking": 8192
+  },
+  "kld_eval_tokens": {
+    "instruct": 2048,
+    "thinking": 8192
+  },
+  "scope": "Reference-only starting protocol; kld_eval_tokens mirrors collection caps and does not approve a KLD/SNR study.",
+  "image_token_budget": "Omit --image-min-tokens and --image-max-tokens entirely; native GGUF/mtmd defaults.",
+  "sampler_policy": "Frozen native calibration dictionaries, explicit model-card parameters, native sampler order and retained defaults.",
+  "semantic_modes": {
+    "internvl3.5-30b-a3b": [
+      "instruct",
+      "thinking"
+    ],
+    "glm-4.6v-flash": [
+      "instruct",
+      "thinking"
+    ],
+    "muse-glimmer-30b": [
+      "thinking"
+    ]
+  },
+  "status": "bounded_reference_acceptance_passed",
+  "models": {
+    "internvl3.5-30b-a3b": {
+      "model": "internvl3.5-30b-a3b/bartowski/bf16/OpenGVLab_InternVL3_5-30B-A3B-bf16-00001-of-00002.gguf",
+      "mmproj": "internvl3.5-30b-a3b/bartowski/mmproj-OpenGVLab_InternVL3_5-30B-A3B-bf16.gguf",
+      "card": "OpenGVLab/InternVL3_5-30B-A3B",
+      "card_source": {
+        "repo": "OpenGVLab/InternVL3_5-30B-A3B",
+        "revision": "ba1762d830e2aeddb3272b66ba9e0abf7e69f626"
+      },
+      "gguf_source": {
+        "repo": "bartowski/OpenGVLab_InternVL3_5-30B-A3B-GGUF",
+        "revision": "a6824f88ffe59c72fc9864a87d40753556cba5d9"
+      },
+      "mtp": null,
+      "production_group": "final_eval",
+      "semantic_modes": [
+        "instruct",
+        "thinking"
+      ],
+      "sampling_args": {
+        "instruct": [
+          "--temp",
+          "0.8"
+        ],
+        "thinking": [
+          "--temp",
+          "0.6"
+        ]
+      },
+      "runtime": {
+        "pro6000": {
+          "instruct": {
+            "ctx": 32768,
+            "batch": 2048,
+            "ubatch": 512,
+            "threads": 8,
+            "threads_batch": 8,
+            "draft_max": 0,
+            "parallel": 1,
+            "swa_full": false,
+            "validation": "New-pin two-row high-level reference acceptance passed at pilot cap; 500 cap is a lower budget-selected limit. See delivery evidence for exact sampling and source identity."
+          },
+          "thinking": {
+            "ctx": 32768,
+            "batch": 2048,
+            "ubatch": 512,
+            "threads": 8,
+            "threads_batch": 8,
+            "draft_max": 0,
+            "parallel": 1,
+            "swa_full": false,
+            "validation": "New-pin two-row high-level reference acceptance passed at pilot cap; 500 cap is a lower budget-selected limit. See delivery evidence for exact sampling and source identity."
+          }
+        }
+      },
+      "effective_sampling": {
+        "instruct": {
+          "seed": 1234,
+          "temperature": 0.800000011920929,
+          "top_k": 40,
+          "top_p": 0.949999988079071,
+          "min_p": 0.05000000074505806,
+          "typical_p": 1.0,
+          "min_keep": 0,
+          "n_prev": 64,
+          "samplers": [
+            "penalties",
+            "dry",
+            "top_n_sigma",
+            "top_k",
+            "typ_p",
+            "top_p",
+            "min_p",
+            "xtc",
+            "temperature"
+          ],
+          "sampler_chain": "logits -> ?penalties -> ?dry -> ?top-n-sigma -> top-k -> ?typical -> top-p -> min-p -> ?xtc -> temp-ext -> dist ",
+          "repeat_last_n": 64,
+          "repeat_penalty": 1.0,
+          "frequency_penalty": 0.0,
+          "presence_penalty": 0.0,
+          "penalize_prompt": true,
+          "dry_multiplier": 0.0,
+          "dry_base": 1.75,
+          "dry_allowed_length": 2,
+          "dry_penalty_last_n": 64,
+          "dry_sequence_breakers": [
+            "\n",
+            ":",
+            "\"",
+            "*"
+          ],
+          "xtc_probability": 0.0,
+          "xtc_threshold": 0.10000000149011612,
+          "dynatemp_range": 0.0,
+          "dynatemp_exponent": 1.0,
+          "top_n_sigma": -1.0,
+          "mirostat": 0,
+          "mirostat_tau": 5.0,
+          "mirostat_eta": 0.10000000149011612,
+          "adaptive_target": -1.0,
+          "adaptive_decay": 0.8999999761581421,
+          "ignore_eos": false,
+          "logit_bias": [],
+          "grammar": "",
+          "grammar_lazy": false,
+          "backend_sampling": false,
+          "user_sampling_config": 64
+        },
+        "thinking": {
+          "seed": 1234,
+          "temperature": 0.6000000238418579,
+          "top_k": 40,
+          "top_p": 0.949999988079071,
+          "min_p": 0.05000000074505806,
+          "typical_p": 1.0,
+          "min_keep": 0,
+          "n_prev": 64,
+          "samplers": [
+            "penalties",
+            "dry",
+            "top_n_sigma",
+            "top_k",
+            "typ_p",
+            "top_p",
+            "min_p",
+            "xtc",
+            "temperature"
+          ],
+          "sampler_chain": "logits -> ?penalties -> ?dry -> ?top-n-sigma -> top-k -> ?typical -> top-p -> min-p -> ?xtc -> temp-ext -> dist ",
+          "repeat_last_n": 64,
+          "repeat_penalty": 1.0,
+          "frequency_penalty": 0.0,
+          "presence_penalty": 0.0,
+          "penalize_prompt": true,
+          "dry_multiplier": 0.0,
+          "dry_base": 1.75,
+          "dry_allowed_length": 2,
+          "dry_penalty_last_n": 64,
+          "dry_sequence_breakers": [
+            "\n",
+            ":",
+            "\"",
+            "*"
+          ],
+          "xtc_probability": 0.0,
+          "xtc_threshold": 0.10000000149011612,
+          "dynatemp_range": 0.0,
+          "dynatemp_exponent": 1.0,
+          "top_n_sigma": -1.0,
+          "mirostat": 0,
+          "mirostat_tau": 5.0,
+          "mirostat_eta": 0.10000000149011612,
+          "adaptive_target": -1.0,
+          "adaptive_decay": 0.8999999761581421,
+          "ignore_eos": false,
+          "logit_bias": [],
+          "grammar": "",
+          "grammar_lazy": false,
+          "backend_sampling": false,
+          "user_sampling_config": 64
+        }
+      },
+      "system_prompt": {
+        "instruct": "",
+        "thinking": "You are an AI assistant that rigorously follows this response protocol:\n\n1. First, conduct a detailed analysis of the question. Consider different angles, potential solutions, and reason through the problem step-by-step. Enclose this entire thinking process within <think> and </think> tags.\n\n2. After the thinking section, provide a clear, concise, and direct answer to the user's question. Separate the answer from the think section with a newline.\n\nEnsure that the thinking process is thorough but remains focused on the query. The final answer should be standalone and not reference the thinking section."
+      },
+      "chat_template_kwargs": {
+        "instruct": {},
+        "thinking": {}
+      },
+      "native_sampling_evidence": {
+        "instruct": {
+          "status": "observed_prior_native",
+          "metadata": "/opt/dlami/nvme/company-length-audit-20260906/runs/round1/internvl3.5-30b-a3b/instruct/native/metadata.json",
+          "sha256": "18d281e57b1462f2bc34dd8cbf1080640204c0837a4cc259f80d89b9e1c0c0b1",
+          "round2_metadata": "/opt/dlami/nvme/company-length-audit-20260906/runs/round2/internvl3.5-30b-a3b/instruct/native/metadata.json",
+          "round2_sha256": "d355176a2bffd0830e1161ea9067cfe4a687b83d7fd443ebb9bfd893f322cb8d",
+          "complete_sampling_dictionary_equal_across_rounds": true,
+          "rows_per_round": 7,
+          "dataset_revision": "c3f0e320b7f0360a3a10ee4c74aca0b93d697dc5"
+        },
+        "thinking": {
+          "status": "observed_prior_native",
+          "metadata": "/opt/dlami/nvme/company-length-audit-20260906/runs/round1/internvl3.5-30b-a3b/thinking/native/metadata.json",
+          "sha256": "4471eccb8196fe16af2c528f34893c3cd4cce0f3dc6a493445a6f7b1cad1fb6c",
+          "round2_metadata": "/opt/dlami/nvme/company-length-audit-20260906/runs/round2/internvl3.5-30b-a3b/thinking/native/metadata.json",
+          "round2_sha256": "716cf6942d988ebc372860988d44ac0d4475ce57d6b9b078d18f3712061359fa",
+          "complete_sampling_dictionary_equal_across_rounds": true,
+          "rows_per_round": 7,
+          "dataset_revision": "c3f0e320b7f0360a3a10ee4c74aca0b93d697dc5"
+        }
+      },
+      "identity": {
+        "files": [
+          {
+            "name": "OpenGVLab_InternVL3_5-30B-A3B-bf16-00001-of-00002.gguf",
+            "size": 39717427296,
+            "sha256": "37ab465cd0c2b47b6b68e17f6e1f3ffd48701a27518c71ad7ac21b7f5a8d9f24",
+            "role": "llm"
+          },
+          {
+            "name": "OpenGVLab_InternVL3_5-30B-A3B-bf16-00002-of-00002.gguf",
+            "size": 21378372352,
+            "sha256": "469c362f36f7ad24dec0da0c75b2ebc681f60b160cee303421388b8375fc2161",
+            "role": "llm"
+          },
+          {
+            "name": "mmproj-OpenGVLab_InternVL3_5-30B-A3B-bf16.gguf",
+            "size": 637310368,
+            "sha256": "d7b31eac832bb0d9adac61b3d5c81071df31ce1ad710d0e5758564e377bb14ea",
+            "role": "mmproj"
+          }
+        ],
+        "manifest": "s3://research-kld-benchmark/reference_model/internvl3.5-30b-a3b/manifest.json",
+        "verification": "Prior full-local SHA256 and remote integrity verification plus exact-key unchanged HeadObject receipt; 2026-09-06 preparation did not rehash model payloads."
+      },
+      "semantic_mode_note": "The GGUF template has no enable_thinking branch. instruct means ordinary prompt with native temperature 0.8, not an official numeric recommendation; thinking means the exact official R1 system prompt plus temperature 0.6. The mode boolean is a dataset semantic label, not the mechanism."
+    },
+    "glm-4.6v-flash": {
+      "model": "glm-4.6v-flash/bartowski/zai-org_GLM-4.6V-Flash-bf16.gguf",
+      "mmproj": "glm-4.6v-flash/bartowski/mmproj-zai-org_GLM-4.6V-Flash-bf16.gguf",
+      "card": "zai-org/GLM-4.6V-Flash",
+      "card_source": {
+        "repo": "zai-org/GLM-4.6V-Flash",
+        "revision": "411bb4d77144a3f03accbf4b780f5acb8b7cde4e"
+      },
+      "gguf_source": {
+        "repo": "bartowski/zai-org_GLM-4.6V-Flash-GGUF",
+        "revision": "6a3b3ca7bbda9a5495091faa7421ebb30365f6aa"
+      },
+      "mtp": null,
+      "production_group": "final_eval",
+      "semantic_modes": [
+        "instruct",
+        "thinking"
+      ],
+      "sampling_args": {
+        "instruct": [
+          "--temp",
+          "0.8",
+          "--top-p",
+          "0.6",
+          "--top-k",
+          "2",
+          "--min-p",
+          "0.05",
+          "--repeat-penalty",
+          "1.1"
+        ],
+        "thinking": [
+          "--temp",
+          "0.8",
+          "--top-p",
+          "0.6",
+          "--top-k",
+          "2",
+          "--min-p",
+          "0.05",
+          "--repeat-penalty",
+          "1.1"
+        ]
+      },
+      "runtime": {
+        "pro6000": {
+          "instruct": {
+            "ctx": 32768,
+            "batch": 2048,
+            "ubatch": 512,
+            "threads": 8,
+            "threads_batch": 8,
+            "draft_max": 0,
+            "parallel": 1,
+            "swa_full": false,
+            "validation": "New-pin two-row high-level reference acceptance passed at pilot cap; 500 cap is a lower budget-selected limit. See delivery evidence for exact sampling and source identity."
+          },
+          "thinking": {
+            "ctx": 32768,
+            "batch": 2048,
+            "ubatch": 512,
+            "threads": 8,
+            "threads_batch": 8,
+            "draft_max": 0,
+            "parallel": 1,
+            "swa_full": false,
+            "validation": "New-pin two-row high-level reference acceptance passed at pilot cap; 500 cap is a lower budget-selected limit. See delivery evidence for exact sampling and source identity."
+          }
+        }
+      },
+      "effective_sampling": {
+        "instruct": {
+          "seed": 1234,
+          "temperature": 0.800000011920929,
+          "top_k": 2,
+          "top_p": 0.6000000238418579,
+          "min_p": 0.05000000074505806,
+          "typical_p": 1.0,
+          "min_keep": 0,
+          "n_prev": 64,
+          "samplers": [
+            "penalties",
+            "dry",
+            "top_n_sigma",
+            "top_k",
+            "typ_p",
+            "top_p",
+            "min_p",
+            "xtc",
+            "temperature"
+          ],
+          "sampler_chain": "logits -> penalties -> ?dry -> ?top-n-sigma -> top-k -> ?typical -> top-p -> min-p -> ?xtc -> temp-ext -> dist ",
+          "repeat_last_n": 64,
+          "repeat_penalty": 1.100000023841858,
+          "frequency_penalty": 0.0,
+          "presence_penalty": 0.0,
+          "penalize_prompt": true,
+          "dry_multiplier": 0.0,
+          "dry_base": 1.75,
+          "dry_allowed_length": 2,
+          "dry_penalty_last_n": 64,
+          "dry_sequence_breakers": [
+            "\n",
+            ":",
+            "\"",
+            "*"
+          ],
+          "xtc_probability": 0.0,
+          "xtc_threshold": 0.10000000149011612,
+          "dynatemp_range": 0.0,
+          "dynatemp_exponent": 1.0,
+          "top_n_sigma": -1.0,
+          "mirostat": 0,
+          "mirostat_tau": 5.0,
+          "mirostat_eta": 0.10000000149011612,
+          "adaptive_target": -1.0,
+          "adaptive_decay": 0.8999999761581421,
+          "ignore_eos": false,
+          "logit_bias": [],
+          "grammar": "",
+          "grammar_lazy": false,
+          "backend_sampling": false,
+          "user_sampling_config": 334
+        },
+        "thinking": {
+          "seed": 1234,
+          "temperature": 0.800000011920929,
+          "top_k": 2,
+          "top_p": 0.6000000238418579,
+          "min_p": 0.05000000074505806,
+          "typical_p": 1.0,
+          "min_keep": 0,
+          "n_prev": 64,
+          "samplers": [
+            "penalties",
+            "dry",
+            "top_n_sigma",
+            "top_k",
+            "typ_p",
+            "top_p",
+            "min_p",
+            "xtc",
+            "temperature"
+          ],
+          "sampler_chain": "logits -> penalties -> ?dry -> ?top-n-sigma -> top-k -> ?typical -> top-p -> min-p -> ?xtc -> temp-ext -> dist ",
+          "repeat_last_n": 64,
+          "repeat_penalty": 1.100000023841858,
+          "frequency_penalty": 0.0,
+          "presence_penalty": 0.0,
+          "penalize_prompt": true,
+          "dry_multiplier": 0.0,
+          "dry_base": 1.75,
+          "dry_allowed_length": 2,
+          "dry_penalty_last_n": 64,
+          "dry_sequence_breakers": [
+            "\n",
+            ":",
+            "\"",
+            "*"
+          ],
+          "xtc_probability": 0.0,
+          "xtc_threshold": 0.10000000149011612,
+          "dynatemp_range": 0.0,
+          "dynatemp_exponent": 1.0,
+          "top_n_sigma": -1.0,
+          "mirostat": 0,
+          "mirostat_tau": 5.0,
+          "mirostat_eta": 0.10000000149011612,
+          "adaptive_target": -1.0,
+          "adaptive_decay": 0.8999999761581421,
+          "ignore_eos": false,
+          "logit_bias": [],
+          "grammar": "",
+          "grammar_lazy": false,
+          "backend_sampling": false,
+          "user_sampling_config": 334
+        }
+      },
+      "system_prompt": {
+        "instruct": "",
+        "thinking": ""
+      },
+      "chat_template_kwargs": {
+        "instruct": {},
+        "thinking": {}
+      },
+      "native_sampling_evidence": {
+        "instruct": {
+          "status": "observed_prior_native",
+          "metadata": "/opt/dlami/nvme/company-length-audit-20260906/runs/round1/glm-4.6v-flash/instruct/native/metadata.json",
+          "sha256": "7a2e2ecc39e109338f195b02350fd23d83fd4134ce92850b5803dab30c0491ed",
+          "round2_metadata": "/opt/dlami/nvme/company-length-audit-20260906/runs/round2/glm-4.6v-flash/instruct/native/metadata.json",
+          "round2_sha256": "a9711b50cf204911c2d9d40550a403fcc4b1900c9163e55a2320da285f0355a0",
+          "complete_sampling_dictionary_equal_across_rounds": true,
+          "rows_per_round": 7,
+          "dataset_revision": "c3f0e320b7f0360a3a10ee4c74aca0b93d697dc5"
+        },
+        "thinking": {
+          "status": "observed_prior_native",
+          "metadata": "/opt/dlami/nvme/company-length-audit-20260906/runs/round1/glm-4.6v-flash/thinking/native/metadata.json",
+          "sha256": "44b19e87c70bea74672e3dcdad3f0bad5b6b37a31ec2387dd2cdad80002b0778",
+          "round2_metadata": "/opt/dlami/nvme/company-length-audit-20260906/runs/round2/glm-4.6v-flash/thinking/native/metadata.json",
+          "round2_sha256": "3ed53d1053debec96799a6a0b486684881b95fc2dc757a3baa60ed2f78b2ae2f",
+          "complete_sampling_dictionary_equal_across_rounds": true,
+          "rows_per_round": 7,
+          "dataset_revision": "c3f0e320b7f0360a3a10ee4c74aca0b93d697dc5"
+        }
+      },
+      "identity": {
+        "files": [
+          {
+            "name": "zai-org_GLM-4.6V-Flash-bf16.gguf",
+            "size": 18811585376,
+            "sha256": "d3e0598b2a7071190f69309f91514596389e5b893a28a4441eb02e0606a6ec5f",
+            "role": "llm"
+          },
+          {
+            "name": "mmproj-zai-org_GLM-4.6V-Flash-bf16.gguf",
+            "size": 1840903936,
+            "sha256": "219b0fcf326d8d023004ce9fc27fa643bd73ebfb73684e8e0af742c1fd755b63",
+            "role": "mmproj"
+          }
+        ],
+        "manifest": "s3://research-kld-benchmark/reference_model/glm-4.6v-flash/manifest.json",
+        "verification": "Prior full-local SHA256 and remote integrity verification plus exact-key unchanged HeadObject receipt; 2026-09-06 preparation did not rehash model payloads."
+      },
+      "semantic_mode_note": "The GGUF template supports enable_thinking and appends /nothink when false. Both modes use the same official numeric sampling recipe plus the retained native min_p explicitly pinned."
+    },
+    "muse-glimmer-30b": {
+      "model": "muse-glimmer-30b/bartowski/bf16/Muse-Glimmer-30B-bf16/Muse-Glimmer-30B-bf16-00001-of-00002.gguf",
+      "mmproj": "muse-glimmer-30b/bartowski/mmproj-Muse-Glimmer-30B-bf16.gguf",
+      "card": "meta-models/Muse-Glimmer-30B",
+      "card_source": {
+        "repo": "meta-models/Muse-Glimmer-30B",
+        "revision": "a4e59da52a7bc87ae7251dd5545c0dd437c44b68"
+      },
+      "gguf_source": {
+        "repo": "bartowski/Muse-Glimmer-30B-GGUF",
+        "revision": "01e1b7c30e19e1823ee9a73dec51d12f59ec4857"
+      },
+      "mtp": null,
+      "production_group": "final_eval",
+      "semantic_modes": [
+        "thinking"
+      ],
+      "sampling_args": {
+        "thinking": [
+          "--temp",
+          "1.0",
+          "--top-p",
+          "0.95",
+          "--top-k",
+          "64",
+          "--min-p",
+          "0.05"
+        ]
+      },
+      "runtime": {
+        "pro6000": {
+          "thinking": {
+            "ctx": 32768,
+            "batch": 2048,
+            "ubatch": 512,
+            "threads": 8,
+            "threads_batch": 8,
+            "draft_max": 0,
+            "parallel": 1,
+            "swa_full": false,
+            "validation": "New-pin two-row high-level reference acceptance passed at pilot cap; 500 cap is a lower budget-selected limit. See delivery evidence for exact sampling and source identity. All21 heuristic new-pin capacity rows passed at cap8."
+          }
+        }
+      },
+      "effective_sampling": {
+        "thinking": {
+          "seed": 1234,
+          "temperature": 1.0,
+          "top_k": 64,
+          "top_p": 0.949999988079071,
+          "min_p": 0.05000000074505806,
+          "typical_p": 1.0,
+          "min_keep": 0,
+          "n_prev": 64,
+          "samplers": [
+            "penalties",
+            "dry",
+            "top_n_sigma",
+            "top_k",
+            "typ_p",
+            "top_p",
+            "min_p",
+            "xtc",
+            "temperature"
+          ],
+          "sampler_chain": "logits -> ?penalties -> ?dry -> ?top-n-sigma -> top-k -> ?typical -> top-p -> min-p -> ?xtc -> ?temp-ext -> dist ",
+          "repeat_last_n": 64,
+          "repeat_penalty": 1.0,
+          "frequency_penalty": 0.0,
+          "presence_penalty": 0.0,
+          "penalize_prompt": true,
+          "dry_multiplier": 0.0,
+          "dry_base": 1.75,
+          "dry_allowed_length": 2,
+          "dry_penalty_last_n": 64,
+          "dry_sequence_breakers": [
+            "\n",
+            ":",
+            "\"",
+            "*"
+          ],
+          "xtc_probability": 0.0,
+          "xtc_threshold": 0.10000000149011612,
+          "dynatemp_range": 0.0,
+          "dynatemp_exponent": 1.0,
+          "top_n_sigma": -1.0,
+          "mirostat": 0,
+          "mirostat_tau": 5.0,
+          "mirostat_eta": 0.10000000149011612,
+          "adaptive_target": -1.0,
+          "adaptive_decay": 0.8999999761581421,
+          "ignore_eos": false,
+          "logit_bias": [],
+          "grammar": "",
+          "grammar_lazy": false,
+          "backend_sampling": false,
+          "user_sampling_config": 78
+        }
+      },
+      "system_prompt": {
+        "thinking": ""
+      },
+      "chat_template_kwargs": {
+        "thinking": {
+          "reasoning_strength": "high",
+          "current_date": "2026-09-06"
+        }
+      },
+      "native_sampling_evidence": {
+        "thinking": {
+          "status": "observed_native_calibration_passed",
+          "basis": "Actual Muse native sampler dictionary matched expected config78 on21 capacity rows and2 full-cap reference rows.",
+          "receipt": "../evidence/muse-glimmer-30b-thinking-acceptance.json"
+        }
+      },
+      "identity": {
+        "files": [
+          {
+            "name": "Muse-Glimmer-30B-bf16-00001-of-00002.gguf",
+            "size": 39750446272,
+            "sha256": "bee9afa70ebaa476b07abaebd4376a37c8b5c4d33fbed7e39bda4e43e0477860",
+            "role": "llm"
+          },
+          {
+            "name": "Muse-Glimmer-30B-bf16-00002-of-00002.gguf",
+            "size": 15975065088,
+            "sha256": "e7bc887eec50cd0a77f1888c4110b17602193cb073e40c9e73df2648c4ff3d16",
+            "role": "llm"
+          },
+          {
+            "name": "mmproj-Muse-Glimmer-30B-bf16.gguf",
+            "size": 3849173920,
+            "sha256": "3727a47650ae65be12e91aae49f9b9f4bef09dc6c401a54ca1bd3d1a6160f35a",
+            "role": "mmproj"
+          }
+        ],
+        "manifest": "s3://research-kld-benchmark/reference_model/muse-glimmer-30b/manifest.json",
+        "verification": "Prior full-local SHA256 and remote integrity verification plus exact-key unchanged HeadObject receipt; 2026-09-06 preparation did not rehash model payloads."
+      },
+      "semantic_mode_note": "Only thinking/high is selected. Official template supports low/medium/high/xhigh reasoning strength, has no thinking-off branch and ignores enable_thinking. Pin current_date to 2026-09-06 to avoid date-dependent prompt drift. No DFlash/MTP head in this AR reference protocol."
+    }
+  },
+  "upstream_support_boundary": "Use only model architectures, graphs, quant kernels and vision preprocessing already present at this upstream base. Company prompt plumbing and tile-checker corrections do not add model capability. Isolate native failures with existing upstream tools before exclusion; no new model implementation.",
+  "upstream_base_commit": "6a1a922d269908a29cbd4b49c27e6a8e7fd10fae"
+}

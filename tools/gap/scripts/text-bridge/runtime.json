@@ -1,0 +1,167 @@
+{
+ "note": "Identity record of the native runtime (binaries + backend libraries) behind every run under runs/. No binaries ship with the release; rebuild from the fork (see README.md). The second build was shown bit-identical to the first on the parity check recorded below.",
+ "source": {
+  "repository": "https://github.com/user/llama-cpp-GAP (branch text-bridge-production-scripts; tool files identical to commit ca3dc958 + overlay patch)",
+  "commit": "ca3dc958533d768953ac92a310b0ae8c6039e51f",
+  "overlay_patch": "llm-vocab-attribute-waiver.patch",
+  "overlay_patch_sha256": "0b188745ba6a6297a2cece40d4de346a8003da164bf549a6607db4d7ee585b19",
+  "targets": [
+   "llama-tokenize",
+   "llama-perplexity",
+   "llama-llm-kld"
+  ]
+ },
+ "protocol": {
+  "n_ctx": 512,
+  "n_batch": 512,
+  "n_ubatch": 512,
+  "n_seq": 1,
+  "threads": 8,
+  "metric_threads": 8,
+  "gpu_layers": "all",
+  "flash_attn": "on",
+  "kv_type": "f16",
+  "fit": "off",
+  "swa_full": false,
+  "targets_per_window": 255,
+  "n_prefill": 257
+ },
+ "builds": [
+  {
+   "name": "runtime",
+   "build": "b10835-4dc671b98",
+   "version": "version: 0.4.0-dev (build 10835, commit 4dc671b98)",
+   "used_for": "250 candidate runs, 2026-09-07..2026-09-10 (all segments except the 4 google Q4_0 supplement runs)",
+   "origin": "accepted binaries copied from the original build host (runtime/manifest.json)",
+   "cuda": "13.2.51",
+   "compiler": "GNU 13.3.0",
+   "gpu": {
+    "name": "NVIDIA RTX PRO 6000 Blackwell Server Edition",
+    "uuid": "GPU-63d80c75-8416-acf3-ea6b-64cf696245b8",
+    "driver": "595.71.05",
+    "memory_mib": 97887,
+    "compute_capability": "12.0"
+   },
+   "contracts": [
+    "reference-vocabulary-v1"
+   ],
+   "files": [
+    {
+     "path": "bin/llama-llm-kld",
+     "sha256": "e0de3e190b91deb974e5a08db6b020e8b026ce0703737e60ac5f4bee987c5404"
+    },
+    {
+     "path": "bin/llama-perplexity",
+     "sha256": "3176db812a509b214fed5a14c095d957dd67f3d2b195f3a40d6dd64af49f7ee3"
+    },
+    {
+     "path": "bin/llama-tokenize",
+     "sha256": "d4057b9dcac18ca9918bbdd030c30a26065e09b1bf5c48cd2aab0250fdd45b2e"
+    },
+    {
+     "path": "bin/llama-vlm-kld",
+     "sha256": "10cec07b40b5524ed3e9a86f11b1d58d1b7666b0627afe8f5547bef2af3f9136"
+    },
+    {
+     "path": "lib/libggml-base.so.0",
+     "sha256": "4ba33916fd3a1ef38bcbb492a871c77a53d7b760da29ddc3c61a06d318d357ae"
+    },
+    {
+     "path": "lib/libggml-cpu.so.0",
+     "sha256": "7130eb28256211df6a5596d8642ee84c8243994c8626f1af61d65f0cbb84b0d3"
+    },
+    {
+     "path": "lib/libggml-cuda.so.0",
+     "sha256": "fa45d88f90d088c256a67ded3b9d6918a36776ee5faf8b9d4f28ff0995b0cce0"
+    },
+    {
+     "path": "lib/libggml.so.0",
+     "sha256": "e8bd12ddba8dd1c9c5c46fd5308d565acab051c52eb01119717cfa2256dc9e48"
+    },
+    {
+     "path": "lib/libllama-common.so.0",
+     "sha256": "cd60956ff247e0b30bd060c7e85e9b60da81840210c3a849c8edca4dc4e7ad4b"
+    },
+    {
+     "path": "lib/libllama-perplexity-impl.so",
+     "sha256": "4477d8b8ae00ffdf3386d5c358249bc2770af7479ab24a775c3d06154836515a"
+    },
+    {
+     "path": "lib/libllama.so.0",
+     "sha256": "e16ed5e092d47f9f3aa8910b5b1514e0460a051e17985097242bf370c9e54e0d"
+    },
+    {
+     "path": "lib/libmtmd.so.0",
+     "sha256": "23c4130ca72d8d2879c186d1892e1a5e9f5148ccb1c9a2466bba2aa28fa8c1c2"
+    }
+   ]
+  },
+  {
+   "name": "runtime-20260911",
+   "build": "b10845-ca3dc9585",
+   "version": "version: 0.4.0-dev (build 10845, commit ca3dc9585)",
+   "used_for": "4 google Q4_0 supplement runs, 2026-09-11 (gemma-4-31b-it and gemma-4-e4b-it, both corpora)",
+   "origin": "rebuild on new host for the google Q4_0 supplement (2026-09-11); original runtime/ kept intact for the 250 original runs",
+   "cmake": "-DGGML_CUDA=ON -DCMAKE_BUILD_TYPE=Release -DCMAKE_CUDA_ARCHITECTURES=120 (ccache launchers)",
+   "source_commit": "ca3dc958533d768953ac92a310b0ae8c6039e51f",
+   "cuda": "13.2.51",
+   "compiler": "GNU 13.3.0",
+   "gpu": {
+    "name": "NVIDIA RTX PRO 6000 Blackwell Server Edition",
+    "uuid": "GPU-a8385e67-e09a-6874-f9f8-b2fc331cf716",
+    "driver": "595.71.05",
+    "memory_mib": 97887,
+    "compute_capability": "12.0"
+   },
+   "contracts": [
+    "reference-vocabulary-v1"
+   ],
+   "parity": {
+    "report": "campaign/runtime-parity-20260911.parity-report.json",
+    "result": "reference PPL, saved base sha256, candidate PPL/KLD and LLM-KLD npz bit-identical to runtime/ and to the archived runs"
+   },
+   "files": [
+    {
+     "path": "bin/llama-llm-kld",
+     "sha256": "a60f9ff7517ed464587c906697a7373f65606e74cb06dd0ddcfba2a1893160bb"
+    },
+    {
+     "path": "bin/llama-perplexity",
+     "sha256": "97379fda86021970e2597b44ee0c0bea921ea5bee769e7a4aa01c5b5ab8c37bf"
+    },
+    {
+     "path": "bin/llama-tokenize",
+     "sha256": "b5e0a3a79261028ceddba00b0d6f35bf5288e320bb2ab027fe058a68db4ce9ac"
+    },
+    {
+     "path": "lib/libggml-base.so.0",
+     "sha256": "5d40951d85ded0c8828bfd49941662a1ff2922f2aa656d3f14b6871c9b70062c"
+    },
+    {
+     "path": "lib/libggml-cpu.so.0",
+     "sha256": "5279be1c5090554751ef0ed31e2b3875e2613c91f75eda7c0b70ff29ebf20bd3"
+    },
+    {
+     "path": "lib/libggml-cuda.so.0",
+     "sha256": "e531492f47c61b5315739721ad9e03764e8c325410ef997f8eeb80739c7bd76e"
+    },
+    {
+     "path": "lib/libggml.so.0",
+     "sha256": "584c9a0562a16915d68c3ee12cfca09b19a96289b863a997f2cfb60745985917"
+    },
+    {
+     "path": "lib/libllama-common.so.0",
+     "sha256": "b3b209490c847984a0eccbf660122e6e3ad0fe90022a34376d396c72a779ccca"
+    },
+    {
+     "path": "lib/libllama-perplexity-impl.so",
+     "sha256": "f51639c9c137f9b96f56bb65afdc76cccb7f6c1797c14d68a5eb2abb365c8e2b"
+    },
+    {
+     "path": "lib/libllama.so.0",
+     "sha256": "2d5f587942bb212052d3c7ec3f7148a567254fa196268e537aa84012fa728b71"
+    }
+   ]
+  }
+ ]
+}
