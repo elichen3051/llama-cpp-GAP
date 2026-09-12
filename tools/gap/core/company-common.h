@@ -1,4 +1,4 @@
-// Shared logging, input validation and context setup for Company tools.
+// Shared logging, input validation and context setup for GAP tools.
 #pragma once
 
 #include "ggml.h"

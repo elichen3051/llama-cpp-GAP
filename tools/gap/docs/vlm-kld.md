@@ -1,6 +1,6 @@
 # VLM KLD collection
 
-Collect both candidates against the same frozen reference trajectories, reference GGUF, projector and runtime. A checkpoint and its quantizations form one comparison family. Models are supplied by this checkout's upstream implementation; Company adds evaluation tools, not model architectures or vision preprocessing.
+Collect both candidates against the same frozen reference trajectories, reference GGUF, projector and runtime. A checkpoint and its quantizations form one comparison family. Models are supplied by this checkout's upstream implementation; GAP adds evaluation tools, not model architectures or vision preprocessing.
 
 ## Frozen inputs and runtime
 

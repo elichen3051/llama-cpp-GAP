@@ -4,7 +4,7 @@ This cleanup changes source and command paths. Native target names, metric recor
 
 | Previous path | Current location |
 | --- | --- |
-| Top-level Company C++ sources and headers | `core/` |
+| Top-level GAP C++ sources and headers | `core/` |
 | `compare/` | `stats/` |
 | Statistical `cli/*.py` | `stats/cli/`; shared guarded collection loading is `stats/collection_io.py` |
 | `env_setup.sh` | `scripts/setup.sh` |

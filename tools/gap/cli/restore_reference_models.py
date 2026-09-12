@@ -38,7 +38,7 @@ def main():
         profile = profiles["models"][model]
         identity = profile["identity"]
         prefix = identity["manifest"].rsplit("/", 1)[0]
-        if prefix != "s3://research-kld-benchmark/reference_model/" + model:
+        if prefix != "s3://<bucket>/reference_model/" + model:
             raise ValueError("unexpected pinned S3 prefix: " + prefix)
         names = {record["name"] for record in identity["files"]}
         if Path(profile["model"]).name not in names or Path(profile["mmproj"]).name not in names:

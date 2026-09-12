@@ -257,7 +257,7 @@
             "role": "mmproj"
           }
         ],
-        "manifest": "s3://research-kld-benchmark/reference_model/internvl3.5-30b-a3b/manifest.json",
+        "manifest": "s3://<bucket>/reference_model/internvl3.5-30b-a3b/manifest.json",
         "verification": "Prior full-local SHA256 and remote integrity verification plus exact-key unchanged HeadObject receipt; 2026-09-06 preparation did not rehash model payloads."
       },
       "semantic_mode_note": "The GGUF template has no enable_thinking branch. instruct means ordinary prompt with native temperature 0.8, not an official numeric recommendation; thinking means the exact official R1 system prompt plus temperature 0.6. The mode boolean is a dataset semantic label, not the mechanism."
@@ -485,7 +485,7 @@
             "role": "mmproj"
           }
         ],
-        "manifest": "s3://research-kld-benchmark/reference_model/glm-4.6v-flash/manifest.json",
+        "manifest": "s3://<bucket>/reference_model/glm-4.6v-flash/manifest.json",
         "verification": "Prior full-local SHA256 and remote integrity verification plus exact-key unchanged HeadObject receipt; 2026-09-06 preparation did not rehash model payloads."
       },
       "semantic_mode_note": "The GGUF template supports enable_thinking and appends /nothink when false. Both modes use the same official numeric sampling recipe plus the retained native min_p explicitly pinned."
@@ -626,12 +626,12 @@
             "role": "mmproj"
           }
         ],
-        "manifest": "s3://research-kld-benchmark/reference_model/muse-glimmer-30b/manifest.json",
+        "manifest": "s3://<bucket>/reference_model/muse-glimmer-30b/manifest.json",
         "verification": "Prior full-local SHA256 and remote integrity verification plus exact-key unchanged HeadObject receipt; 2026-09-06 preparation did not rehash model payloads."
       },
       "semantic_mode_note": "Only thinking/high is selected. Official template supports low/medium/high/xhigh reasoning strength, has no thinking-off branch and ignores enable_thinking. Pin current_date to 2026-09-06 to avoid date-dependent prompt drift. No DFlash/MTP head in this AR reference protocol."
     }
   },
-  "upstream_support_boundary": "Use only model architectures, graphs, quant kernels and vision preprocessing already present at this upstream base. Company prompt plumbing and tile-checker corrections do not add model capability. Isolate native failures with existing upstream tools before exclusion; no new model implementation.",
+  "upstream_support_boundary": "Use only model architectures, graphs, quant kernels and vision preprocessing already present at this upstream base. GAP prompt plumbing and tile-checker corrections do not add model capability. Isolate native failures with existing upstream tools before exclusion; no new model implementation.",
   "upstream_base_commit": "6a1a922d269908a29cbd4b49c27e6a8e7fd10fae"
 }

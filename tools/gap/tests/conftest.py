@@ -1,4 +1,4 @@
-# Make the company scripts importable from this tests/ subdirectory.
+# Make the GAP scripts importable from this tests/ subdirectory.
 # `import paired_compare` etc. would otherwise fail because pytest only
 # adds the test file's own directory to sys.path.
 import sys

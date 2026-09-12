@@ -925,7 +925,7 @@ def test_reference_model_restore_keeps_verified_nested_paths(tmp_path, monkeypat
     files = [{'name': n, 'size': len(data), 'sha256': hashlib.sha256(data).hexdigest(), 'role': role}
              for n, role in [('part1.gguf', 'llm'), ('part2.gguf', 'llm'), ('projector.gguf', 'mmproj')]]
     profile = {'models': {'test': {'model': 'test/nested/part1.gguf', 'mmproj': 'test/projector.gguf',
-                                 'identity': {'manifest': 's3://research-kld-benchmark/reference_model/test/manifest.json', 'files': files}}}}
+                                 'identity': {'manifest': 's3://<bucket>/reference_model/test/manifest.json', 'files': files}}}}
     model = profile['models']['test']
     with_head = scenario.startswith('head_')
     if with_head:

@@ -202,7 +202,7 @@ stationarity"）。
 5. 未在任何確認 claim 出現、仍屬 open：variance-stabilizing
    transforms、stratified-by-position 估計量、per-item 變異 shrinkage。
 
-### 4.4 對 company 的落地含意
+### 4.4 對 GAP 的落地含意
 
 - `stats/cli/variance_decomposition.py` 現行設計（實測 ladder 為主、1/K 律
   只作 model-check、外插標為假設、sign-flip 警告、iterated-t N）＝

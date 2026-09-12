@@ -1,5 +1,5 @@
 {
-  "_comment": "Copy this fixture file VERBATIM to the company and logits repos' paired_compare golden test fixtures; do not regenerate per repo.",
+  "_comment": "Copy this fixture file VERBATIM to the GAP and logits repos' paired_compare golden test fixtures; do not regenerate per repo.",
   "baseline_records": [
     {
       "category": "synthetic",

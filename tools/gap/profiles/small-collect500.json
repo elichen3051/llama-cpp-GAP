@@ -104,7 +104,7 @@
             "role": "mmproj"
           }
         ],
-        "manifest": "s3://research-kld-benchmark/reference_model/qwen3.5-4b/manifest.json"
+        "manifest": "s3://<bucket>/reference_model/qwen3.5-4b/manifest.json"
       },
       "effective_sampling": {
         "instruct": {
@@ -285,7 +285,7 @@
             "role": "mmproj"
           }
         ],
-        "manifest": "s3://research-kld-benchmark/reference_model/gemma-4-e4b-it/manifest.json"
+        "manifest": "s3://<bucket>/reference_model/gemma-4-e4b-it/manifest.json"
       },
       "effective_sampling": {
         "instruct": {

@@ -1,8 +1,8 @@
 {
  "note": "Identity record of the native runtime (binaries + backend libraries) behind every run under runs/. No binaries ship with the release; rebuild from the fork (see README.md). The second build was shown bit-identical to the first on the parity check recorded below.",
  "source": {
-  "repository": "anonymized llama.cpp fork, branch text-bridge-production-scripts (tools/gap)",
-  "commit": "ca3dc958533d768953ac92a310b0ae8c6039e51f (fork commit before anonymization; not present in the published branch)",
+  "repository": "anonymized llama.cpp fork shipped alongside this package (directory llama-cpp-GAP/, tools/gap)",
+  "commit": "ca3dc958533d768953ac92a310b0ae8c6039e51f (fork commit before anonymization; the shipped tree carries no git history)",
   "overlay_patch": "llm-vocab-attribute-waiver.patch",
   "targets": [
    "llama-tokenize",

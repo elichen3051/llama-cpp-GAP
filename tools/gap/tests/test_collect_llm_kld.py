@@ -144,7 +144,7 @@ def test_parse_args_documents_sort_direction(tmp_path, monkeypatch, capsys):
 
     out = capsys.readouterr().out
     help_text = " ".join(out.split())
-    assert "company sorts ascending" in help_text
+    assert "GAP sorts ascending" in help_text
     assert "logits repo sorts descending" in help_text
     assert "--sort-desc" in out
 

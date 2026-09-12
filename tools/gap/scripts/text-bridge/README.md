@@ -26,7 +26,8 @@ is reused by all candidates of that checkpoint.
    then point `TEXT_BIN`/`TEXT_LIB` at `build/bin` (or `RUNTIME_DIR` at a directory with `bin/` + `lib/`).
    `runtime.json` records the two builds that produced `runs/`: source commit, CUDA, GPU and the SHA256 of
    every binary and library.
-2. **Fork checkout** (`FORK_REPO`): the anonymized llama.cpp fork, branch `text-bridge-production-scripts`.
+2. **Fork source tree** (`FORK_REPO`): the anonymized llama.cpp fork shipped next to this package in the same
+   archive (directory `llama-cpp-GAP/`; no git history is included or needed).
    Its `tools/gap/cli/{prepare_perplexity_corpus,collect_llm_kld,verify_perplexity_bridge}.py` are the tools
    that produced `runs/` (the fork's pre-anonymization commit `ca3dc958` plus `llm-vocab-attribute-waiver.patch`),
    with the anonymization string mapping applied. Shipped SHA256 (after the mapping):
@@ -48,7 +49,7 @@ Only one scorer may use the GPU at a time; `llama-llm-kld` loads reference and c
 
 ```bash
 export TEXT_BIN=/path/to/build/bin TEXT_LIB=/path/to/build/bin   # or RUNTIME_DIR=/path/with/bin+lib
-export FORK_REPO=/path/to/llama-cpp-GAP        # not needed when running from inside the fork
+export FORK_REPO=/path/to/llama-cpp-GAP        # the fork tree from the archive; not needed when running from inside it
 export PYTHON=/path/to/venv/bin/python
 cd scripts                                     # or tools/gap/scripts/text-bridge in the fork
 
@@ -175,8 +176,8 @@ base SHA256, candidate PPL/KLD and every LLM-KLD npz); the parity report is
 `campaign/runtime-parity-20260911.parity-report.json`. No binaries ship with the release; full file lists
 with SHA256 for both builds are in `runtime.json`.
 
-The maintained copy of this directory is `tools/gap/scripts/text-bridge/` in the fork; the copy in the
-release package is the snapshot that documents `runs/`.
+The same scripts ship twice in the archive: here, next to the data they document, and as
+`tools/gap/scripts/text-bridge/` inside the fork source tree (identical apart from the patch copy).
 
 ## Anonymization
 

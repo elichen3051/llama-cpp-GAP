@@ -1,4 +1,4 @@
-"""Shared hermetic fakes for the company test suite (no transformers/PIL).
+"""Shared hermetic fakes for the GAP test suite (no transformers/PIL).
 
 FakeTok mimics the two tokenizer surfaces the scripts use: decode() for
 prep's decode-and-collapse, and the convert_tokens_to_ids /

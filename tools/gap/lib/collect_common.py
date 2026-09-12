@@ -554,7 +554,7 @@ def finalized_kld_row(row: dict, num_eval_tokens: int, log_prefix: str):
 
 def add_collector_selection_args(p):
     p.add_argument("--sort-desc", action="store_true",
-                   help="Sort --sort-by descending instead of company's default "
+                   help="Sort --sort-by descending instead of GAP's default "
                         "ascending order. Default false preserves existing "
                         "index-keyed artifact dirs.")
     p.add_argument("--start", type=int, default=0)

@@ -1,6 +1,6 @@
-# Company: reference generation, KLD collection and paired statistics
+# GAP: reference generation, KLD collection and paired statistics
 
-Company generates reference answers with llama.cpp, replays their exact tokens through a reference and a quantized candidate, and compares saved candidate metrics. Supported models and CUDA kernels come from this checkout's upstream base. Company does not implement additional model architectures.
+GAP generates reference answers with llama.cpp, replays their exact tokens through a reference and a quantized candidate, and compares saved candidate metrics. Supported models and CUDA kernels come from this checkout's upstream base. GAP does not implement additional model architectures.
 
 Reference generation, VLM-KLD and the text PPL bridge are separate workflows. Statistics runs on completed metric collections without loading a model or using a GPU.
 

@@ -156,7 +156,7 @@ def parse_args():
     p.add_argument("--subset", default="Qwen3-4B-Instruct-2507-vllm")
     p.add_argument("--split", default="train")
     p.add_argument("--sort-by", default="",
-                   help="Optional dataset column to sort by. company sorts ascending; "
+                   help="Optional dataset column to sort by. GAP sorts ascending; "
                         "logits repo sorts descending for its similarly named flag.")
     add_collector_selection_args(p)
     p.add_argument("--max-total-tokens", type=int, default=None,

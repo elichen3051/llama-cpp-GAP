@@ -1,4 +1,4 @@
-# The two company scorers: {llm,vlm}-kld. They share the header-only
+# The two GAP scorers: {llm,vlm}-kld. They share the header-only
 # company-common.h / company-vlmk-kernel.h; the VLM tool additionally
 # links mtmd.
 #   llama-vlm-kld    dual-model on-the-fly KLD/JSD metrics (no logit storage)

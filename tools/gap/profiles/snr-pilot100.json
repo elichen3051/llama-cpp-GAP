@@ -123,7 +123,7 @@
             "role": "mmproj"
           }
         ],
-        "manifest": "s3://research-kld-benchmark/reference_model/gemma-4-31b-it/manifest.json",
+        "manifest": "s3://<bucket>/reference_model/gemma-4-31b-it/manifest.json",
         "head_files": [
           {
             "name": "mtp-google_gemma-4-31B-it-Q8_0.gguf",
@@ -139,7 +139,7 @@
           "sha256": "743b2b719e448f9a06e774b4f33dd7a391a73e94d32297c7590256484562eb52"
         },
         "verification": "Reused verified full-local-SHA/S3 identity receipt and current local path/size; this preparation does not rehash all model bytes.",
-        "head_manifest": "s3://research-kld-benchmark/reference_model/gemma-4-31b-it/mtp-manifest.json",
+        "head_manifest": "s3://<bucket>/reference_model/gemma-4-31b-it/mtp-manifest.json",
         "head_manifest_sha256": "bfc45371859b2a1b6a17dfad1ed79504652ad165661fea84b51cfba93a7b68ef"
       },
       "effective_sampling": {
@@ -355,7 +355,7 @@
             "role": "mmproj"
           }
         ],
-        "manifest": "s3://research-kld-benchmark/reference_model/qwen3.6-35b-a3b/manifest.json",
+        "manifest": "s3://<bucket>/reference_model/qwen3.6-35b-a3b/manifest.json",
         "verification": "Reused verified full-local-SHA/S3 identity receipt and current local path/size; this preparation does not rehash all model bytes."
       },
       "effective_sampling": {
@@ -518,7 +518,7 @@
         }
       },
       "identity": {
-        "manifest": "s3://research-kld-benchmark/reference_model/kimi-vl-a3b-instruct/manifest.json",
+        "manifest": "s3://<bucket>/reference_model/kimi-vl-a3b-instruct/manifest.json",
         "manifest_sha256": "1b4be203ef930a1df393d18039132df540d0c7b7bdfca9b50b7122023236378a",
         "files": [
           {
@@ -636,7 +636,7 @@
         }
       },
       "identity": {
-        "manifest": "s3://research-kld-benchmark/reference_model/kimi-vl-a3b-thinking-2506/manifest.json",
+        "manifest": "s3://<bucket>/reference_model/kimi-vl-a3b-thinking-2506/manifest.json",
         "manifest_sha256": "f01a0a4e2be8fc0e54b77f3db67f468c1b28c1f98b38cd61c3555f4aedc3bd4c",
         "files": [
           {

@@ -1,4 +1,4 @@
-# Sequential-prefix power analysis for company
+# Sequential-prefix power analysis for GAP
 
 版本：2026-08-29
 
@@ -13,7 +13,7 @@
 `--num-eval-tokens = K` 是 ordered-prefix estimand 的定義，不是樣本數。
 正確的獨立抽樣單位是 item；同一 item 內的 tokens 保留原順序和全部相依性。
 
-company 的事前規劃是二維問題：
+GAP 的事前規劃是二維問題：
 
     Power(N, K; Δ_K)
 
@@ -95,7 +95,7 @@ cap 是 estimator/endpoint choice，不是 precision knob。
 的 repeated sampling K 是「同一題獨立生成 K 次完整回答」。在 conditional
 IID 且同一 latent question score 下，generation noise 才有 σ_i²/K。
 
-company 不同：
+GAP 不同：
 
 - teacher-forced token metric 在 model、item、target 和 knobs 固定後是確定的；
 - position t 不是同一 scalar 的重複量測；
@@ -114,7 +114,7 @@ bootstrap participants；[官方 OSF 程式](https://osf.io/b2wk3/) 也確認不
 重抽或重排 ordered trials。
 
 該例的 power 隨 K 先下降到接近零，再上升，因為 prefix effect 本身在變。
-company 借用 whole-item resampling、ordered prefix 與 N × K contour。
+GAP 借用 whole-item resampling、ordered prefix 與 N × K contour。
 
 但 Baker 將 bootstrap subset 的 observed Cohen's d 代回 analytic power。
 這是 pilot-conditioned replication diagnostic，不是有外部 SESOI 的完整
@@ -131,7 +131,7 @@ prospective simulation。
 
 moving-block、stationary bootstrap 與一般 HAC 通常需要一條足夠長、
 weakly dependent 或 locally stationary 的序列，並需要選 block length 或
-bandwidth。company 是多條短、不等長、start/end transient 明顯的 item
+bandwidth。GAP 是多條短、不等長、start/end transient 明顯的 item
 trajectories；重排 token blocks 還會破壞 position regime。
 
 更根本的是，這些方法無法消除「K 改變 estimand」的問題。相關限制見
