@@ -61,14 +61,18 @@ STATUS=0
 
 if [[ "$WHAT" == verify ]]; then
     P=$OUT/pg-normalized-html5lib1.1-html2text2.4.0
-    verify_present() { # LABEL FILE SHA BYTES
-        if [[ -f "$2" ]]; then check "$1" "$2" "$3" "$4" || STATUS=1; else log "missing   $1: $2"; STATUS=1; fi
+    first_existing() { for f in "$@"; do [[ -f "$f" ]] && { echo "$f"; return; }; done; echo "$1"; }
+    verify_present() { # LABEL SHA BYTES REQUIRED(1/0) FILE...
+        local label=$1 sha=$2 bytes=$3 required=$4; shift 4; local f; f=$(first_existing "$@")
+        if [[ -f "$f" ]]; then check "$label" "$f" "$sha" "$bytes" || STATUS=1
+        elif [[ "$required" == 1 ]]; then log "missing   $label: $1"; STATUS=1
+        else log "not shipped (optional)  $label"; fi
     }
-    verify_present "wikitext-2 zip" "$OUT/wikitext-2/wikitext-2-raw-v1.zip" "$WIKI_ZIP_SHA" 4721645
-    verify_present "wiki.test.raw" "$OUT/wikitext-2/wikitext-2-raw/wiki.test.raw" "$WIKI_SHA" "$WIKI_BYTES"
-    verify_present "articles.json (60-article index)" "$OUT/wikitext-2/articles.json" "$INDEX_SHA" 10095
-    verify_present "pg.txt (217 essays)" "$P/pg.txt" "$PG_SHA" "$PG_BYTES"
-    verify_present "pg manifest.json" "$P/manifest.json" "$PG_MANIFEST_SHA" "$PG_MANIFEST_BYTES"
+    verify_present "wiki.test.raw" "$WIKI_SHA" "$WIKI_BYTES" 1 "$OUT/wiki.test.raw" "$OUT/wikitext-2/wikitext-2-raw/wiki.test.raw"
+    verify_present "pg.txt (217 essays)" "$PG_SHA" "$PG_BYTES" 1 "$OUT/pg.txt" "$P/pg.txt"
+    verify_present "wikitext-2 zip" "$WIKI_ZIP_SHA" 4721645 0 "$OUT/wikitext-2/wikitext-2-raw-v1.zip" "$OUT/wikitext-2-raw-v1.zip"
+    verify_present "articles.json (60-article index)" "$INDEX_SHA" 10095 0 "$OUT/wikitext-2/articles.json" "$OUT/articles.json"
+    verify_present "pg manifest.json" "$PG_MANIFEST_SHA" "$PG_MANIFEST_BYTES" 0 "$P/manifest.json" "$OUT/manifest.json"
 fi
 
 if [[ "$WHAT" == wikitext || "$WHAT" == all ]]; then

@@ -123,7 +123,7 @@
     "reference-vocabulary-v1"
    ],
    "parity": {
-    "report": "campaign/runtime-parity-20260911.parity-report.json",
+    "report": "verdict recorded here; the full parity report is not part of the archive",
     "result": "reference PPL, saved base sha256, candidate PPL/KLD and LLM-KLD npz bit-identical to runtime/ and to the archived runs"
    },
    "files": [

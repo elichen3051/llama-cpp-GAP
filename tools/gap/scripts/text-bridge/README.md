@@ -11,7 +11,7 @@ cross-tool bridge check.
 
 | stage | script | tool | writes |
 | --- | --- | --- | --- |
-| 0 | `get_corpora.sh` | `curl`, `unzip`; for PG also `html5lib`, C++ `html2text`, GNU `fmt` | `corpora/wikitext-2/…`, `corpora/pg-normalized-…/{pg.txt,manifest.json}` |
+| 0 | `get_corpora.sh` | `verify`: SHA256 of the shipped corpora; download modes need `curl`, `unzip`, for PG also `html5lib`, C++ `html2text`, GNU `fmt` | `corpora/wiki.test.raw`, `corpora/pg.txt` |
 | 1 | `prepare_corpus.sh` | `prepare_perplexity_corpus.py` (uses `llama-tokenize`, `llama-llm-kld --vocab-identity`) | `PREPARED/{corpus.txt,dataset/,manifest.json,stream.json}` |
 | 2 | `reference_ppl.sh` | `llama-perplexity --save-all-logits` | `PPL_SEG/reference-ppl.{log,sha256,receipt.json}` + the base `.bin` |
 | 3 | `candidate_ppl.sh` | `llama-perplexity --kl-divergence --kl-divergence-base` | `PPL_SEG/candidates/LABEL/ppl.log` |
@@ -28,8 +28,9 @@ is reused by all candidates of that checkpoint.
 runs/llama-perplexity-records/   reference PPL + saved-base receipts and candidate PPL logs (18 segments)
 runs/our-llm-kld-records/        the 254 LLM-KLD collections and bridge checks      see "Output layout" below
 scripts/         this directory: stage scripts, README, runtime.json, patch copy
-campaign/        candidate roster with GGUF SHA256s (jobs.json, bundle/), anomalies, final summary,
-                 decisions, frozen execution environments, runtime parity report
+corpora/         the two frozen corpus files: wiki.test.raw (WikiText-2 test) and pg.txt (217 Paul Graham essays)
+campaign/        models.json (reference model file and candidate labels per checkpoint), environment/ (frozen
+                 execution environment of the build host), README.md (protocol notes), VLM_REVIEW.md
 llama-cpp-GAP/   the fork source tree (tools/gap); build the binaries and run the Python tools from here
 ```
 
@@ -54,9 +55,9 @@ llama-cpp-GAP/   the fork source tree (tools/gap); build the binaries and run th
 3. **Python** (`PYTHON`): the fork's locked environment, `uv sync --project tools/gap --python 3.12.3 --locked`
    (Python 3.12.3, datasets 5.0.1, numpy 2.5.2, pyarrow 25.0.1, huggingface-hub 1.30.0).
 4. **Models**: reference GGUF (bf16; shard 1 for split files) and candidate GGUFs of the same checkpoint.
-5. **Corpus**: raw UTF-8 text. Production used WikiText-2 test (`wiki.test.raw`, SHA256 `173c87a5…7dd08`)
-   and 217 Paul Graham essays from the `pgessays` RSS feed (`pg.txt`, SHA256 `26db5717…a082`) with an article
-   index. `get_corpora.sh` downloads and verifies both; see "Corpora" below.
+5. **Corpus**: raw UTF-8 text. Production used WikiText-2 test (`corpora/wiki.test.raw`, SHA256 `173c87a5…7dd08`)
+   and 217 Paul Graham essays from the `pgessays` RSS feed (`corpora/pg.txt`, SHA256 `26db5717…a082`), both
+   shipped; `get_corpora.sh verify` checks them. See "Corpora" below.
 6. **Disk**: the reference base is `20 + W*512*4 + W*255*(2*ceil(V/2)+4)*2` bytes (W windows, V vocab),
    e.g. 73 GB for Qwen3.5-4B/WikiText-2 and 199 GB for Gemma-4/PG. Keep one base per segment and reuse it.
 
@@ -70,12 +71,11 @@ export FORK_REPO=/path/to/llama-cpp-GAP        # the fork tree from the archive;
 export PYTHON=/path/to/venv/bin/python
 cd scripts                                     # or tools/gap/scripts/text-bridge in the fork
 
-# 0. corpora (WikiText-2 verified against the frozen SHA256; PG best effort, see "Corpora")
-./get_corpora.sh --out corpora wikitext
+# 0. corpora: check the shipped files against the frozen SHA256s
+./get_corpora.sh --out corpora verify
 
-# 1. freeze the corpus once per reference model
-./prepare_corpus.sh corpora/wikitext-2/wikitext-2-raw/wiki.test.raw wikitext-2-test ref-bf16.gguf \
-    work/prepared/qwen3.5-4b/wikitext-2-test corpora/wikitext-2/articles.json   # index: optional for WikiText, required for PG
+# 1. freeze the corpus once per reference model (WikiText-2; the PG preparation needs its article manifest, see "Corpora")
+./prepare_corpus.sh corpora/wiki.test.raw wikitext-2-test ref-bf16.gguf work/prepared/qwen3.5-4b/wikitext-2-test
 
 # 2..5 reference PPL, then every candidate (PPL, LLM-KLD, bridge check)
 PPL_BASE=/fast-disk/qwen3.5-4b/wikitext-2-test/reference-ppl.bin \
@@ -94,28 +94,24 @@ two-window smoke used before production; leave it at `-1` for real collections.
 ## Corpora
 
 ```bash
-./get_corpora.sh --out corpora wikitext        # WikiText-2 test split + 60-article index
-./get_corpora.sh --out corpora pg              # 217 Paul Graham essays (Linux: C++ html2text 2.4.0, GNU fmt, html5lib 1.1)
-./get_corpora.sh --out corpora --pg-limit 3 pg # mechanics check only
-./get_corpora.sh --out corpora --expect-manifest /path/to/frozen/manifest.json pg   # compare essay by essay
-./get_corpora.sh --out corpora verify          # no download: check the files already under corpora/ (e.g. the frozen PG copy)
+./get_corpora.sh --out corpora verify          # SHA256 + size of corpora/wiki.test.raw and corpora/pg.txt
+./get_corpora.sh --out dl wikitext             # re-download WikiText-2 from the pinned ggml-org/ci snapshot and verify
+./get_corpora.sh --out dl pg                   # best-effort reconstruction of pg.txt (Linux: C++ html2text 2.4.0, GNU fmt, html5lib 1.1)
 ```
 
-The archive ships the frozen corpora under `corpora/` (both WikiText-2 files, the PG `pg.txt` and `manifest.json`,
-and the acquisition receipts `corpus-inputs.json`, `corpus-freeze-receipt.json`, `SHA256SUMS`); `verify` checks them.
-The `pg` download mode is the documented best-effort reconstruction for anyone without those files. In the frozen
-`corpora/SHA256SUMS`, the entries for the five shipped corpus files verify; `corpus-inputs.json` is stale because one
-path inside it was anonymized, and the remaining entries refer to acquisition files that were never part of the bundle.
+| file | source | frozen identity (SHA256, bytes) |
+| --- | --- | --- |
+| `corpora/wiki.test.raw` (shipped) | `wikitext-2-raw-v1.zip` from the `ggml-org/ci` HF dataset, commit `927b3642` (same archive as llama.cpp `scripts/get-wikitext-2.sh`; zip SHA256 `ef7edb56…5a11`); re-downloaded and verified identical on 2026-09-12 | `173c87a5…7dd08`, 1,290,590 |
+| `corpora/pg.txt` (shipped) | the 217 essays of the `pgessays` RSS feed, llama.cpp `scripts/get-pg.sh` with n=217 plus html5lib 1.1 normalization before C++ `html2text` 2.4.0, then `tail -n +4 \| sed -E 's/^[[:space:]]+//g' \| fmt -w 80` under `LC_ALL=C.UTF-8` (2026-09-06) | `26db5717…a082`, 3,179,044 |
 
-| corpus | source | frozen identity (SHA256, bytes) | status |
-| --- | --- | --- | --- |
-| `wikitext-2/wikitext-2-raw-v1.zip` | `ggml-org/ci` HF dataset, commit `927b3642` (same archive as llama.cpp `scripts/get-wikitext-2.sh`) | `ef7edb56…5a11`, 4,721,645 | reproducible, verified 2026-09-12 (`main` and pinned commit identical) |
-| `wikitext-2/wikitext-2-raw/wiki.test.raw` | extracted from the zip | `173c87a5…7dd08`, 1,290,590 | reproducible |
-| `wikitext-2/articles.json` | `campaign/bundle/articles.json` | `63216bfa…0bf6b72` | shipped |
-| `pg-normalized-html5lib1.1-html2text2.4.0/pg.txt` | `pgessays` RSS, llama.cpp `scripts/get-pg.sh` with n=217 plus html5lib 1.1 normalization before C++ `html2text` 2.4.0, then `tail -n +4 \| sed -E 's/^[[:space:]]+//g' \| fmt -w 80` under `LC_ALL=C.UTF-8` | `26db5717…a082`, 3,179,044 | best effort: the feed is live (still 217 essays on 2026-09-12) and GNU vs BSD `fmt` differ; the script exits non-zero on mismatch, in which case use the frozen file |
-| `pg-normalized-…/manifest.json` | written by the script (byte span and SHA256 per essay) | `0abeb0d4…a198f` for the frozen one | compare with `--expect-manifest` |
-
-`prepare_corpus.sh` takes `corpus.txt` and, for PG, the `manifest.json` as `ARTICLE_INDEX`.
+The article indexes used for the article-level statistics (the explicit 60-article WikiText-2 index, SHA256
+`63216bfa…0bf6b72`, and the PG byte-span manifest, SHA256 `0abeb0d4…a198f`) are not part of the archive.
+`prepare_corpus.sh` can therefore rebuild the WikiText-2 preparation without an index (identical tokens, windows and
+targets; article attribution from the preparer's automatic header detection instead of the frozen index, so the
+protocol identity differs from `runs/`), and cannot rebuild the PG preparation, which requires the manifest. The
+collections under `runs/` were made with the frozen indexes and carry their article attribution in
+`corpus_windows.json`. The `pg` download mode is a best-effort reconstruction: the feed is live and GNU vs BSD `fmt`
+differ; the script exits non-zero on a SHA256 mismatch.
 
 ## Exact commands
 
@@ -205,12 +201,13 @@ runs/our-llm-kld-records/<checkpoint>/<corpus>/             KLD_SEG
 
 `LABEL` is `candidate--<provider>--<quant>`, the quantization spelled as in the GGUF file name (mradermacher
 imatrix files carry their `i1-` marker, e.g. `candidate--mradermacher--i1-IQ4_XS` next to
-`candidate--mradermacher--IQ4_XS`). `campaign/jobs.json` lists every label with its model file and SHA256.
+`candidate--mradermacher--IQ4_XS`). `campaign/models.json` lists the reference model file and the candidate labels
+of each checkpoint; the exact candidate file of every collection is recorded in its `collect_meta.json`.
 
 252 of the 254 candidates have a passing `bridge.json`. The two `candidate--unsloth--UD-Q3_K_XL` runs of
 `gemma-4-31b-it` (both corpora) have `bridge.log` only: their collections are complete, but the candidate's
 degenerate logits make the two tools' mean NLL differ by more than the 1e-5 nats tolerance, so the check is
-recorded as failed (see `campaign/ANOMALIES.md`).
+recorded as failed; both collections are complete and usable.
 
 Every script validates its output the way the production dispatcher did before marking a job done:
 exactly one summary line per metric, window count equal to the prepared corpus, exact base size, base
@@ -226,9 +223,9 @@ flags, and `bridge.json` status. Outputs are never overwritten; retry into a new
 
 Both were built from the fork's commit `ca3dc958` + the waiver patch and run on an RTX PRO 6000 Blackwell
 Server Edition (driver 595.71.05). The rebuilt runtime reproduced the original bit for bit (reference PPL,
-base SHA256, candidate PPL/KLD and every LLM-KLD npz); the parity report is
-`campaign/runtime-parity-20260911.parity-report.json`. No binaries ship with the release; full file lists
-with SHA256 for both builds are in `runtime.json`.
+base SHA256, candidate PPL/KLD and every LLM-KLD npz); the verdict is recorded in `runtime.json`. No binaries
+ship with the release; full file lists with SHA256 for both builds are in `runtime.json`, and
+`campaign/environment/{runtime-files,resolved-libraries}.sha256` are the build host's own receipts for them.
 
 The same scripts ship twice in the archive: here, next to the data they document, and as
 `tools/gap/scripts/text-bridge/` inside the fork source tree (identical apart from the patch copy).
@@ -245,22 +242,13 @@ maintainer handle → `user`, tool directory `tools/<company>` → `tools/gap`).
   not recompute from the renamed protocol dict. Set `LEGACY_CORPUS_DIGEST=1` when running the fork's stats or
   bridge tools on these collections; every structural check (window order, ids, token/target digests, metric
   shapes) still applies. New collections made with the renamed tools need no flag.
-- Checksum receipts were computed before anonymization. Rule: any receipt entry that covers a text file
-  containing a renamed string is stale; entries over binary artifacts are valid. Concretely, stale entries
-  exist in `campaign/environment*.SHA256SUMS`, `campaign/overlay-patch.sha256`,
-  `campaign/environment*/{overlay-patch,source-overlay-applied.diff,company-lock}.sha256`,
-  `campaign/bundle/SHA256SUMS` and the `overlay_patch_sha256` in `runtime.json` (original value kept beside
-  the shipped one). Model GGUF SHA256s in `campaign/jobs.json` and `campaign/bundle/`, `reference-ppl.sha256`
-  base digests and `saved_logits_sha256` are unaffected.
-- Beyond the string mapping, these shipped files were edited by hand: `campaign/FINAL_SUMMARY.md` (local-time
-  rendering removed, UTC only), every S3 URI now reads `s3://<bucket>/…`, and the scripts in this directory.
-  The campaign's operational records (scheduler state, worker logs, S3 backup receipts, the dispatcher
-  source) are not part of this archive.
+- The checksum receipts shipped under `campaign/environment/` cover binaries and still verify against the original
+  files. `runtime.json` keeps both the original SHA256 of the waiver patch and that of the shipped, renamed copy.
+- Beyond the string mapping, the scripts in this directory were edited by hand, and S3 bucket names read `<bucket>`.
+  The campaign's operational records (scheduler state, worker logs, S3 backup receipts, the dispatcher source, the
+  full candidate roster with GGUF SHA256s) are not part of this archive.
 - Candidate directory names were normalized to `candidate--<provider>--<quant>`: the campaign's running
   numbers and its `supplemental-*` prefixes were dropped, and the 16 mradermacher imatrix files whose campaign
   label omitted the `i1-` marker now carry it. The same rename was applied inside the logs and in
-  `campaign/jobs.json`, `campaign/supplemental-candidates.json`, `campaign/GOOGLE_SUPPLEMENT_20260911.*` and
-  `campaign/bundle/{retained-candidates.csv,retained-candidates.json,models.json,excluded-candidates.json}`;
-  `candidate_id` fields keep the campaign numbering, and the `campaign/bundle/SHA256SUMS` entries of those
-  bundle files are stale as a result.
+  `campaign/models.json`.
 - No native binaries ship; `runtime.json` keeps their identities.
