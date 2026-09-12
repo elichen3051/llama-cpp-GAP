@@ -101,9 +101,11 @@ two-window smoke used before production; leave it at `-1` for real collections.
 ./get_corpora.sh --out corpora verify          # no download: check the files already under corpora/ (e.g. the frozen PG copy)
 ```
 
-The PG corpus is shipped as the frozen files, not re-downloaded: place `pg.txt` and `manifest.json` from the original
-bundle under `corpora/pg-normalized-html5lib1.1-html2text2.4.0/` and run `verify`; the `pg` download mode is the
-documented best-effort reconstruction for anyone without those files.
+The archive ships the frozen corpora under `corpora/` (both WikiText-2 files, the PG `pg.txt` and `manifest.json`,
+and the acquisition receipts `corpus-inputs.json`, `corpus-freeze-receipt.json`, `SHA256SUMS`); `verify` checks them.
+The `pg` download mode is the documented best-effort reconstruction for anyone without those files. In the frozen
+`corpora/SHA256SUMS`, the entries for the five shipped corpus files verify; `corpus-inputs.json` is stale because one
+path inside it was anonymized, and the remaining entries refer to acquisition files that were never part of the bundle.
 
 | corpus | source | frozen identity (SHA256, bytes) | status |
 | --- | --- | --- | --- |
