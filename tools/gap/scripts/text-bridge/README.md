@@ -8,6 +8,7 @@ Each candidate run is three GPU/CPU stages over the same frozen 512-token window
 
 | stage | script | tool | writes |
 | --- | --- | --- | --- |
+| 0 | `get_corpora.sh` | `curl`, `unzip`; for PG also `html5lib`, C++ `html2text`, GNU `fmt` | `corpora/wikitext-2/…`, `corpora/pg-normalized-…/{pg.txt,manifest.json}` |
 | 1 | `prepare_corpus.sh` | `prepare_perplexity_corpus.py` (uses `llama-tokenize`, `llama-llm-kld --vocab-identity`) | `PREPARED/{corpus.txt,dataset/,manifest.json,stream.json}` |
 | 2 | `reference_ppl.sh` | `llama-perplexity --save-all-logits` | `SEG/reference-ppl.{log,sha256,receipt.json}` + the base `.bin` |
 | 3 | `candidate_ppl.sh` | `llama-perplexity --kl-divergence --kl-divergence-base` | `SEG/candidates/LABEL/ppl.log` |
@@ -50,7 +51,8 @@ llama-cpp-GAP/   the fork source tree (tools/gap); build the binaries and run th
    (Python 3.12.3, datasets 5.0.1, numpy 2.5.2, pyarrow 25.0.1, huggingface-hub 1.30.0).
 4. **Models**: reference GGUF (bf16; shard 1 for split files) and candidate GGUFs of the same checkpoint.
 5. **Corpus**: raw UTF-8 text. Production used WikiText-2 test (`wiki.test.raw`, SHA256 `173c87a5…7dd08`)
-   and the 217-article Project Gutenberg RSS corpus (`pg.txt`, SHA256 `26db5717…a082`) with an article index.
+   and 217 Paul Graham essays from the `pgessays` RSS feed (`pg.txt`, SHA256 `26db5717…a082`) with an article
+   index. `get_corpora.sh` downloads and verifies both; see "Corpora" below.
 6. **Disk**: the reference base is `20 + W*512*4 + W*255*(2*ceil(V/2)+4)*2` bytes (W windows, V vocab),
    e.g. 73 GB for Qwen3.5-4B/WikiText-2 and 199 GB for Gemma-4/PG. Keep one base per segment and reuse it.
 
@@ -64,9 +66,12 @@ export FORK_REPO=/path/to/llama-cpp-GAP        # the fork tree from the archive;
 export PYTHON=/path/to/venv/bin/python
 cd scripts                                     # or tools/gap/scripts/text-bridge in the fork
 
+# 0. corpora (WikiText-2 verified against the frozen SHA256; PG best effort, see "Corpora")
+./get_corpora.sh --out corpora wikitext
+
 # 1. freeze the corpus once per reference model
-./prepare_corpus.sh wiki.test.raw wikitext-2-test ref-bf16.gguf work/prepared/qwen3.5-4b/wikitext-2-test \
-    articles.json                                                     # article index optional for WikiText, required for PG
+./prepare_corpus.sh corpora/wikitext-2/wikitext-2-raw/wiki.test.raw wikitext-2-test ref-bf16.gguf \
+    work/prepared/qwen3.5-4b/wikitext-2-test corpora/wikitext-2/articles.json   # index: optional for WikiText, required for PG
 
 # 2..5 reference PPL, then every candidate (PPL, LLM-KLD, bridge check)
 PPL_BASE=/fast-disk/qwen3.5-4b/wikitext-2-test/reference-ppl.bin \
@@ -81,6 +86,25 @@ ALLOW_VOCAB_ATTR_MISMATCH=1 ./run_segment.sh gemma-bf16.gguf work/prepared/gemma
 
 `DRY_RUN=1` prints every command line without running anything. `CHUNKS=2` turns every stage into the
 two-window smoke used before production; leave it at `-1` for real collections.
+
+## Corpora
+
+```bash
+./get_corpora.sh --out corpora wikitext        # WikiText-2 test split + 60-article index
+./get_corpora.sh --out corpora pg              # 217 Paul Graham essays (Linux: C++ html2text 2.4.0, GNU fmt, html5lib 1.1)
+./get_corpora.sh --out corpora --pg-limit 3 pg # mechanics check only
+./get_corpora.sh --out corpora --expect-manifest /path/to/frozen/manifest.json pg   # compare essay by essay
+```
+
+| corpus | source | frozen identity (SHA256, bytes) | status |
+| --- | --- | --- | --- |
+| `wikitext-2/wikitext-2-raw-v1.zip` | `ggml-org/ci` HF dataset, commit `927b3642` (same archive as llama.cpp `scripts/get-wikitext-2.sh`) | `ef7edb56…5a11`, 4,721,645 | reproducible, verified 2026-09-12 (`main` and pinned commit identical) |
+| `wikitext-2/wikitext-2-raw/wiki.test.raw` | extracted from the zip | `173c87a5…7dd08`, 1,290,590 | reproducible |
+| `wikitext-2/articles.json` | `campaign/bundle/articles.json` | `63216bfa…0bf6b72` | shipped |
+| `pg-normalized-html5lib1.1-html2text2.4.0/pg.txt` | `pgessays` RSS, llama.cpp `scripts/get-pg.sh` with n=217 plus html5lib 1.1 normalization before C++ `html2text` 2.4.0, then `tail -n +4 \| sed -E 's/^[[:space:]]+//g' \| fmt -w 80` under `LC_ALL=C.UTF-8` | `26db5717…a082`, 3,179,044 | best effort: the feed is live (still 217 essays on 2026-09-12) and GNU vs BSD `fmt` differ; the script exits non-zero on mismatch, in which case use the frozen file |
+| `pg-normalized-…/manifest.json` | written by the script (byte span and SHA256 per essay) | `0abeb0d4…a198f` for the frozen one | compare with `--expect-manifest` |
+
+`prepare_corpus.sh` takes `corpus.txt` and, for PG, the `manifest.json` as `ARTICLE_INDEX`.
 
 ## Exact commands
 
