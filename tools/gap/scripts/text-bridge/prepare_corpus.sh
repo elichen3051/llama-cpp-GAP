@@ -24,7 +24,7 @@ CORPUS=$(abspath "$1"); NAME=$2; REF=$(abspath "$3"); OUT=$4
 require_file "$CORPUS"; require_file "$REF"
 require_exe "$TEXT_BIN/llama-tokenize"; require_exe "$TEXT_BIN/llama-llm-kld"
 require_new "$OUT"
-mkdir -p -- "$(dirname -- "$OUT")"
+make_dir "$(dirname -- "$OUT")"
 OUT=$(abspath "$OUT")
 INDEX_ARGS=()
 if [[ $# -eq 5 ]]; then require_file "$5"; INDEX_ARGS=(--article-index "$(abspath "$5")"); fi

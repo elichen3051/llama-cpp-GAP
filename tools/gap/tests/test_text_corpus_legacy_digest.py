@@ -106,3 +106,47 @@ def test_flag_requires_well_formed_meta_digest(tmp_path, monkeypatch):
     monkeypatch.setenv(text_corpus.LEGACY_DIGEST_ENV, "1")
     with pytest.raises(ValueError, match="does not match collect_meta"):
         load_corpus_map(tmp_path, meta)
+
+
+def test_flag_value_must_be_exactly_one(tmp_path, monkeypatch):
+    _, _, meta = renamed_collection(tmp_path)
+    monkeypatch.setenv(text_corpus.LEGACY_DIGEST_ENV, "true")
+    with pytest.raises(ValueError, match="does not match collect_meta"):
+        load_corpus_map(tmp_path, meta)
+
+
+def renamed_row():
+    """A prepared-dataset row whose window digest predates the schema rename."""
+    from lib.reference_dataset import canonical_json
+    from lib.text_corpus import corpus_row
+    original = make_protocol(schema="original-perplexity-corpus-v1")
+    tokens = [(i * 7) % 100 for i in range(512)]
+    row = corpus_row(make_protocol(), tokens, 1, [0] * 255)
+    window = json.loads(row["corpus_window"])
+    window["protocol_sha256"] = digest_json(original)          # digest computed before the rename
+    window["id"] = f"unit-test-{digest_json(original)[:16]}-000001"
+    row["corpus_window"] = canonical_json(window)
+    row["id"] = window["id"]
+    return row
+
+
+def test_validate_corpus_row_respects_flag(monkeypatch):
+    from lib.text_corpus import validate_corpus_row
+    row = renamed_row()
+    with pytest.raises(ValueError, match="identity mismatch"):
+        validate_corpus_row(row)
+    monkeypatch.setenv(text_corpus.LEGACY_DIGEST_ENV, "1")
+    validate_corpus_row(row)
+
+
+def test_flag_keeps_target_digest_check(tmp_path, monkeypatch):
+    import numpy as np
+    from lib.text_corpus import check_corpus_metrics
+    renamed, windows, meta = renamed_collection(tmp_path)
+    monkeypatch.setenv(text_corpus.LEGACY_DIGEST_ENV, "1")
+    protocol, keyed = load_corpus_map(tmp_path, meta)
+    key = next(iter(keyed))
+    header = {"npos": 255, "n_prefill": 257, "n_past_actual": 512, "vocab": 100}
+    metrics = {"target": np.zeros(255, dtype="<i4"), "kld": np.zeros(255)}
+    with pytest.raises(ValueError, match="differ from the frozen corpus"):
+        check_corpus_metrics(key, metrics, header, protocol, keyed)

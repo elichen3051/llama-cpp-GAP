@@ -20,7 +20,7 @@ elif [[ -f "$SEG/reference-ppl.sha256" ]]; then BASE=$(sha_receipt_path "$SEG/re
 else die "set PPL_BASE or run reference_ppl.sh first"; fi
 CDIR=$SEG/candidates/$LABEL
 require_new "$CDIR"
-mkdir -p -- "$CDIR"
+make_dir "$CDIR"
 
 "$HERE/candidate_ppl.sh" "$CAND" "$BASE" "$CDIR"
 "$HERE/llm_kld.sh" "$REF" "$CAND" "$PREPARED" "$CDIR" "$@"

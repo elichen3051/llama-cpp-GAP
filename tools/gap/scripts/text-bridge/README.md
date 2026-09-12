@@ -26,12 +26,14 @@ is reused by all candidates of that checkpoint.
    then point `TEXT_BIN`/`TEXT_LIB` at `build/bin` (or `RUNTIME_DIR` at a directory with `bin/` + `lib/`).
    `runtime.json` records the two builds that produced `runs/`: source commit, CUDA, GPU and the SHA256 of
    every binary and library.
-2. **Fork checkout** (`FORK_REPO`): <https://github.com/user/llama-cpp-GAP>, branch
-   `text-bridge-production-scripts`. Its `tools/gap/cli/{prepare_perplexity_corpus,collect_llm_kld,
-   verify_perplexity_bridge}.py` are byte-identical to the state used for `runs/` (upstream commit
-   `ca3dc958533d768953ac92a310b0ae8c6039e51f` plus `llm-vocab-attribute-waiver.patch`, SHA256 `0b188745…585b19`,
-   now committed in the fork). Auto-detected when these scripts run from `tools/gap/scripts/text-bridge`
-   inside that checkout. Needed by stages 1, 4 and 5 only.
+2. **Fork checkout** (`FORK_REPO`): the anonymized llama.cpp fork, branch `text-bridge-production-scripts`.
+   Its `tools/gap/cli/{prepare_perplexity_corpus,collect_llm_kld,verify_perplexity_bridge}.py` are the tools
+   that produced `runs/` (the fork's pre-anonymization commit `ca3dc958` plus `llm-vocab-attribute-waiver.patch`),
+   with the anonymization string mapping applied. Shipped SHA256 (after the mapping):
+   `prepare_perplexity_corpus.py` `93e2843d…e2e7`, `collect_llm_kld.py` `ad5d663a…ab10`,
+   `verify_perplexity_bridge.py` `5c84bf2c…7b6c`. The patch copy in this directory carries the same mapping
+   (SHA256 `dc913eda…d6f4`; the original was `0b188745…585b19`). Auto-detected when these scripts run from
+   `tools/gap/scripts/text-bridge` inside that checkout. Needed by stages 1, 4 and 5 only.
 3. **Python** (`PYTHON`): the fork's locked environment, `uv sync --project tools/gap --python 3.12.3 --locked`
    (Python 3.12.3, datasets 5.0.1, numpy 2.5.2, pyarrow 25.0.1, huggingface-hub 1.30.0).
 4. **Models**: reference GGUF (bf16; shard 1 for split files) and candidate GGUFs of the same checkpoint.
@@ -150,6 +152,11 @@ SEG/                                  runs/<checkpoint>/<corpus>/
     bridge.log, bridge.json           cross-tool verification ("status": "passed")
 ```
 
+252 of the 254 candidates have a passing `bridge.json`. The two `candidate-004--unsloth--UD-Q3_K_XL` runs of
+`gemma-4-31b-it` (both corpora) have `bridge.log` only: their collections are complete, but the candidate's
+degenerate logits make the two tools' mean NLL differ by more than the 1e-5 nats tolerance, so the check is
+recorded as failed (see `campaign/ANOMALIES.md`).
+
 Every script validates its output the way the production dispatcher did before marking a job done:
 exactly one summary line per metric, window count equal to the prepared corpus, exact base size, base
 unchanged after each candidate, `metrics/*.npz` count, reconciled collection state, `collect_meta.json`
@@ -162,11 +169,11 @@ flags, and `bridge.json` status. Outputs are never overwritten; retry into a new
 | `runtime/` | b10835-4dc671b98, CUDA 13.2.51 | 250 runs, 2026-09-07..10 | `3176db81…7ee3` | `e0de3e19…5404` |
 | `runtime-20260911/` | b10845-ca3dc9585, CUDA 13.2.51 | 4 google Q4_0 runs, 2026-09-11 | `97379fda…37bf` | `a60f9ff7…60bb` |
 
-Both were built from source commit `ca3dc958` + the waiver patch and run on an RTX PRO 6000 Blackwell
+Both were built from the fork's commit `ca3dc958` + the waiver patch and run on an RTX PRO 6000 Blackwell
 Server Edition (driver 595.71.05). The rebuilt runtime reproduced the original bit for bit (reference PPL,
 base SHA256, candidate PPL/KLD and every LLM-KLD npz); the parity report is
-`campaign/runtime-parity-20260911.parity-report.json`. Only `runtime/` ships with the release; full file
-lists with SHA256 for both builds are in `runtime.json`.
+`campaign/runtime-parity-20260911.parity-report.json`. No binaries ship with the release; full file lists
+with SHA256 for both builds are in `runtime.json`.
 
 The maintained copy of this directory is `tools/gap/scripts/text-bridge/` in the fork; the copy in the
 release package is the snapshot that documents `runs/`.
@@ -183,8 +190,12 @@ maintainer handle → `user`, tool directory `tools/<company>` → `tools/gap`).
   not recompute from the renamed protocol dict. Set `LEGACY_CORPUS_DIGEST=1` when running the fork's stats or
   bridge tools on these collections; every structural check (window order, ids, token/target digests, metric
   shapes) still applies. New collections made with the renamed tools need no flag.
-- Checksum receipts computed before anonymization over text files that contain renamed strings no longer
-  match those files (`campaign/environment*.SHA256SUMS`, `campaign/runner-scripts.*.sha256`,
-  `campaign/overlay-patch.sha256`, `campaign/bundle/SHA256SUMS`). Receipts over binary artifacts
-  (`runs/**/metrics/*.npz`, `backup/*/manifest.json` sizes and MD5s, model SHA256s) are unaffected.
+- Checksum receipts were computed before anonymization. Rule: any receipt entry that covers a text file
+  containing a renamed string is stale; entries over binary artifacts are valid. Concretely, stale entries
+  exist in `campaign/environment*.SHA256SUMS`, `campaign/runner-scripts.*.sha256`,
+  `campaign/overlay-patch.sha256`, `campaign/environment*/{overlay-patch,source-overlay-applied.diff,
+  company-lock}.sha256`, `campaign/bundle/SHA256SUMS`, the `overlay_patch_sha256` in `runtime.json` (original
+  value kept beside the shipped one) and the per-segment `backup/*/manifest.json` (5,653 of 266,340 entries,
+  all `.json`, `.log` and `.sha256` files; every `.npz`, `.bin`, `.csv` and `.jsonl` entry is still valid).
+  Model GGUF SHA256s, `reference-ppl.sha256` base digests and `saved_logits_sha256` are unaffected.
 - No native binaries ship; `runtime.json` keeps their identities.

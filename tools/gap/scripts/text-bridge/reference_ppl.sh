@@ -22,7 +22,7 @@ require_file "$REF"; require_file "$PREPARED/corpus.txt"; require_exe "$TEXT_BIN
 read -r W V WS T <<<"$(prepared_info "$PREPARED")"
 WE=$(expected_windows "$W")
 EXPECTED_BYTES=$(ppl_base_bytes "$WE" "$V" "$WS" "$T")
-mkdir -p -- "$SEG" "$(dirname -- "$BASE")"
+make_dir "$SEG" "$(dirname -- "$BASE")"
 LOG=$SEG/reference-ppl.log
 require_new "$LOG"; require_new "$BASE"; require_new "$SEG/reference-ppl.sha256"
 

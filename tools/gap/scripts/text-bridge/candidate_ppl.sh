@@ -18,7 +18,7 @@ usage() { sed -n '2,13p' "${BASH_SOURCE[0]}" >&2; exit 2; }
 
 CAND=$(abspath "$1"); BASE=$(abspath "$2"); CDIR=$3
 require_file "$CAND"; require_file "$BASE"; require_exe "$TEXT_BIN/llama-perplexity"
-mkdir -p -- "$CDIR"
+make_dir "$CDIR"
 LOG=$CDIR/ppl.log
 require_new "$LOG"
 BEFORE=; [[ "${DRY_RUN:-0}" == 1 ]] || BEFORE=$(file_sig "$BASE")

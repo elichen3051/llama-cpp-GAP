@@ -10,6 +10,7 @@ require_file() { [[ -f "$1" ]] || _missing "missing file: $1"; }
 require_dir()  { [[ -d "$1" ]] || _missing "missing directory: $1"; }
 require_exe()  { [[ -x "$1" ]] || _missing "missing executable: $1 (set RUNTIME_DIR; see runtime.json)"; }
 require_new()  { [[ ! -e "$1" ]] || die "already exists, refusing to overwrite evidence (use a new output): $1"; }
+make_dir()     { [[ "${DRY_RUN:-0}" == 1 ]] || mkdir -p -- "$@"; }
 require_fork() {
     [[ -n "$FORK_REPO" ]] || die "set FORK_REPO to the llama.cpp checkout that contains tools/gap"
     require_file "$FORK_REPO/tools/gap/cli/collect_llm_kld.py"

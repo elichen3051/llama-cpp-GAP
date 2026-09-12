@@ -34,7 +34,7 @@ done
 require_file "$REF"; require_file "$CAND"; require_dir "$PREPARED/dataset"; require_exe "$TEXT_BIN/llama-llm-kld"
 read -r W V WS T <<<"$(prepared_info "$PREPARED")"
 WE=$(expected_windows "$W")
-mkdir -p -- "$CDIR"
+make_dir "$CDIR"
 CDIR=$(abspath "$CDIR")
 OUT=$CDIR/llm-kld; LOG=$CDIR/llm.log
 require_new "$LOG"; require_new "$OUT"

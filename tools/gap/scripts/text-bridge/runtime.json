@@ -1,15 +1,21 @@
 {
  "note": "Identity record of the native runtime (binaries + backend libraries) behind every run under runs/. No binaries ship with the release; rebuild from the fork (see README.md). The second build was shown bit-identical to the first on the parity check recorded below.",
  "source": {
-  "repository": "https://github.com/user/llama-cpp-GAP (branch text-bridge-production-scripts; tool files identical to commit ca3dc958 + overlay patch)",
-  "commit": "ca3dc958533d768953ac92a310b0ae8c6039e51f",
+  "repository": "anonymized llama.cpp fork, branch text-bridge-production-scripts (tools/gap)",
+  "commit": "ca3dc958533d768953ac92a310b0ae8c6039e51f (fork commit before anonymization; not present in the published branch)",
   "overlay_patch": "llm-vocab-attribute-waiver.patch",
-  "overlay_patch_sha256": "0b188745ba6a6297a2cece40d4de346a8003da164bf549a6607db4d7ee585b19",
   "targets": [
    "llama-tokenize",
    "llama-perplexity",
    "llama-llm-kld"
-  ]
+  ],
+  "overlay_patch_sha256_original": "0b188745ba6a6297a2cece40d4de346a8003da164bf549a6607db4d7ee585b19",
+  "overlay_patch_sha256_shipped": "dc913edaea6d40584c6524a9f8cf109e608605e0fe91404dd25b54967a77d6f4",
+  "shipped_tool_sha256": {
+   "tools/gap/cli/prepare_perplexity_corpus.py": "93e2843d20f464574fb4c4709e5075da701b8edc7a338f86619e2e68d3d2e2e7",
+   "tools/gap/cli/collect_llm_kld.py": "ad5d663ae9fa54290490ca3647d3091875df19fd5e5f0fbcaea9f8f576ccab10",
+   "tools/gap/cli/verify_perplexity_bridge.py": "5c84bf2c110de07260d6545b3f05110132c395abf0b101a1708bc58fbcfa7b6c"
+  }
  },
  "protocol": {
   "n_ctx": 512,
