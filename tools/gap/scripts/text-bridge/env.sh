@@ -3,10 +3,10 @@
 # Source this file (lib.sh does it for you). Override any value from the environment before sourcing.
 #
 #   RUNTIME_DIR    one directory with bin/{llama-perplexity,llama-tokenize,llama-llm-kld} and lib/*.so
-#                  (release package default: ../runtime; identity recorded in runtime.json)
+#                  (optional; the release ships no binaries, their identities are in runtime.json)
 #   TEXT_BIN       binaries directory   } set these two instead of RUNTIME_DIR for a fresh llama.cpp build,
 #   TEXT_LIB       shared libraries dir } where both live in build/bin (default when run inside the fork)
-#   FORK_REPO  llama.cpp fork checkout providing tools/gap (auto-detected when this directory is
+#   FORK_REPO  llama.cpp fork source tree providing tools/gap (auto-detected when this directory is
 #                  tools/gap/scripts/text-bridge of that checkout). Needed by prepare_corpus.sh,
 #                  llm_kld.sh and verify_bridge.sh only.
 #   PYTHON         interpreter with tools/gap's locked dependencies (datasets, numpy, pyarrow, huggingface-hub)
@@ -15,7 +15,8 @@
 
 _TB_SCRIPTS=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 
-# Two homes: <release>/scripts next to <release>/runtime, or <fork>/tools/gap/scripts/text-bridge.
+# Two homes: <release>/scripts (give RUNTIME_DIR or TEXT_BIN/TEXT_LIB), or <fork>/tools/gap/scripts/text-bridge
+# (defaults to the fork's build/bin).
 _TB_REPO=$(cd -- "$_TB_SCRIPTS/../../../.." 2>/dev/null && pwd || true)
 [[ -n "$_TB_REPO" && -f "$_TB_REPO/tools/gap/cli/collect_llm_kld.py" ]] || _TB_REPO=
 export FORK_REPO=${FORK_REPO:-$_TB_REPO}

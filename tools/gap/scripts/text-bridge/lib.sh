@@ -12,7 +12,7 @@ require_exe()  { [[ -x "$1" ]] || _missing "missing executable: $1 (set RUNTIME_
 require_new()  { [[ ! -e "$1" ]] || die "already exists, refusing to overwrite evidence (use a new output): $1"; }
 make_dir()     { [[ "${DRY_RUN:-0}" == 1 ]] || mkdir -p -- "$@"; }
 require_fork() {
-    [[ -n "$FORK_REPO" ]] || die "set FORK_REPO to the llama.cpp checkout that contains tools/gap"
+    [[ -n "$FORK_REPO" ]] || die "set FORK_REPO to the llama.cpp fork source tree that contains tools/gap"
     require_file "$FORK_REPO/tools/gap/cli/collect_llm_kld.py"
     command -v "$PYTHON" >/dev/null 2>&1 || die "PYTHON=$PYTHON not found"
 }
@@ -51,6 +51,7 @@ KLD_ARGS=(--perplexity-window --n-ctx "$N_CTX" --n-batch "$N_BATCH" --n-ubatch "
 # prepared_info PREPARED_DIR -> "windows vocab window_size targets_per_window" from the preparer's manifest.json
 prepared_info() {
     require_file "$1/manifest.json"
+    if [[ ! -f "$1/manifest.json" && "${DRY_RUN:-0}" == 1 ]]; then echo "0 0 512 255"; return 0; fi
     "$PYTHON" - "$1/manifest.json" <<'PY'
 import json, sys
 m = json.load(open(sys.argv[1]))

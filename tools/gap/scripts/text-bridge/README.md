@@ -30,11 +30,12 @@ is reused by all candidates of that checkpoint.
    archive (directory `llama-cpp-GAP/`; no git history is included or needed).
    Its `tools/gap/cli/{prepare_perplexity_corpus,collect_llm_kld,verify_perplexity_bridge}.py` are the tools
    that produced `runs/` (the fork's pre-anonymization commit `ca3dc958` plus `llm-vocab-attribute-waiver.patch`),
-   with the anonymization string mapping applied. Shipped SHA256 (after the mapping):
-   `prepare_perplexity_corpus.py` `93e2843d…e2e7`, `collect_llm_kld.py` `ad5d663a…ab10`,
+   with the anonymization string mapping applied and, in `collect_llm_kld.py`, one reworded help string
+   (codename). Shipped SHA256:
+   `prepare_perplexity_corpus.py` `93e2843d…e2e7`, `collect_llm_kld.py` `485c43b9…f443`,
    `verify_perplexity_bridge.py` `5c84bf2c…7b6c`. The patch copy in this directory carries the same mapping
    (SHA256 `dc913eda…d6f4`; the original was `0b188745…585b19`). Auto-detected when these scripts run from
-   `tools/gap/scripts/text-bridge` inside that checkout. Needed by stages 1, 4 and 5 only.
+   `tools/gap/scripts/text-bridge` inside that tree. Needed by stages 1, 4 and 5 only.
 3. **Python** (`PYTHON`): the fork's locked environment, `uv sync --project tools/gap --python 3.12.3 --locked`
    (Python 3.12.3, datasets 5.0.1, numpy 2.5.2, pyarrow 25.0.1, huggingface-hub 1.30.0).
 4. **Models**: reference GGUF (bf16; shard 1 for split files) and candidate GGUFs of the same checkpoint.
@@ -199,4 +200,10 @@ maintainer handle → `user`, tool directory `tools/<company>` → `tools/gap`).
   value kept beside the shipped one) and the per-segment `backup/*/manifest.json` (5,653 of 266,340 entries,
   all `.json`, `.log` and `.sha256` files; every `.npz`, `.bin`, `.csv` and `.jsonl` entry is still valid).
   Model GGUF SHA256s, `reference-ppl.sha256` base digests and `saved_logits_sha256` are unaffected.
+- Beyond the string mapping, these files were edited by hand: `runner/eta.py`, `runner/final_summary.py` and
+  their copies under `campaign/runner-archive/*/` (local-time renderings removed, UTC only);
+  `campaign/FINAL_SUMMARY.md` and `campaign/final_summary.stdout` (same); every S3 URI now uses `<bucket>`;
+  one codename wording change each in two handover documents under `campaign/docs/` and in
+  `logs/setup/00_setup_env.log`; and the scripts in this directory. Receipt entries covering these files are
+  stale too (for example `eta.py` in `campaign/runner-scripts.*.sha256`).
 - No native binaries ship; `runtime.json` keeps their identities.

@@ -13,7 +13,7 @@
   "overlay_patch_sha256_shipped": "dc913edaea6d40584c6524a9f8cf109e608605e0fe91404dd25b54967a77d6f4",
   "shipped_tool_sha256": {
    "tools/gap/cli/prepare_perplexity_corpus.py": "93e2843d20f464574fb4c4709e5075da701b8edc7a338f86619e2e68d3d2e2e7",
-   "tools/gap/cli/collect_llm_kld.py": "ad5d663ae9fa54290490ca3647d3091875df19fd5e5f0fbcaea9f8f576ccab10",
+   "tools/gap/cli/collect_llm_kld.py": "485c43b91f6261067308b20f88c530b80830a7ab5dd8adea33323193bc66f443",
    "tools/gap/cli/verify_perplexity_bridge.py": "5c84bf2c110de07260d6545b3f05110132c395abf0b101a1708bc58fbcfa7b6c"
   }
  },
@@ -38,7 +38,7 @@
    "build": "b10835-4dc671b98",
    "version": "version: 0.4.0-dev (build 10835, commit 4dc671b98)",
    "used_for": "250 candidate runs, 2026-09-07..2026-09-10 (all segments except the 4 google Q4_0 supplement runs)",
-   "origin": "accepted binaries copied from the original build host (runtime/manifest.json)",
+   "origin": "accepted binaries copied from the original build host; file list and hashes recorded in campaign/environment/runtime-files.sha256 and in the files list below",
    "cuda": "13.2.51",
    "compiler": "GNU 13.3.0",
    "gpu": {
