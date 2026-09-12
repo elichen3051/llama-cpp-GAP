@@ -18,6 +18,16 @@ Each candidate run is three GPU/CPU stages over the same frozen 512-token window
 `run_candidate.sh` for every candidate. Stage 1 runs once per (reference model, corpus) and its output
 is reused by all candidates of that checkpoint.
 
+## Archive layout
+
+```
+runs/            the 254 collections (18 checkpoint/corpus segments)            see "Output layout" below
+scripts/         this directory: stage scripts, README, runtime.json, patch copy
+campaign/        candidate roster with GGUF SHA256s (jobs.json, bundle/), anomalies, final summary,
+                 decisions, frozen execution environments, runtime parity report
+llama-cpp-GAP/   the fork source tree (tools/gap); build the binaries and run the Python tools from here
+```
+
 ## Requirements
 
 1. **Native runtime**: `llama-perplexity`, `llama-tokenize`, `llama-llm-kld` and their shared libraries.
@@ -194,16 +204,13 @@ maintainer handle → `user`, tool directory `tools/<company>` → `tools/gap`).
   shapes) still applies. New collections made with the renamed tools need no flag.
 - Checksum receipts were computed before anonymization. Rule: any receipt entry that covers a text file
   containing a renamed string is stale; entries over binary artifacts are valid. Concretely, stale entries
-  exist in `campaign/environment*.SHA256SUMS`, `campaign/runner-scripts.*.sha256`,
-  `campaign/overlay-patch.sha256`, `campaign/environment*/{overlay-patch,source-overlay-applied.diff,
-  company-lock}.sha256`, `campaign/bundle/SHA256SUMS`, the `overlay_patch_sha256` in `runtime.json` (original
-  value kept beside the shipped one) and the per-segment `backup/*/manifest.json` (5,653 of 266,340 entries,
-  all `.json`, `.log` and `.sha256` files; every `.npz`, `.bin`, `.csv` and `.jsonl` entry is still valid).
-  Model GGUF SHA256s, `reference-ppl.sha256` base digests and `saved_logits_sha256` are unaffected.
-- Beyond the string mapping, these files were edited by hand: `runner/eta.py`, `runner/final_summary.py` and
-  their copies under `campaign/runner-archive/*/` (local-time renderings removed, UTC only);
-  `campaign/FINAL_SUMMARY.md` and `campaign/final_summary.stdout` (same); every S3 URI now uses `<bucket>`;
-  one codename wording change each in two handover documents under `campaign/docs/` and in
-  `logs/setup/00_setup_env.log`; and the scripts in this directory. Receipt entries covering these files are
-  stale too (for example `eta.py` in `campaign/runner-scripts.*.sha256`).
+  exist in `campaign/environment*.SHA256SUMS`, `campaign/overlay-patch.sha256`,
+  `campaign/environment*/{overlay-patch,source-overlay-applied.diff,company-lock}.sha256`,
+  `campaign/bundle/SHA256SUMS` and the `overlay_patch_sha256` in `runtime.json` (original value kept beside
+  the shipped one). Model GGUF SHA256s in `campaign/jobs.json` and `campaign/bundle/`, `reference-ppl.sha256`
+  base digests and `saved_logits_sha256` are unaffected.
+- Beyond the string mapping, these shipped files were edited by hand: `campaign/FINAL_SUMMARY.md` (local-time
+  rendering removed, UTC only), every S3 URI now reads `s3://<bucket>/…`, and the scripts in this directory.
+  The campaign's operational records (scheduler state, worker logs, S3 backup receipts, the dispatcher
+  source) are not part of this archive.
 - No native binaries ship; `runtime.json` keeps their identities.
