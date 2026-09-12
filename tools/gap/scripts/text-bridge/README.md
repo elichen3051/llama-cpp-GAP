@@ -94,7 +94,12 @@ two-window smoke used before production; leave it at `-1` for real collections.
 ./get_corpora.sh --out corpora pg              # 217 Paul Graham essays (Linux: C++ html2text 2.4.0, GNU fmt, html5lib 1.1)
 ./get_corpora.sh --out corpora --pg-limit 3 pg # mechanics check only
 ./get_corpora.sh --out corpora --expect-manifest /path/to/frozen/manifest.json pg   # compare essay by essay
+./get_corpora.sh --out corpora verify          # no download: check the files already under corpora/ (e.g. the frozen PG copy)
 ```
+
+The PG corpus is shipped as the frozen files, not re-downloaded: place `pg.txt` and `manifest.json` from the original
+bundle under `corpora/pg-normalized-html5lib1.1-html2text2.4.0/` and run `verify`; the `pg` download mode is the
+documented best-effort reconstruction for anyone without those files.
 
 | corpus | source | frozen identity (SHA256, bytes) | status |
 | --- | --- | --- | --- |

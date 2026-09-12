@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # Download and verify the two frozen corpora behind runs/ (stage 0, before prepare_corpus.sh).
 #
-# usage: get_corpora.sh [--out DIR] [--pg-limit N] [--expect-manifest FILE] [wikitext|pg|all]
+# usage: get_corpora.sh [--out DIR] [--pg-limit N] [--expect-manifest FILE] [wikitext|pg|all|verify]
+#   verify                  download nothing; check the files already under --out (e.g. the frozen PG copy placed
+#                           there by hand) against the identities below
 #   --out DIR               output root (default: ./corpora)
 #   --pg-limit N            convert only the first N essays of the feed (mechanics check; verification skipped)
 #   --expect-manifest FILE  frozen PG manifest.json (per-article byte spans / sha256) to compare article by article
@@ -22,12 +24,13 @@
 #   `tail -n +4 | sed -E 's/^[[:space:]]+//g' | fmt -w 80` with GNU coreutils under LC_ALL=C.UTF-8:
 #   file  pg-normalized-html5lib1.1-html2text2.4.0/pg.txt
 #         sha256 26db5717f58a11a8ed9c24dab9acffc557bcb9d7697b733f44039f13cca4e082   3179044 bytes
-#   index pg-normalized-html5lib1.1-html2text2.4.0/manifest.json (byte spans per essay; written by this script)
+#   index pg-normalized-html5lib1.1-html2text2.4.0/manifest.json (byte spans per essay)
+#         frozen copy: sha256 0abeb0d4ce01100c4a8781599ee932daf0e80c85aa20b7286168c796b9da198f   373445 bytes
 #   The feed is live and the converter stack matters (macOS/BSD fmt differs from GNU fmt). A SHA256 mismatch means
 #   the frozen pg.txt and manifest.json must be taken from the original bundle instead of this download.
 set -euo pipefail
 source "$(dirname -- "${BASH_SOURCE[0]}")/lib.sh"
-usage() { sed -n '2,30p' "${BASH_SOURCE[0]}" >&2; exit 2; }
+usage() { sed -n '2,33p' "${BASH_SOURCE[0]}" >&2; exit 2; }
 
 WIKI_ZIP_URL=https://huggingface.co/datasets/ggml-org/ci/resolve/927b3642933080f1b0e811e2f916e14c292992f9/wikitext-2-raw-v1.zip
 WIKI_ZIP_SHA=ef7edb566e3e2b2d31b29c1fdb0c89a4cc683597484c3dc2517919c615435a11
@@ -35,6 +38,7 @@ WIKI_SHA=173c87a53759e0201f33e0ccf978e510c2042d7f2cb78229d9a50d79b9e7dd08; WIKI_
 INDEX_SHA=63216bfa0d687101963fada39c8b7434e9953eef87f8fdb0e5207371c0bf6b72
 PG_FEED=http://www.aaronsw.com/2002/feeds/pgessays.rss
 PG_SHA=26db5717f58a11a8ed9c24dab9acffc557bcb9d7697b733f44039f13cca4e082; PG_BYTES=3179044; PG_COUNT=217
+PG_MANIFEST_SHA=0abeb0d4ce01100c4a8781599ee932daf0e80c85aa20b7286168c796b9da198f; PG_MANIFEST_BYTES=373445
 
 OUT=corpora; LIMIT=; EXPECT=; WHAT=all
 while [[ $# -gt 0 ]]; do
@@ -42,7 +46,7 @@ while [[ $# -gt 0 ]]; do
         --out) OUT=$2; shift 2 ;;
         --pg-limit) LIMIT=$2; shift 2 ;;
         --expect-manifest) EXPECT=$(abspath "$2"); shift 2 ;;
-        wikitext|pg|all) WHAT=$1; shift ;;
+        wikitext|pg|all|verify) WHAT=$1; shift ;;
         *) usage ;;
     esac
 done
@@ -54,6 +58,18 @@ check() { # check LABEL FILE SHA [BYTES]
     log "MISMATCH  $1: $2 sha256=$got bytes=$(file_size "$2") expected $3${4:+ $4 bytes}"; return 1
 }
 STATUS=0
+
+if [[ "$WHAT" == verify ]]; then
+    P=$OUT/pg-normalized-html5lib1.1-html2text2.4.0
+    verify_present() { # LABEL FILE SHA BYTES
+        if [[ -f "$2" ]]; then check "$1" "$2" "$3" "$4" || STATUS=1; else log "missing   $1: $2"; STATUS=1; fi
+    }
+    verify_present "wikitext-2 zip" "$OUT/wikitext-2/wikitext-2-raw-v1.zip" "$WIKI_ZIP_SHA" 4721645
+    verify_present "wiki.test.raw" "$OUT/wikitext-2/wikitext-2-raw/wiki.test.raw" "$WIKI_SHA" "$WIKI_BYTES"
+    verify_present "articles.json (60-article index)" "$OUT/wikitext-2/articles.json" "$INDEX_SHA" 10095
+    verify_present "pg.txt (217 essays)" "$P/pg.txt" "$PG_SHA" "$PG_BYTES"
+    verify_present "pg manifest.json" "$P/manifest.json" "$PG_MANIFEST_SHA" "$PG_MANIFEST_BYTES"
+fi
 
 if [[ "$WHAT" == wikitext || "$WHAT" == all ]]; then
     command -v curl >/dev/null && command -v unzip >/dev/null || die "wikitext needs curl and unzip"
