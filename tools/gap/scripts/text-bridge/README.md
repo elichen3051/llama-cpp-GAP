@@ -4,16 +4,19 @@ These scripts are the exact commands and parameters that produced every collecti
 (18 checkpoint/corpus segments, 254 candidate runs), lifted out of the campaign dispatcher and made
 reusable for any reference model, any candidate quantization and any text corpus.
 
-Each candidate run is three GPU/CPU stages over the same frozen 512-token windows:
+Each candidate run is three GPU/CPU stages over the same frozen 512-token windows. Outputs go to two record
+trees: `PPL_SEG` = `runs/llama-perplexity-records/<checkpoint>/<corpus>` for everything `llama-perplexity`
+produced, `KLD_SEG` = `runs/our-llm-kld-records/<checkpoint>/<corpus>` for the LLM-KLD collections and the
+cross-tool bridge check.
 
 | stage | script | tool | writes |
 | --- | --- | --- | --- |
 | 0 | `get_corpora.sh` | `curl`, `unzip`; for PG also `html5lib`, C++ `html2text`, GNU `fmt` | `corpora/wikitext-2/…`, `corpora/pg-normalized-…/{pg.txt,manifest.json}` |
 | 1 | `prepare_corpus.sh` | `prepare_perplexity_corpus.py` (uses `llama-tokenize`, `llama-llm-kld --vocab-identity`) | `PREPARED/{corpus.txt,dataset/,manifest.json,stream.json}` |
-| 2 | `reference_ppl.sh` | `llama-perplexity --save-all-logits` | `SEG/reference-ppl.{log,sha256,receipt.json}` + the base `.bin` |
-| 3 | `candidate_ppl.sh` | `llama-perplexity --kl-divergence --kl-divergence-base` | `SEG/candidates/LABEL/ppl.log` |
-| 4 | `llm_kld.sh` | `collect_llm_kld.py --perplexity-window` → `llama-llm-kld --manifest` | `SEG/candidates/LABEL/{llm.log,llm-kld/}` |
-| 5 | `verify_bridge.sh` | `verify_perplexity_bridge.py` (CPU) | `SEG/candidates/LABEL/{bridge.log,bridge.json}` |
+| 2 | `reference_ppl.sh` | `llama-perplexity --save-all-logits` | `PPL_SEG/reference-ppl.{log,sha256,receipt.json}` + the base `.bin` |
+| 3 | `candidate_ppl.sh` | `llama-perplexity --kl-divergence --kl-divergence-base` | `PPL_SEG/candidates/LABEL/ppl.log` |
+| 4 | `llm_kld.sh` | `collect_llm_kld.py --perplexity-window` → `llama-llm-kld --manifest` | `KLD_SEG/candidates/LABEL/{llm.log,llm-kld/}` |
+| 5 | `verify_bridge.sh` | `verify_perplexity_bridge.py` (CPU) | `KLD_SEG/candidates/LABEL/{bridge.log,bridge.json}` |
 
 `run_candidate.sh` chains 3→4→5 for one candidate; `run_segment.sh` runs stage 2 once and then
 `run_candidate.sh` for every candidate. Stage 1 runs once per (reference model, corpus) and its output
@@ -22,7 +25,8 @@ is reused by all candidates of that checkpoint.
 ## Archive layout
 
 ```
-runs/            the 254 collections (18 checkpoint/corpus segments)            see "Output layout" below
+runs/llama-perplexity-records/   reference PPL + saved-base receipts and candidate PPL logs (18 segments)
+runs/our-llm-kld-records/        the 254 LLM-KLD collections and bridge checks      see "Output layout" below
 scripts/         this directory: stage scripts, README, runtime.json, patch copy
 campaign/        candidate roster with GGUF SHA256s (jobs.json, bundle/), anomalies, final summary,
                  decisions, frozen execution environments, runtime parity report
@@ -75,13 +79,13 @@ cd scripts                                     # or tools/gap/scripts/text-bridg
 
 # 2..5 reference PPL, then every candidate (PPL, LLM-KLD, bridge check)
 PPL_BASE=/fast-disk/qwen3.5-4b/wikitext-2-test/reference-ppl.bin \
-./run_segment.sh ref-bf16.gguf work/prepared/qwen3.5-4b/wikitext-2-test runs/qwen3.5-4b/wikitext-2-test \
-    candidate-019--bartowski--IQ4_NL=cand-IQ4_NL.gguf \
-    candidate-020--bartowski--IQ4_XS=cand-IQ4_XS.gguf
+./run_segment.sh ref-bf16.gguf work/prepared/qwen3.5-4b/wikitext-2-test runs qwen3.5-4b wikitext-2-test \
+    candidate--bartowski--IQ4_NL=cand-IQ4_NL.gguf \
+    candidate--bartowski--IQ4_XS=cand-IQ4_XS.gguf
 
 # Gemma-family checkpoints: token attribute metadata differs between bf16 and quantized files
 ALLOW_VOCAB_ATTR_MISMATCH=1 ./run_segment.sh gemma-bf16.gguf work/prepared/gemma-4-e4b-it/pg-full-rss \
-    runs/gemma-4-e4b-it/pg-full-rss supplemental-google-02--google--Q4_0=gemma-4-E4B_q4_0-it.gguf
+    runs gemma-4-e4b-it pg-full-rss candidate--google--Q4_0=gemma-4-E4B_q4_0-it.gguf
 ```
 
 `DRY_RUN=1` prints every command line without running anything. `CHUNKS=2` turns every stage into the
@@ -181,19 +185,27 @@ what `verify_bridge.sh` checks (tolerance 1e-5 nats).
 ## Output layout (identical to `runs/`)
 
 ```
-SEG/                                  runs/<checkpoint>/<corpus>/
+runs/llama-perplexity-records/<checkpoint>/<corpus>/        PPL_SEG
   reference-ppl.log                   llama-perplexity output, "Final estimate: PPL = …"
-  reference-ppl.sha256                sha256sum line of the base (base itself is large and lives on PPL_BASE)
+  reference-ppl.sha256                sha256sum line of the base (the base itself is large and lives on PPL_BASE)
   reference-ppl.receipt.json          bytes, sha256, windows, reference PPL, reference model
+  reference-ppl.*superseded-*, reference-ppl.regeneration-*.json   (4 gemma segments whose base was regenerated)
+  candidates/LABEL/ppl.log            "Mean PPL(Q)", "Mean PPL(base)", "Mean KLD" …
+
+runs/our-llm-kld-records/<checkpoint>/<corpus>/             KLD_SEG
   candidates/LABEL/
-    ppl.log                           "Mean PPL(Q)", "Mean PPL(base)", "Mean KLD" …
     llm.log                           collector log
     llm-kld/metrics/NNN_<window-id>.npz   per-window, per-target full-vocabulary metrics
     llm-kld/{manifest.csv,collect_meta.json,corpus_windows.json,logs/kld_run.log,.attempts/}
     bridge.log, bridge.json           cross-tool verification ("status": "passed")
+    llm-kld.failed-1-<ts>/, llm.failed-1-<ts>.log   (3 kept failed first attempts)
 ```
 
-252 of the 254 candidates have a passing `bridge.json`. The two `candidate-004--unsloth--UD-Q3_K_XL` runs of
+`LABEL` is `candidate--<provider>--<quant>`, the quantization spelled as in the GGUF file name (mradermacher
+imatrix files carry their `i1-` marker, e.g. `candidate--mradermacher--i1-IQ4_XS` next to
+`candidate--mradermacher--IQ4_XS`). `campaign/jobs.json` lists every label with its model file and SHA256.
+
+252 of the 254 candidates have a passing `bridge.json`. The two `candidate--unsloth--UD-Q3_K_XL` runs of
 `gemma-4-31b-it` (both corpora) have `bridge.log` only: their collections are complete, but the candidate's
 degenerate logits make the two tools' mean NLL differ by more than the 1e-5 nats tolerance, so the check is
 recorded as failed (see `campaign/ANOMALIES.md`).
@@ -242,4 +254,11 @@ maintainer handle → `user`, tool directory `tools/<company>` → `tools/gap`).
   rendering removed, UTC only), every S3 URI now reads `s3://<bucket>/…`, and the scripts in this directory.
   The campaign's operational records (scheduler state, worker logs, S3 backup receipts, the dispatcher
   source) are not part of this archive.
+- Candidate directory names were normalized to `candidate--<provider>--<quant>`: the campaign's running
+  numbers and its `supplemental-*` prefixes were dropped, and the 16 mradermacher imatrix files whose campaign
+  label omitted the `i1-` marker now carry it. The same rename was applied inside the logs and in
+  `campaign/jobs.json`, `campaign/supplemental-candidates.json`, `campaign/GOOGLE_SUPPLEMENT_20260911.*` and
+  `campaign/bundle/{retained-candidates.csv,retained-candidates.json,models.json,excluded-candidates.json}`;
+  `candidate_id` fields keep the campaign numbering, and the `campaign/bundle/SHA256SUMS` entries of those
+  bundle files are stale as a result.
 - No native binaries ship; `runtime.json` keeps their identities.

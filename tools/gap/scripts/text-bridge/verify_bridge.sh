@@ -4,8 +4,9 @@
 #
 # usage: verify_bridge.sh PREPARED_DIR SEGMENT_DIR CAND_DIR [PPL_BASE]
 #   SEGMENT_DIR  holds reference-ppl.log and reference-ppl.sha256 (from reference_ppl.sh)
-#   CAND_DIR     holds ppl.log and llm-kld/ (from candidate_ppl.sh and llm_kld.sh); writes bridge.log, bridge.json
+#   CAND_DIR     holds llm-kld/ (from llm_kld.sh) and, unless PPL_LOG is set, ppl.log; writes bridge.log, bridge.json
 #   PPL_BASE     base path (default: the path recorded in SEGMENT_DIR/reference-ppl.sha256)
+#   env PPL_LOG  candidate ppl.log when it lives in the llama-perplexity-records tree (default CAND_DIR/ppl.log)
 #
 # Production command (after `sha256sum -c reference-ppl.sha256`, CPU queue, nice 10):
 #   CUDA_VISIBLE_DEVICES= python tools/gap/cli/verify_perplexity_bridge.py --prepared PREPARED \
@@ -19,7 +20,8 @@ require_fork
 
 PREPARED=$(abspath "$1"); SEG=$(abspath "$2"); CDIR=$(abspath "$3")
 SHA=$SEG/reference-ppl.sha256
-require_file "$SHA"; require_file "$SEG/reference-ppl.log"; require_file "$CDIR/ppl.log"; require_dir "$CDIR/llm-kld"
+PPL_LOG=${PPL_LOG:-$CDIR/ppl.log}
+require_file "$SHA"; require_file "$SEG/reference-ppl.log"; require_file "$PPL_LOG"; require_dir "$CDIR/llm-kld"
 if [[ $# -eq 4 ]]; then BASE=$(abspath "$4")
 elif [[ -f "$SHA" ]]; then BASE=$(sha_receipt_path "$SHA")
 else die "no PPL_BASE given and $SHA is missing"; fi
@@ -38,7 +40,7 @@ fi
 ( cd -- "$FORK_REPO" && run_logged "$LOG" env CUDA_VISIBLE_DEVICES= nice -n 10 \
     "$PYTHON" "$FORK_REPO/tools/gap/cli/verify_perplexity_bridge.py" \
     --prepared "$PREPARED" --llm-collection "$CDIR/llm-kld" --ppl-logits "$BASE" \
-    --ppl-reference-log "$SEG/reference-ppl.log" --ppl-candidate-log "$CDIR/ppl.log" --out "$OUT" ) \
+    --ppl-reference-log "$SEG/reference-ppl.log" --ppl-candidate-log "$PPL_LOG" --out "$OUT" ) \
     || die "bridge verification failed; see $LOG"
 [[ "${DRY_RUN:-0}" == 1 ]] && exit 0
 
