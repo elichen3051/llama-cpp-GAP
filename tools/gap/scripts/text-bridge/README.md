@@ -88,7 +88,7 @@ PPL_BASE=/fast-disk/qwen3.5-4b/wikitext-2-test/reference-ppl.bin \
 
 # Gemma-family checkpoints: token attribute metadata differs between bf16 and quantized files
 ALLOW_VOCAB_ATTR_MISMATCH=1 ./run_segment.sh gemma-bf16.gguf work/prepared/gemma-4-e4b-it/pg-full-rss \
-    runs gemma-4-e4b-it pg-full-rss candidate--google--Q4_0=gemma-4-E4B_q4_0-it.gguf
+    runs gemma-4-e4b-it pg-full-rss candidate--google--QAT-Q4_0=gemma-4-E4B_q4_0-it.gguf
 ```
 
 `DRY_RUN=1` prints every command line without running anything. `CHUNKS=2` turns every stage into the
