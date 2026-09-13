@@ -12,6 +12,37 @@ from pathlib import Path
 
 SCHEME = "company-collection-attempt-v1"
 
+# Published archives ship collections without their .attempts/ records (collector scheduling state). With
+# LEGACY_ATTEMPT_RECORDS=1 a collection that has NO .attempts/ directory is accepted on the strength of its
+# data alone: every manifest row must carry a terminal status and metrics/*.npz must be exactly the OK rows.
+# A collection that does have .attempts/ is still checked strictly.
+LEGACY_ATTEMPTS_ENV = "LEGACY_ATTEMPT_RECORDS"
+_legacy_attempts_notice_shown = False
+
+
+def legacy_attempt_records_accepted():
+    return os.environ.get(LEGACY_ATTEMPTS_ENV) == "1"
+
+
+def require_manifest_matches_metrics(root):
+    """Data-only completeness check: manifest statuses are terminal and metrics/*.npz are exactly the OK rows."""
+    root = Path(root)
+    try:
+        with (root / "manifest.csv").open(newline="") as stream:
+            manifest = {int(r["row_idx"]): r for r in csv.DictReader(stream)}
+        if not manifest:
+            raise ValueError("manifest has no rows")
+        for idx, row in manifest.items():
+            status = row["status"]
+            if status not in ("OK", "SKIP_OVER_BUDGET") and not status.startswith("FAIL_"):
+                raise ValueError(f"unknown terminal status {status!r} for row {idx}")
+        expected_npz = {f"{idx:03d}_{row['item_id']}.npz" for idx, row in manifest.items() if row["status"] == "OK"}
+        actual_npz = {p.name for p in (root / "metrics").glob("*.npz")}
+        if actual_npz != expected_npz:
+            raise ValueError("metric artifacts differ from completed OK rows")
+    except (OSError, ValueError, KeyError) as error:
+        raise ValueError(f"{root}: incomplete collection: {error}") from error
+
 
 def fsync_directory(path):
     fd = os.open(path, os.O_RDONLY | os.O_DIRECTORY)
@@ -105,9 +136,18 @@ class CollectionAttempt:
 
 
 def require_completed_attempts(root):
+    global _legacy_attempts_notice_shown
     root = Path(root)
     parent = root / ".attempts"
     if not parent.is_dir() or not any(parent.iterdir()):
+        if legacy_attempt_records_accepted():
+            if not _legacy_attempts_notice_shown:
+                import sys
+                print(f"[collection_state] {LEGACY_ATTEMPTS_ENV}=1: accepting collections without .attempts/ records "
+                      "on the strength of manifest.csv and metrics/*.npz", file=sys.stderr)
+                _legacy_attempts_notice_shown = True
+            require_manifest_matches_metrics(root)
+            return
         raise ValueError(f"{root}: collection attempt records missing; re-collect legacy data")
     requested, terminal = {}, {}
     for path in sorted(parent.iterdir()):

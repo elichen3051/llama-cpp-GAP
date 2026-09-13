@@ -61,6 +61,13 @@ then still requires consistent window order and offsets, ids that carry the stor
 token and target digests, and matching metric shapes. Collections produced by the current tools need no
 flag.
 
+Published archives also omit the collectors' `.attempts/` directories (declared rows, terminal statuses and
+reference sidecars, i.e. scheduling state rather than data). `require_collection_success` refuses such a
+collection unless `LEGACY_ATTEMPT_RECORDS=1` is set; the flag applies only to collections that have no
+`.attempts/` at all and keeps the data-only checks: every `manifest.csv` row carries a terminal status and
+`metrics/*.npz` are exactly the rows marked `OK`. The pilot+tail composition, which needs the reference
+sidecars, is not available for such archives.
+
 ## Exact decode contract
 
 1. Remove one final newline from the original corpus when present, matching common's file handling. Do not interpret escapes or parse literal special-token spellings.
