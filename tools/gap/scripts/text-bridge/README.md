@@ -195,7 +195,7 @@ runs/our-llm-kld-records/<checkpoint>/<corpus>/             KLD_SEG
   candidates/LABEL/
     llm.log                           collector log
     llm-kld/metrics/NNN_<window-id>.npz   per-window, per-target full-vocabulary metrics
-    llm-kld/{manifest.csv,collect_meta.json,corpus_windows.json,logs/kld_run.log,.attempts/}
+    llm-kld/{manifest.csv,collect_meta.json,corpus_windows.json,logs/kld_run.log}
     bridge.log, bridge.json           cross-tool verification ("status": "passed")
     llm-kld.failed-1-<ts>/, llm.failed-1-<ts>.log   (3 kept failed first attempts)
 ```
@@ -243,6 +243,11 @@ maintainer handle → `user`, tool directory `tools/<company>` → `tools/gap`).
   not recompute from the renamed protocol dict. Set `LEGACY_CORPUS_DIGEST=1` when running the fork's stats or
   bridge tools on these collections; every structural check (window order, ids, token/target digests, metric
   shapes) still applies. New collections made with the renamed tools need no flag.
+- The collectors' `.attempts/` directories (declared rows and terminal statuses, i.e. scheduling state) are not
+  shipped; each of the 254 collections was checked before removal (state `completed`, all rows `OK`, statuses equal
+  to `manifest.csv`, npz count equal to the `OK` rows). The three kept failed first attempts
+  (`llm-kld.failed-1-*`) retain theirs. Set `LEGACY_ATTEMPT_RECORDS=1` as well when loading these collections
+  with the fork's tools; completeness is then verified from `manifest.csv` and `metrics/` alone.
 - The checksum receipts shipped under `campaign/environment/` cover binaries and still verify against the original
   files. `runtime.json` keeps both the original SHA256 of the waiver patch and that of the shipped, renamed copy.
 - Beyond the string mapping, the scripts in this directory were edited by hand, and S3 bucket names read `<bucket>`.
