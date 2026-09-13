@@ -47,12 +47,11 @@ README.md
    every binary and library.
 2. **Fork source tree** (`FORK_REPO`): this llama.cpp fork (the archive itself contains no code).
    Its `tools/gap/cli/{prepare_perplexity_corpus,collect_llm_kld,verify_perplexity_bridge}.py` are the tools
-   that produced `runs/` (the fork's pre-anonymization commit `ca3dc958` plus `llm-vocab-attribute-waiver.patch`),
-   with the anonymization string mapping applied and, in `collect_llm_kld.py`, one reworded help string
-   (codename). Shipped SHA256:
+   that produced `runs/` (the fork's pre-anonymization commit `ca3dc958`, whose collector already carries the
+   Gemma `--allow-vocab-attr-mismatch` waiver), with the anonymization string mapping applied and, in
+   `collect_llm_kld.py`, one reworded help string (codename). Shipped SHA256:
    `prepare_perplexity_corpus.py` `93e2843d…e2e7`, `collect_llm_kld.py` `485c43b9…f443`,
-   `verify_perplexity_bridge.py` `5c84bf2c…7b6c`. The patch copy in this directory carries the same mapping
-   (SHA256 `dc913eda…d6f4`; the original was `0b188745…585b19`). Auto-detected when these scripts run from
+   `verify_perplexity_bridge.py` `5c84bf2c…7b6c`. Auto-detected when these scripts run from
    `tools/gap/scripts/text-bridge` inside that tree. Needed by stages 1, 4 and 5 only.
 3. **Python** (`PYTHON`): the fork's locked environment, `uv sync --project tools/gap --python 3.12.3 --locked`
    (Python 3.12.3, datasets 5.0.1, numpy 2.5.2, pyarrow 25.0.1, huggingface-hub 1.30.0).
@@ -223,13 +222,13 @@ flags, and `bridge.json` status. Outputs are never overwritten; retry into a new
 | `runtime/` | b10835-4dc671b98, CUDA 13.2.51 | 250 runs, 2026-09-07..10 | `3176db81…7ee3` | `e0de3e19…5404` |
 | `runtime-20260911/` | b10845-ca3dc9585, CUDA 13.2.51 | 4 google Q4_0 runs, 2026-09-11 | `97379fda…37bf` | `a60f9ff7…60bb` |
 
-Both were built from the fork's commit `ca3dc958` + the waiver patch and run on an RTX PRO 6000 Blackwell
+Both were built from the fork's commit `ca3dc958` (waiver included) and run on an RTX PRO 6000 Blackwell
 Server Edition (driver 595.71.05). The rebuilt runtime reproduced the original bit for bit (reference PPL,
 base SHA256, candidate PPL/KLD and every LLM-KLD npz); the verdict is recorded in `runtime.json`. No binaries
 ship with the release; full file lists with SHA256 for both builds are in `runtime.json`, and
 `campaign/environment/{runtime-files,resolved-libraries}.sha256` are the build host's own receipts for them.
 
-The archive ships artifacts only; these scripts and the waiver patch copy live here in the fork.
+The archive ships artifacts only; these scripts live here in the fork.
 
 ## Anonymization
 
@@ -249,7 +248,7 @@ maintainer handle → `user`, tool directory `tools/<company>` → `tools/gap`).
   (`llm-kld.failed-1-*`) retain theirs. Set `LEGACY_ATTEMPT_RECORDS=1` as well when loading these collections
   with the fork's tools; completeness is then verified from `manifest.csv` and `metrics/` alone.
 - The checksum receipts shipped under `campaign/environment/` cover binaries and still verify against the original
-  files. `runtime.json` keeps both the original SHA256 of the waiver patch and that of the shipped, renamed copy.
+  files.
 - Beyond the string mapping, S3 bucket names read `<bucket>`.
   The campaign's operational records (scheduler state, worker logs, S3 backup receipts, the dispatcher source, the
   full candidate roster with GGUF SHA256s) are not part of this archive.

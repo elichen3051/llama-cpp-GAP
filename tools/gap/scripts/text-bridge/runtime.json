@@ -3,19 +3,17 @@
  "source": {
   "repository": "anonymized llama.cpp fork shipped alongside this package (directory llama-cpp-GAP/, tools/gap)",
   "commit": "ca3dc958533d768953ac92a310b0ae8c6039e51f (fork commit before anonymization; the shipped tree carries no git history)",
-  "overlay_patch": "llm-vocab-attribute-waiver.patch",
   "targets": [
    "llama-tokenize",
    "llama-perplexity",
    "llama-llm-kld"
   ],
-  "overlay_patch_sha256_original": "0b188745ba6a6297a2cece40d4de346a8003da164bf549a6607db4d7ee585b19",
-  "overlay_patch_sha256_shipped": "dc913edaea6d40584c6524a9f8cf109e608605e0fe91404dd25b54967a77d6f4",
   "shipped_tool_sha256": {
    "tools/gap/cli/prepare_perplexity_corpus.py": "93e2843d20f464574fb4c4709e5075da701b8edc7a338f86619e2e68d3d2e2e7",
    "tools/gap/cli/collect_llm_kld.py": "485c43b91f6261067308b20f88c530b80830a7ab5dd8adea33323193bc66f443",
    "tools/gap/cli/verify_perplexity_bridge.py": "5c84bf2c110de07260d6545b3f05110132c395abf0b101a1708bc58fbcfa7b6c"
-  }
+  },
+  "gemma_vocab_attribute_waiver": "--allow-vocab-attr-mismatch support is part of the fork's collector (committed)"
  },
  "protocol": {
   "n_ctx": 512,
