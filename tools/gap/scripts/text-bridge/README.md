@@ -195,7 +195,7 @@ runs/our-llm-kld-records/<checkpoint>/<corpus>/             KLD_SEG
   candidates/LABEL/
     llm.log                           collector log
     llm-kld/metrics/NNN_<window-id>.npz   per-window, per-target full-vocabulary metrics
-    llm-kld/{manifest.csv,collect_meta.json,corpus_windows.json,logs/kld_run.log}
+    llm-kld/{manifest.csv,collect_meta.json,corpus_windows.json,kld_run.log}
     bridge.log, bridge.json           cross-tool verification ("status": "passed")
     llm-kld.failed-1-<ts>/, llm.failed-1-<ts>.log   (3 kept failed first attempts)
 ```
