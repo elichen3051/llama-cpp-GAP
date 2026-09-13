@@ -134,7 +134,7 @@ def test_tail_freeze_only_validates_before_scoring(tmp_path, monkeypatch):
             "--llama-vlm-kld", "scorer", "--gpu", "0"]
     plan = {"size": 500, "reference_tail_400": True, "hardware": "pro6000", "metric_threads": 12,
             "models": [model], "sources": ["mmstar"], "modes": ["instruct"], "models_dir": str(tmp_path)}
-    scripts = tmp_path / "scripts/company"
+    scripts = tmp_path / "scripts/gap"
     monkeypatch.setattr(sys, "argv", ["collect_model_kld.py", *argv])
     monkeypatch.setattr(launch, "prepare_study", lambda args: (tmp_path, scripts, profiles, plan))
     monkeypatch.setattr(launch, "archived_dispatch", lambda study: None)

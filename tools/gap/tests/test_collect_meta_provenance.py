@@ -360,7 +360,7 @@ receipt = {**manifest, "status": "verified", "commit": "b" * 40, "private": a.pr
 '''
 
     def snapshot(out, path):
-        archived = out / "scripts/company"
+        archived = out / "scripts/gap"
         if not archived.exists():
             (archived / "cli").mkdir(parents=True)
             (archived / "profiles").mkdir()
@@ -382,7 +382,7 @@ receipt = {**manifest, "status": "verified", "commit": "b" * 40, "private": a.pr
     def configure(**values):
         profiles.update(values)
         profile_path.write_text(json.dumps(profiles))
-        archived = args.out / "scripts/company/profiles/reference_model_profiles.json"
+        archived = args.out / "scripts/gap/profiles/reference_model_profiles.json"
         if archived.exists():
             archived.write_text(json.dumps(profiles))
 
@@ -699,7 +699,7 @@ def test_campaign_writes_a_readable_runtime_overview(campaign_fixture):
     assert overview["generation_caps"] == {"instruct": 8192}
     runtime = overview["models"]["qwen3.5-4b"]["kld_runtime"]["instruct"]
     assert runtime["n_ubatch"] == 512 and runtime["num_eval_tokens"] == 2048
-    assert overview["settings_source"] == "scripts/company/profiles/reference_model_profiles.json"
+    assert overview["settings_source"] == "scripts/gap/profiles/reference_model_profiles.json"
 
 
 def test_kld_status_retains_failed_and_interrupted_jobs(tmp_path):
@@ -819,7 +819,7 @@ def test_campaign_checks_uploader_again_after_generation(campaign_fixture, monke
     def change_archive(self, command, *pos, **kwargs):
         result = execute(self, command, *pos, **kwargs)
         if command[1].endswith("generate_model_reference.py"):
-            path = args.out / "scripts/company/cli/upload_reference.py"
+            path = args.out / "scripts/gap/cli/upload_reference.py"
             path.write_text("raise RuntimeError('changed uploader must not run')\n")
         return result
     monkeypatch.setattr(campaign.ProcessSupervisor, "execute", change_archive)
