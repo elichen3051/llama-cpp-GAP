@@ -1,0 +1,64 @@
+diff --git a/tools/gap/cli/collect_llm_kld.py b/tools/gap/cli/collect_llm_kld.py
+index 484ba2363..73543f4af 100644
+--- a/tools/gap/cli/collect_llm_kld.py
++++ b/tools/gap/cli/collect_llm_kld.py
+@@ -115,6 +115,8 @@ def build_collect_meta(args, dataset_content_hash: str | None = None, *,
+         "metric_threads": args.metric_threads,
+         "flash_attn": args.flash_attn,
+         "swa_full": bool(args.swa_full),
++        # Keep this outside IDENTITY_FIELDS for legacy collections; native logs record accepted mismatches.
++        "allow_vocab_attr_mismatch": bool(getattr(args, "allow_vocab_attr_mismatch", False)),
+         "perplexity_window": bool(getattr(args, "perplexity_window", False)),
+         "corpus_protocol": None,
+         "corpus_windows_sha256": None,
+@@ -162,6 +164,8 @@ def parse_args():
+                         "effective eval tokens exceeds this cap, recording "
+                         "SKIP_OVER_BUDGET before scorer prep.")
+     add_collector_runtime_args(p)
++    p.add_argument("--allow-vocab-attr-mismatch", action="store_true",
++                   help="Forwarded to the scorer: accept per-token attribute differences; token texts must still match id by id.")
+     p.add_argument("--llama-llm-kld",
+                    default=str(REPO_ROOT / "build/bin/llama-llm-kld"))
+     p.add_argument("--perplexity-window", action="store_true",
+@@ -288,6 +292,8 @@ def _scorer_argv(args, kld_manifest_path):
+         *(["--flash-attn"] if args.flash_attn == "enabled" else
+           ["--no-flash-attn"] if args.flash_attn == "disabled" else []),
+         *(["--swa-full"] if args.swa_full else []),
++        *(["--allow-vocab-attr-mismatch"]
++          if getattr(args, "allow_vocab_attr_mismatch", False) else []),
+         *(["--perplexity-window"] if getattr(args, "perplexity_window", False) else []),
+     ]
+ 
+diff --git a/tools/gap/tests/test_collect_llm_kld.py b/tools/gap/tests/test_collect_llm_kld.py
+index 5bfcbe8e8..dc54254e4 100644
+--- a/tools/gap/tests/test_collect_llm_kld.py
++++ b/tools/gap/tests/test_collect_llm_kld.py
+@@ -149,6 +149,28 @@ def test_parse_args_documents_sort_direction(tmp_path, monkeypatch, capsys):
+     assert "--sort-desc" in out
+ 
+ 
++@pytest.mark.parametrize("allow_attributes", [False, True])
++def test_vocab_attr_mismatch_is_opt_in_and_preserves_legacy_meta(tmp_path, monkeypatch, allow_attributes):
++    argv = ["collect_llm_kld.py", "--ref-model", "ref.gguf", "--cand-model", "cand.gguf", "--out", str(tmp_path)]
++    if allow_attributes:
++        argv.append("--allow-vocab-attr-mismatch")
++    monkeypatch.setattr("sys.argv", argv)
++
++    args = ck.parse_args()
++    command = ck._scorer_argv(args, tmp_path / "manifest.jsonl")
++    meta = ck.build_collect_meta(args)
++    assert args.allow_vocab_attr_mismatch is allow_attributes
++    assert ("--allow-vocab-attr-mismatch" in command) is allow_attributes
++    assert meta["allow_vocab_attr_mismatch"] is allow_attributes
++
++    legacy = dict(meta)
++    legacy.pop("allow_vocab_attr_mismatch")
++    assert ck.ensure_collect_meta(tmp_path, legacy) is True
++    stored = (tmp_path / "collect_meta.json").read_bytes()
++    assert ck.ensure_collect_meta(tmp_path, meta) is False
++    assert (tmp_path / "collect_meta.json").read_bytes() == stored
++
++
+ def test_sort_desc_is_guarded_and_recorded(tmp_path, monkeypatch):
+     monkeypatch.setattr(
+         "sys.argv",

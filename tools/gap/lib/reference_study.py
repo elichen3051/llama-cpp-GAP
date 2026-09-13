@@ -93,11 +93,11 @@ def study_overview(profiles, plan):
                              "cache_type_v": "f16", "fit": "off", "seed": profiles["seed"],
                              "image_token_budget": profiles["image_token_budget"]},
         "models": models, "generation_jobs": sum(len(model["modes"]) for model in models.values()) * len(plan["sources"]),
-        "layout": {"scripts": "scripts/company", "script_hashes": "scripts/manifest.json",
+        "layout": {"scripts": "scripts/gap", "script_hashes": "scripts/manifest.json",
                    "provenance": "scripts/provenance", "status": "status.json",
                    "reference": "artifacts/<model>/<subset>/attempt-<number>/dataset",
                    "kld": "artifacts/<model>/<subset>/kld/<candidate>/metrics/*.npz",
                    "kld_row_status": "artifacts/<model>/<subset>/kld/<candidate>/manifest.csv"},
-        "settings_source": "scripts/company/profiles/reference_model_profiles.json",
+        "settings_source": "scripts/gap/profiles/reference_model_profiles.json",
         "note": "Derived overview; launchers use the archived profile. Change protocols only in a new study.",
     }

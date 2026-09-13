@@ -124,7 +124,7 @@ def prepare_study(args):
     study = args.study.expanduser().resolve()
     model_root = (args.models_dir or Path.home() / "models").expanduser().resolve()
     with study_lock(study):
-        existing = study / "scripts/company/cli/collect_model_kld.py"
+        existing = study / "scripts/gap/cli/collect_model_kld.py"
         if existing.is_file() and existing.resolve() != Path(__file__).resolve():
             return study, existing.parents[1], None, None
         scripts = snapshot(study, args.profiles)

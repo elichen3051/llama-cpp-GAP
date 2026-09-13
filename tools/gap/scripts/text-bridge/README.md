@@ -22,17 +22,19 @@ cross-tool bridge check.
 `run_candidate.sh` for every candidate. Stage 1 runs once per (reference model, corpus) and its output
 is reused by all candidates of that checkpoint.
 
-## Archive layout
+## The artifact archive
+
+The collections are delivered as a separate, artifacts-only archive (no code):
 
 ```
 runs/llama-perplexity-records/   reference PPL + saved-base receipts and candidate PPL logs (18 segments)
 runs/our-llm-kld-records/        the 254 LLM-KLD collections and bridge checks      see "Output layout" below
-scripts/         this directory: stage scripts, README, runtime.json, patch copy
 corpora/         the frozen corpora: wiki.test.raw + wikitext-2.articles.json (WikiText-2 test, 60-article index),
                  pg.txt + pg.manifest.json (217 Paul Graham essays, byte-span manifest)
 campaign/        models.json (reference model file and candidate labels per checkpoint), environment/ (frozen
                  execution environment of the build host), README.md (protocol notes), VLM_REVIEW.md
-llama-cpp-GAP/   the fork source tree (tools/gap); build the binaries and run the Python tools from here
+runtime.json     identity of the two native runtimes behind runs/ (copy of the file in this directory)
+README.md
 ```
 
 ## Requirements
@@ -43,8 +45,7 @@ llama-cpp-GAP/   the fork source tree (tools/gap); build the binaries and run th
    then point `TEXT_BIN`/`TEXT_LIB` at `build/bin` (or `RUNTIME_DIR` at a directory with `bin/` + `lib/`).
    `runtime.json` records the two builds that produced `runs/`: source commit, CUDA, GPU and the SHA256 of
    every binary and library.
-2. **Fork source tree** (`FORK_REPO`): the anonymized llama.cpp fork shipped next to this package in the same
-   archive (directory `llama-cpp-GAP/`; no git history is included or needed).
+2. **Fork source tree** (`FORK_REPO`): this llama.cpp fork (the archive itself contains no code).
    Its `tools/gap/cli/{prepare_perplexity_corpus,collect_llm_kld,verify_perplexity_bridge}.py` are the tools
    that produced `runs/` (the fork's pre-anonymization commit `ca3dc958` plus `llm-vocab-attribute-waiver.patch`),
    with the anonymization string mapping applied and, in `collect_llm_kld.py`, one reworded help string
@@ -68,12 +69,12 @@ Only one scorer may use the GPU at a time; `llama-llm-kld` loads reference and c
 
 ```bash
 export TEXT_BIN=/path/to/build/bin TEXT_LIB=/path/to/build/bin   # or RUNTIME_DIR=/path/with/bin+lib
-export FORK_REPO=/path/to/llama-cpp-GAP        # the fork tree from the archive; not needed when running from inside it
+export FORK_REPO=/path/to/llama-cpp-GAP        # not needed when running from inside the fork
 export PYTHON=/path/to/venv/bin/python
-cd scripts                                     # or tools/gap/scripts/text-bridge in the fork
+cd tools/gap/scripts/text-bridge
 
-# 0. corpora: check the shipped files against the frozen SHA256s
-./get_corpora.sh --out corpora verify
+# 0. corpora: check the archive's files against the frozen SHA256s
+./get_corpora.sh --out /path/to/archive/corpora verify
 
 # 1. freeze the corpus once per reference model
 ./prepare_corpus.sh corpora/wiki.test.raw wikitext-2-test ref-bf16.gguf work/prepared/qwen3.5-4b/wikitext-2-test \
@@ -97,7 +98,7 @@ two-window smoke used before production; leave it at `-1` for real collections.
 ## Corpora
 
 ```bash
-./get_corpora.sh --out corpora verify          # SHA256 + size of the four shipped corpus files
+./get_corpora.sh --out /path/to/archive/corpora verify   # SHA256 + size of the four shipped corpus files
 ./get_corpora.sh --out dl wikitext             # re-download WikiText-2 from the pinned ggml-org/ci snapshot and verify
 ./get_corpora.sh --out dl pg                   # best-effort reconstruction of pg.txt (Linux: C++ html2text 2.4.0, GNU fmt, html5lib 1.1)
 ```
@@ -228,8 +229,7 @@ base SHA256, candidate PPL/KLD and every LLM-KLD npz); the verdict is recorded i
 ship with the release; full file lists with SHA256 for both builds are in `runtime.json`, and
 `campaign/environment/{runtime-files,resolved-libraries}.sha256` are the build host's own receipts for them.
 
-The same scripts ship twice in the archive: here, next to the data they document, and as
-`tools/gap/scripts/text-bridge/` inside the fork source tree (identical apart from the patch copy).
+The archive ships artifacts only; these scripts and the waiver patch copy live here in the fork.
 
 ## Anonymization
 
@@ -250,7 +250,7 @@ maintainer handle → `user`, tool directory `tools/<company>` → `tools/gap`).
   with the fork's tools; completeness is then verified from `manifest.csv` and `metrics/` alone.
 - The checksum receipts shipped under `campaign/environment/` cover binaries and still verify against the original
   files. `runtime.json` keeps both the original SHA256 of the waiver patch and that of the shipped, renamed copy.
-- Beyond the string mapping, the scripts in this directory were edited by hand, and S3 bucket names read `<bucket>`.
+- Beyond the string mapping, S3 bucket names read `<bucket>`.
   The campaign's operational records (scheduler state, worker logs, S3 backup receipts, the dispatcher source, the
   full candidate roster with GGUF SHA256s) are not part of this archive.
 - Candidate directory names were normalized to `candidate--<provider>--<quant>`: the campaign's running
