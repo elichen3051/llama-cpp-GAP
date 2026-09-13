@@ -14,7 +14,7 @@
 #         sha256 ef7edb566e3e2b2d31b29c1fdb0c89a4cc683597484c3dc2517919c615435a11   4721645 bytes
 #   file  wikitext-2/wikitext-2-raw/wiki.test.raw
 #         sha256 173c87a53759e0201f33e0ccf978e510c2042d7f2cb78229d9a50d79b9e7dd08   1290590 bytes
-#   index wikitext-2/articles.json (60 explicit articles; copied from ../campaign/bundle/articles.json)
+#   index wikitext-2.articles.json in the archive (download mode writes wikitext-2/articles.json; 60 explicit articles)
 #         sha256 63216bfa0d687101963fada39c8b7434e9953eef87f8fdb0e5207371c0bf6b72
 #   Same archive as llama.cpp's scripts/get-wikitext-2.sh, pinned to the dataset commit the campaign used.
 #
@@ -24,7 +24,7 @@
 #   `tail -n +4 | sed -E 's/^[[:space:]]+//g' | fmt -w 80` with GNU coreutils under LC_ALL=C.UTF-8:
 #   file  pg-normalized-html5lib1.1-html2text2.4.0/pg.txt
 #         sha256 26db5717f58a11a8ed9c24dab9acffc557bcb9d7697b733f44039f13cca4e082   3179044 bytes
-#   index pg-normalized-html5lib1.1-html2text2.4.0/manifest.json (byte spans per essay)
+#   index pg.manifest.json in the archive (download mode writes pg-normalized-…/manifest.json; byte spans per essay)
 #         frozen copy: sha256 0abeb0d4ce01100c4a8781599ee932daf0e80c85aa20b7286168c796b9da198f   373445 bytes
 #   The feed is live and the converter stack matters (macOS/BSD fmt differs from GNU fmt). A SHA256 mismatch means
 #   the frozen pg.txt and manifest.json must be taken from the original bundle instead of this download.
@@ -70,9 +70,9 @@ if [[ "$WHAT" == verify ]]; then
     }
     verify_present "wiki.test.raw" "$WIKI_SHA" "$WIKI_BYTES" 1 "$OUT/wiki.test.raw" "$OUT/wikitext-2/wikitext-2-raw/wiki.test.raw"
     verify_present "pg.txt (217 essays)" "$PG_SHA" "$PG_BYTES" 1 "$OUT/pg.txt" "$P/pg.txt"
+    verify_present "WikiText-2 60-article index" "$INDEX_SHA" 10095 1 "$OUT/wikitext-2.articles.json" "$OUT/wikitext-2/articles.json"
+    verify_present "PG byte-span manifest" "$PG_MANIFEST_SHA" "$PG_MANIFEST_BYTES" 1 "$OUT/pg.manifest.json" "$P/manifest.json"
     verify_present "wikitext-2 zip" "$WIKI_ZIP_SHA" 4721645 0 "$OUT/wikitext-2/wikitext-2-raw-v1.zip" "$OUT/wikitext-2-raw-v1.zip"
-    verify_present "articles.json (60-article index)" "$INDEX_SHA" 10095 0 "$OUT/wikitext-2/articles.json" "$OUT/articles.json"
-    verify_present "pg manifest.json" "$PG_MANIFEST_SHA" "$PG_MANIFEST_BYTES" 0 "$P/manifest.json" "$OUT/manifest.json"
 fi
 
 if [[ "$WHAT" == wikitext || "$WHAT" == all ]]; then

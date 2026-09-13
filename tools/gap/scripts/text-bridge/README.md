@@ -28,7 +28,8 @@ is reused by all candidates of that checkpoint.
 runs/llama-perplexity-records/   reference PPL + saved-base receipts and candidate PPL logs (18 segments)
 runs/our-llm-kld-records/        the 254 LLM-KLD collections and bridge checks      see "Output layout" below
 scripts/         this directory: stage scripts, README, runtime.json, patch copy
-corpora/         the two frozen corpus files: wiki.test.raw (WikiText-2 test) and pg.txt (217 Paul Graham essays)
+corpora/         the frozen corpora: wiki.test.raw + wikitext-2.articles.json (WikiText-2 test, 60-article index),
+                 pg.txt + pg.manifest.json (217 Paul Graham essays, byte-span manifest)
 campaign/        models.json (reference model file and candidate labels per checkpoint), environment/ (frozen
                  execution environment of the build host), README.md (protocol notes), VLM_REVIEW.md
 llama-cpp-GAP/   the fork source tree (tools/gap); build the binaries and run the Python tools from here
@@ -74,8 +75,10 @@ cd scripts                                     # or tools/gap/scripts/text-bridg
 # 0. corpora: check the shipped files against the frozen SHA256s
 ./get_corpora.sh --out corpora verify
 
-# 1. freeze the corpus once per reference model (WikiText-2; the PG preparation needs its article manifest, see "Corpora")
-./prepare_corpus.sh corpora/wiki.test.raw wikitext-2-test ref-bf16.gguf work/prepared/qwen3.5-4b/wikitext-2-test
+# 1. freeze the corpus once per reference model
+./prepare_corpus.sh corpora/wiki.test.raw wikitext-2-test ref-bf16.gguf work/prepared/qwen3.5-4b/wikitext-2-test \
+    corpora/wikitext-2.articles.json
+./prepare_corpus.sh corpora/pg.txt pg-full-rss ref-bf16.gguf work/prepared/qwen3.5-4b/pg-full-rss corpora/pg.manifest.json
 
 # 2..5 reference PPL, then every candidate (PPL, LLM-KLD, bridge check)
 PPL_BASE=/fast-disk/qwen3.5-4b/wikitext-2-test/reference-ppl.bin \
@@ -94,7 +97,7 @@ two-window smoke used before production; leave it at `-1` for real collections.
 ## Corpora
 
 ```bash
-./get_corpora.sh --out corpora verify          # SHA256 + size of corpora/wiki.test.raw and corpora/pg.txt
+./get_corpora.sh --out corpora verify          # SHA256 + size of the four shipped corpus files
 ./get_corpora.sh --out dl wikitext             # re-download WikiText-2 from the pinned ggml-org/ci snapshot and verify
 ./get_corpora.sh --out dl pg                   # best-effort reconstruction of pg.txt (Linux: C++ html2text 2.4.0, GNU fmt, html5lib 1.1)
 ```
@@ -103,15 +106,13 @@ two-window smoke used before production; leave it at `-1` for real collections.
 | --- | --- | --- |
 | `corpora/wiki.test.raw` (shipped) | `wikitext-2-raw-v1.zip` from the `ggml-org/ci` HF dataset, commit `927b3642` (same archive as llama.cpp `scripts/get-wikitext-2.sh`; zip SHA256 `ef7edb56…5a11`); re-downloaded and verified identical on 2026-09-12 | `173c87a5…7dd08`, 1,290,590 |
 | `corpora/pg.txt` (shipped) | the 217 essays of the `pgessays` RSS feed, llama.cpp `scripts/get-pg.sh` with n=217 plus html5lib 1.1 normalization before C++ `html2text` 2.4.0, then `tail -n +4 \| sed -E 's/^[[:space:]]+//g' \| fmt -w 80` under `LC_ALL=C.UTF-8` (2026-09-06) | `26db5717…a082`, 3,179,044 |
+| `corpora/wikitext-2.articles.json` (shipped) | explicit 60-article index of the WikiText-2 test split (byte spans, titles, per-article SHA256); pass it as `ARTICLE_INDEX` | `63216bfa…0bf6b72`, 10,095 |
+| `corpora/pg.manifest.json` (shipped) | byte-span manifest of the 217 essays; required `ARTICLE_INDEX` for `pg-full-rss` | `0abeb0d4…a198f`, 373,445 |
 
-The article indexes used for the article-level statistics (the explicit 60-article WikiText-2 index, SHA256
-`63216bfa…0bf6b72`, and the PG byte-span manifest, SHA256 `0abeb0d4…a198f`) are not part of the archive.
-`prepare_corpus.sh` can therefore rebuild the WikiText-2 preparation without an index (identical tokens, windows and
-targets; article attribution from the preparer's automatic header detection instead of the frozen index, so the
-protocol identity differs from `runs/`), and cannot rebuild the PG preparation, which requires the manifest. The
-collections under `runs/` were made with the frozen indexes and carry their article attribution in
-`corpus_windows.json`. The `pg` download mode is a best-effort reconstruction: the feed is live and GNU vs BSD `fmt`
-differ; the script exits non-zero on a SHA256 mismatch.
+With these four files `prepare_corpus.sh` rebuilds both preparations exactly as used for `runs/` (same tokens,
+windows, targets and article attribution; `corpus_windows.json` in every collection records the protocol). The
+`pg` download mode is a best-effort reconstruction for anyone without the frozen files: the feed is live and GNU
+vs BSD `fmt` differ; the script exits non-zero on a SHA256 mismatch.
 
 ## Exact commands
 
