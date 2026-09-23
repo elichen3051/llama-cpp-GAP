@@ -243,7 +243,7 @@ def main(argv=None):
     try:
         scripts = output / "scripts"
         scripts.mkdir()
-        for name in ("scan.py", "analysis.py", "requirements.txt", "README.md"):
+        for name in ("scan.py", "analysis.py", "requirements.txt"):
             shutil.copyfile(Path(__file__).with_name(name), scripts / name)
         if args.input_manifest:
             metadata = json.loads(args.input_manifest.expanduser().read_text())

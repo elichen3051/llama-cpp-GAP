@@ -1,192 +1,225 @@
-# GAP: reference generation, KLD collection and paired statistics
+# GAP: Reference Trajectories and VLM Fidelity Metrics
 
-GAP generates reference answers with llama.cpp, replays their exact tokens through a reference and a quantized candidate, and compares saved candidate metrics. Supported models and CUDA kernels come from this checkout's upstream base. GAP does not implement additional model architectures.
+This guide describes how to generate reference response trajectories and collect token-level fidelity metrics for a candidate vision-language model (VLM). A reference model first generates a response to each question and its images. The collector then feeds the saved response tokens to both the reference and candidate models, comparing their next-token distributions at each response position.
 
-Reference generation, VLM-KLD and the text PPL bridge are separate workflows. Statistics runs on completed metric collections without loading a model or using a GPU.
-
-## Source layout
+The workflow ends with a completed metric collection for downstream use. It uses the direct local-data entry points in this source tree; model profiles and dataset publication are not required.
 
 ```text
-tools/gap/
-  core/                          C++ generation, teacher forcing, metrics and repetition detection
-  cli/                           Python reference and collection entry points
-  lib/                           Shared datasets, metric I/O, provenance and collection state
-  stats/                         Statistical inference, power planning and report rendering
-    cli/                         Command-line analysis tools
-  profiles/                      Explicit model/runtime profiles for pilot100 and collect500
-  scripts/                       Numbered workflow helpers and optional dataset maintenance
-  verify_and_validation_scripts/ Functional, numerical and GPU validation helpers
-  tests/                         Automated tests and fixed numerical fixtures
-  docs/                          Workflow guides, formats and troubleshooting
-  knowledge/                     Statistical theory and explicitly historical research notes
-  CMakeLists.txt
-  pyproject.toml
-  uv.lock
+Prepared questions and images + reference GGUF and projector
+  -> generate_reference.py -> llama-reference
+  -> Frozen reference dataset with response token IDs
+  -> collect_kld.py -> llama-vlm-kld (+ candidate GGUF and projector)
+  -> Per-response-token metrics, manifest and provenance
 ```
 
-See [numbered workflows](docs/workflows.md) for the optional shell wrappers.
+## 1. Environment and build
 
-The native targets remain `llama-reference`, `llama-vlm-kld` and `llama-llm-kld`, built into the selected build directory's `bin/`. C++ sources are together in `core/`; collection and analysis share `lib/kld_metrics_io.py` rather than defining the metric format twice.
+Run all commands from the repository root, in the same Bash session. The commands below target a Linux CUDA host with a compatible NVIDIA driver and CUDA toolkit, a C++17 compiler, CMake, and `uv`. Python dependencies are pinned in [pyproject.toml](pyproject.toml) and [uv.lock](uv.lock); the Python version is 3.12.3.
 
-## Reproduce the tested environment
-
-Run commands from the llama.cpp repository root. Put new environments, builds, caches, logs and datasets on a work volume with sufficient space. Existing model files may remain elsewhere.
+`GAP_WORK` is the directory for the Python environment, compiled binaries, caches and experiment outputs. The example below uses `$HOME/gap-work`, a directory under your own home directory, and creates it automatically. Keep it outside the source tree. If your home disk has limited space, use a writable directory on a larger data disk, such as `/mnt/data/gap-work`. Replace the `/path/to/...` dataset and model paths in the later steps with your actual inputs.
 
 ```bash
-export COMPANY_WORK=/opt/dlami/nvme/company
-export TMPDIR="$COMPANY_WORK/tmp"
-export UV_CACHE_DIR="$COMPANY_WORK/uv-cache"
-export UV_PROJECT_ENVIRONMENT="$COMPANY_WORK/venv"
-export HF_HOME="$COMPANY_WORK/hf"
-export CCACHE_DIR="$COMPANY_WORK/ccache"
-export CCACHE_TEMPDIR="$TMPDIR/ccache"
-export CUDA_CACHE_PATH="$COMPANY_WORK/cuda-cache"
-export XDG_CACHE_HOME="$COMPANY_WORK/xdg-cache"
+export GAP_WORK="$HOME/gap-work"
+export TMPDIR="$GAP_WORK/tmp"
+export UV_CACHE_DIR="$GAP_WORK/uv-cache"
+export UV_PROJECT_ENVIRONMENT="$GAP_WORK/venv"
+export HF_HOME="$GAP_WORK/hf"
+export CUDA_CACHE_PATH="$GAP_WORK/cuda-cache"
 export PYTHONDONTWRITEBYTECODE=1
-mkdir -p "$TMPDIR" "$CCACHE_TEMPDIR"
-uv sync --project tools/gap --python 3.12.3 --locked --group dev
-export COMPANY_PYTHON="$UV_PROJECT_ENVIRONMENT/bin/python"
+mkdir -p "$TMPDIR" "$UV_CACHE_DIR" "$HF_HOME" "$CUDA_CACHE_PATH"
 
-cmake -S . -B "$COMPANY_WORK/build" -DCMAKE_BUILD_TYPE=Release -DGGML_CUDA=ON
-cmake --build "$COMPANY_WORK/build" --target \
-  llama-reference llama-vlm-kld llama-llm-kld llama-perplexity llama-tokenize -j8
+uv sync --project tools/gap --python 3.12.3 --locked
+export GAP_PYTHON="$UV_PROJECT_ENVIRONMENT/bin/python"
+export GAP_BIN="$GAP_WORK/build/bin"
+
+cmake -S . -B "$GAP_WORK/build" \
+  -DCMAKE_BUILD_TYPE=Release -DGGML_CUDA=ON \
+  -DBUILD_SHARED_LIBS=ON -DLLAMA_BUILD_SERVER=OFF
+cmake --build "$GAP_WORK/build" --target llama-reference llama-vlm-kld -j8
 ```
 
-The validated Python environment uses Python 3.12.3, NumPy 2.5.2, datasets 5.0.1, Pillow 12.3.0, huggingface-hub 1.30.0 and PyArrow 25.0.1. SciPy 1.18.1 is a runtime dependency for statistics. Development checks use pytest 9.1.1 and pytest-timeout 2.4.0. Direct dependencies are pinned in `pyproject.toml`; `uv.lock` pins transitive dependencies. `--locked` refuses a lockfile that no longer matches the project rather than silently changing its resolution ([uv documentation](https://docs.astral.sh/uv/concepts/projects/sync/)).
+The two executables are defined in [CMakeLists.txt](CMakeLists.txt). Keep their shared libraries with the build. Collection records the executed binary and loaded-library hashes, so use the same build throughout a candidate comparison.
 
-For local CPU statistics and tests, run `uv sync --python 3.12 --locked --group dev` from `tools/gap`. With `UV_PROJECT_ENVIRONMENT` unset, this creates `.venv`; use `.venv/bin/python` or activate it with `source .venv/bin/activate`.
-
-Student-t tests, distribution functions, percentile/BCa intervals and Wilson intervals use SciPy. Holm/BH/BY corrections use statsmodels. Function docstrings carry API references; [statistical APIs and verification](docs/statistical-apis.md) records MATLAB, Julia and Wolfram correspondences and independent checks. Token-weighted results are descriptive only.
-
-The KLD acceptance environment used CUDA 13.2.51 and an RTX PRO 6000 Blackwell Server Edition. Python pins do not pin CUDA, compiler flags, model files or GPU behavior: retain native binary/backend hashes and runtime metadata with every study. The optional `hf-tokenizer` extra is for legacy HF/vLLM references and was not used by the native reference/KLD run; its lockfile entries are not evidence of native-run validation. `scripts/setup.sh` automates setup and checks; inspect its options before running it.
-
-## 1. Generate reference answers
-
-Choose the matching profile explicitly; there is no implicit six-model production profile. The [profile index](profiles/README.md) lists model groups, supported modes and cohort limits. `pilot100` and `collect500` use different generation caps. Image-token bounds are omitted so generation uses the mmproj defaults. Generation parallelism comes from each validated profile; KLD uses one sequence.
-
-This command generates one Qwen3.5-4B pilot subset locally. Models must already be present under `--models-dir` with the profile's relative filenames.
+The metric-kernel self-test can check the scorer without loading model weights:
 
 ```bash
-"$COMPANY_PYTHON" tools/gap/cli/run_reference_campaign.py \
-  --profiles tools/gap/profiles/small-pilot100.json \
-  --models qwen3.5-4b --modes instruct --sources mmstar \
-  --size 100 --gpus 0 --models-dir "$HOME/models" \
-  --llama-reference "$COMPANY_WORK/build/bin/llama-reference" \
-  --out "$COMPANY_WORK/reference/qwen35-pilot-v1" --no-upload
+"$GAP_BIN/llama-vlm-kld" --self-test
 ```
 
-Remove the model/mode/source filters to collect the selected profile's complete supported set. Add `--dry-run` to inspect the plan first. For 500 questions, choose `small-collect500.json`, `--size 500` and a new study directory. Run the SNR decision groups before the final-evaluation group within each cohort. Pilot rows may overlap the 500-question cohort; they are not an independent confirmation set.
+Generation loads the reference model and its projector. Collection loads the reference and candidate models, both projector instances, and their context buffers together. Choose a GPU with enough memory for that pair. Run one collection process per GPU.
 
-Each campaign freezes scripts, profiles, source provenance and its plan. Successful attempts contain `dataset/`, `metadata.json`, `complete.json`, `run_state.json`, `requests.jsonl`, `excluded.jsonl` and `failures.jsonl`. Preserve the whole attempt. Repetition removes an entire row; context failures are recorded without replacement. Non-repetitive answers reaching the generation cap remain eligible and are marked as capped.
+## 2. Prepare source data and model files
 
-Publication uses `cli/upload_reference.py` or the campaign's upload option, verifies the generated data, and sets the HF dataset **private**. The namespace is `<model>-pilot` or `<model>-collect-500`; configs are `<source>-subsample-<100|500>-<ins|think>`, split `train`. Do not reuse a remote config for different content. See [reference generation](docs/reference.md) for upload, MTP, resumption and single-job commands.
+Use a local Hugging Face Datasets directory created with `Dataset.save_to_disk()` or `DatasetDict.save_to_disk()`. For a `DatasetDict`, the commands below select its `train` split. The source contains questions and images; the next step adds the reference responses.
 
-## 2. Collect VLM-KLD on frozen answers
+| Column | Expected contents |
+| --- | --- |
+| `question` | A string containing one user question. It may be empty when images are present. |
+| `images` | An ordered list of encoded images, represented as `Sequence(Image(decode=False))`. Embed the original image bytes for a portable dataset. |
+| `item_id` | Recommended: a unique string using letters, digits, `.`, `_` and `-`, excluding `.` and `..` as entire IDs. |
 
-All candidates for the same base checkpoint use the same reference dataset and scoring runtime. The scorer loads reference and candidate together, prefills the same prompt/images, then teacher-forces the saved continuation tokens. It computes full-vocabulary metrics while logits are in memory and saves metric records, not full logits. Native reference token IDs, original image content and vocabulary mapping are checked before scoring.
+The generator uses `item_id`, then `id`, then a generated row index as its identifier. It accepts `--question-column`, `--images-column` and `--id-column` for other column names. Rows with neither question text nor images are rejected. Images precede the question in the rendered user message; preserve their order and original encoded bytes.
 
-Use a separate KLD study and a stable candidate label. `REFERENCE_DATASET` points to a completed attempt's local `dataset/` directory; `CANDIDATE_GGUF` points to the candidate file, or the first shard for a split model.
+Set the actual dataset and model paths:
 
 ```bash
-export REFERENCE_DATASET=/path/to/completed/attempt-0001/dataset
-export CANDIDATE_GGUF=/path/to/qwen35-q4_0.gguf
-"$COMPANY_PYTHON" tools/gap/cli/collect_model_kld.py \
-  --profiles tools/gap/profiles/small-pilot100.json \
-  --study "$COMPANY_WORK/vlm-kld/qwen35-pilot-v1" --size 100 \
-  --model qwen3.5-4b --source mmstar --mode instruct \
-  --candidate bartowski-Q4_0 --cand-model "$CANDIDATE_GGUF" \
-  --dataset "$REFERENCE_DATASET" --models-dir "$HOME/models" --gpu 0 \
-  --llama-vlm-kld "$COMPANY_WORK/build/bin/llama-vlm-kld"
+export SOURCE_DATASET=/path/to/prepared-source-dataset
+export REF_MODEL=/path/to/reference-bf16.gguf
+export REF_MMPROJ=/path/to/reference-mmproj.gguf
+export CAND_MODEL=/path/to/candidate-quantized.gguf
+export CAND_MMPROJ=/path/to/candidate-mmproj.gguf
+export CUDA_VISIBLE_DEVICES=0
 ```
 
-Repeat with the other candidate path and label in the same KLD study. The helper chooses the recorded profile runtime and reference BF16 projector. Native KLD remains autoregressive even if reference generation used MTP. Threads and metric threads are 8, flash attention is enabled, all layers are offloaded and `swa_full` is false; architecture-defined sliding-window attention is not removed. Context and ubatch are model-specific. See [collection](docs/collect.md) and [VLM-KLD handover](docs/vlm-kld.md) for direct flags, capacity and permitted vocabulary-attribute differences.
+If a prepared dataset is not available, the following example creates a one-question dataset at `SOURCE_DATASET`, which must be a new directory. Replace the image path and question, and extend `rows` with the intended evaluation inputs. Skip this block when using an existing dataset.
 
-## 3. Collect the text PPL / LLM-KLD bridge
+```bash
+"$GAP_PYTHON" - <<'PY'
+import os
+from pathlib import Path
+from datasets import Dataset, Features, Image, Sequence, Value
 
-This branch uses a frozen text corpus, not VLM-generated answers. Follow [the text bridge guide](docs/text-bridge.md) for WikiText-2 or the full corpus from `scripts/get-pg.sh` and the numbered text-bridge wrapper.
+rows = [{
+    "item_id": "sample-0001",
+    "question": "What is shown in the image?",
+    "images": [{"bytes": Path("/path/to/image.png").read_bytes(), "path": None}],
+}]
+features = Features({
+    "item_id": Value("string"),
+    "question": Value("string"),
+    "images": Sequence(Image(decode=False)),
+})
+Dataset.from_list(rows, features=features).save_to_disk(os.environ["SOURCE_DATASET"])
+PY
+```
 
-Freeze corpus bytes and article boundaries before tokenization. Both tools use the same native tokenizer, BOS handling, 512-token windows and target positions 257 through 511 (255 targets). Use `-c 512 -b 512 -ub 512`, one sequence, matching thread counts and runtime. The saved llama-perplexity base is quantized; full-distribution LLM-KLD metrics provide the precision bridge. Save both PPL logs, the reference logits base, the prepared corpus and each candidate's complete metric collection. VLM context settings do not need to match this 512-token protocol.
+Supply a reference GGUF supported by this checkout and its matching vision projector, plus a candidate derived from the same base checkpoint and the candidate's own matching projector. Use `REF_MODEL` and `REF_MMPROJ` for reference generation and the reference side of collection. Use `CAND_MODEL` and `CAND_MMPROJ` for the candidate side of collection. For split GGUF models, supply the first shard and keep all shards together. Preserve complete checksums and source versions for all model files and the input dataset.
 
-## Keep studies ready for analysis
+The models must share the vocabulary type, size and token-ID-to-text mapping. The scorer also checks token attributes. An equal vocabulary size alone is insufficient. These native reference trajectories use GGUF tokenization and the saved prompt; the optional `hf-tokenizer` dependency is unnecessary for this workflow.
 
-Use a new study ID when changing the reference, profile, corpus, native build, runtime or collection horizon. Keep each base checkpoint, reference mode/strength, cohort and subset identifiable. Candidate labels must include the provider when filenames alone are ambiguous.
+## 3. Generate the reference dataset
+
+Choose the context, batch sizes, generation cap and sampling settings for the selected model and evaluation protocol. The following values are an example configuration, not model-specific reproduction settings. The context must fit each multimodal prompt plus its generation allowance. Complete non-causal image chunks must fit both batch and microbatch sizes; increase these values when the model's image layout requires it.
+
+```bash
+export N_CTX=32768
+export N_BATCH=2048
+export N_UBATCH=2048
+export N_THREADS=8
+export GEN_TOKENS=1024
+export REFERENCE_RUN="$GAP_WORK/reference/run-001"
+
+"$GAP_PYTHON" tools/gap/cli/generate_reference.py \
+  --dataset "$SOURCE_DATASET" --split train \
+  --out "$REFERENCE_RUN" \
+  --llama-reference "$GAP_BIN/llama-reference" \
+  --no-enable-thinking -- \
+  -m "$REF_MODEL" --mmproj "$REF_MMPROJ" \
+  -ngl all -c "$N_CTX" -b "$N_BATCH" -ub "$N_UBATCH" \
+  -t "$N_THREADS" -tb "$N_THREADS" -np 1 -fa on --fit off \
+  -ctk f16 -ctv f16 -n "$GEN_TOKENS" \
+  --seed 1234 --temp 1.0 --top-p 0.95 --top-k 64 --min-p 0.0
+```
+
+`REFERENCE_RUN` must not already exist. Python driver options precede `--`; native model and sampling options follow it. This example uses one sequence and autoregressive generation. Adapt sampling settings to the protocol and retain the recorded effective sampler settings. For a model/template with thinking support, replace `--no-enable-thinking` with `--enable-thinking` when required; thinking tokens remain part of the trajectory and count toward the generation cap. An optional `--system-prompt` belongs before `--`.
+
+For an initial small run, add `--num-samples 2` before `--` and use a separate output directory. It selects the first two source rows. Create a fresh directory for the full run.
+
+| Output under `REFERENCE_RUN` | Contents |
+| --- | --- |
+| `dataset/` | Eligible reference rows, including the prompt, original images and full token sequence. Absent if no rows are eligible. |
+| `metadata.json` | Effective runtime, sampling, model identities and cohort counts. |
+| `complete.json`, `run_state.json` | Completion status and eligible/excluded/failed row accounting. |
+| `requests.jsonl`, `inputs/` | Prepared requests and original encoded input images. |
+| `excluded.jsonl`, `failures.jsonl` | Repetition exclusions and generation/preparation failures. |
+| `attempts/`, `scripts/` | Native attempt logs/results and a snapshot of the generator sources. |
+
+Check `complete.json` before collecting metrics. Require `status` to be `complete`, `rows` to be positive, and `dataset/` to exist. The driver can finish with `complete_with_failures`; a successful process exit or the presence of `complete.json` alone does not prove every requested row succeeded. Resolve failures before a full-cohort collection and retain their original records.
+
+Repetition detection excludes an entire row and records the reason. Failed and excluded rows are not replaced automatically. Non-repetitive responses that reach the generation cap remain eligible and are marked `truncated_by_cap`. Preserve these counts and the selected row identities with the experiment.
+
+The native schema is defined in [lib/reference_dataset.py](lib/reference_dataset.py) and [lib/reference_contract.py](lib/reference_contract.py). `input_ids[n_prefill_tokens:]` is the frozen response trajectory, including any generated end-of-generation token. The dataset also retains the exact rendered prompt, image layout, vocabulary identity and raw reference token log-probabilities. Keep the full generated dataset intact for collection.
+
+## 4. Collect VLM KLD along the response trajectory
+
+For each saved response position, both models receive the same prompt, images and preceding reference tokens. The collector compares their full-vocabulary next-token distributions using teacher forcing. The candidate does not generate a separate response. Forward KLD is `KL(p_reference || p_candidate)` in nats at each scored response position.
+
+```bash
+export REFERENCE_DATASET="$REFERENCE_RUN/dataset"
+export COLLECTION_OUT="$GAP_WORK/metrics/candidate-001"
+export SCORING_CAP=-1
+export TF_CHUNK=2048
+
+"$GAP_PYTHON" tools/gap/cli/collect_kld.py \
+  --dataset "$REFERENCE_DATASET" --subset '' --split train \
+  --ref-model "$REF_MODEL" --ref-mmproj "$REF_MMPROJ" \
+  --cand-model "$CAND_MODEL" --cand-mmproj "$CAND_MMPROJ" \
+  --llama-vlm-kld "$GAP_BIN/llama-vlm-kld" \
+  --out "$COLLECTION_OUT" --sort-by num_images \
+  --n-ctx "$N_CTX" --n-batch "$N_BATCH" --n-ubatch "$N_UBATCH" \
+  --tf-chunk "$TF_CHUNK" --n-threads "$N_THREADS" \
+  --metric-threads "$N_THREADS" --n-gpu-layers -2 --flash-attn \
+  --num-eval-tokens "$SCORING_CAP"
+```
+
+`SCORING_CAP=-1` scores all saved response tokens. A positive value scores at most that many response tokens per item. Shorter responses retain their actual lengths. Collection cannot extend a saved trajectory. Keep the same scoring horizon and teacher-forcing chunk size for every candidate; changing batch shapes can change floating-point results.
+
+The command uses one sequence, F16 KV caches and all supported GPU layers (`--n-gpu-layers -2`). Image-token limits are omitted so the collector adopts the reference dataset's recorded image policy. Prefix/image-position mismatches and vocabulary mismatches are rejected by default. Keep the same context, batch sizes, threads, image policy, flash-attention setting and native build across candidates. If a runtime change is necessary, collect all affected candidates into new output directories using the revised configuration.
+
+For an examined conversion that changes only vocabulary attributes, `--allow-vocab-attr-mismatch` permits those attribute differences while retaining the exact token-text mapping checks. Record and apply that choice consistently across the candidate family. It cannot make different tokenizations compatible.
+
+Use a fresh `COLLECTION_OUT` for each run. For a small collection check, add `--dataset-limit 2` and use a separate output directory. Row selection occurs after the requested sorting. For each additional candidate, set its `CAND_MODEL`, matching `CAND_MMPROJ` and a new `COLLECTION_OUT`, then repeat the command with the same frozen reference inputs and runtime. Use a new output directory after a failed or interrupted collection.
+
+### Completion and saved metrics
+
+A completed collection has a successful collector exit, a reconciled manifest, and `.attempts/*/state.json` records in the `completed` state for the declared work. The command above requests all eligible reference rows without a budget filter: every manifest row should have `status=OK`, the row count should match `complete.json`'s `rows`, and each row should have a corresponding metric file. `FAIL_*` statuses, unfinished attempts, or `.bin.rejected` files mean the collection is incomplete. Review `logs/kld_run.log` and retain failed output for diagnosis.
 
 ```text
-$COMPANY_WORK/
-  reference/<study-id>/
-    plan.json, study.json, status.json
-    scripts/                                  Frozen code, profile and provenance
-    artifacts/<model>/<subset>/attempt-0001/   Complete reference attempt
-  vlm-kld/<study-id>/
-    scripts/, plan.json, study.json
-    artifacts/<model>/<subset>/kld/<candidate>/
-      collect_meta.json
-      manifest.csv
-      metrics/<item-key>.npz
-  text/<corpus-revision>/<base-checkpoint>/
-    prepared/                                 Corpus, tokens, windows and article mapping
-    ppl/                                      Reference logits and per-candidate logs
-    kld/<candidate>/                          Complete LLM metric collection
-  analysis/<comparison-id>/
-    paired-window.md, paired-window.json
-    paired-article.md, paired-article.json
-    power.md, power.json
+COLLECTION_OUT/
+  collect_meta.json
+  manifest.csv
+  metrics/<row-index>_<item-id>.npz
+  logs/kld_run.log
+  .attempts/<attempt-id>/
+    request.json
+    state.json
+    statuses.jsonl
+    references.jsonl
+    generators/
 ```
 
-The reference and VLM paths above are launcher output layouts. The text and analysis parents are a naming convention you choose through output arguments. Retain all collection contents: copying only `metrics/*.npz` loses the provenance and completion checks needed by the statistical tools. Do not rename metric stems or infer pairings from filesystem order. Pairing uses exact stored identities and target alignment; directory names are for navigation.
+The collector validates the native metric version, vocabulary size, prefill and target counts, exact target token IDs, and finite metric values before converting each native `.bin` file to `.npz`. Successful conversion preserves the arrays and removes the intermediate `.bin`. Keep the entire collection, including hidden `.attempts/` records and `collect_meta.json`; metric files alone lose the completion and provenance evidence.
 
-Record source revision, subset/split, model/provider hashes, semantic mode, generation cap, scoring horizon, runtime and exclusions with the study. Keep article/window maps and related-source IDs. Article or block aggregation changes the unit of analysis, but does not prove independent sampling. Do not pool different strengths or unrelated corpora into one comparison merely because the directories have similar names.
+The current VLMK v5 output contains one value per scored response token for each metric:
 
-## 4. Run statistics
+| NPZ fields | Meaning |
+| --- | --- |
+| `kld`, `reversed_kld`, `js_kld` | Forward KL, reverse KL and Jensen-Shannon divergence, in nats. |
+| `nll_ref`, `nll_cand` | Negative log-probability of the saved target token under each model. |
+| `entropy_ref`, `entropy_cand` | Full-vocabulary entropy of each distribution, in nats. |
+| `ear` | Expected acceptance rate, `sum_v min(p_reference(v), p_candidate(v))`. |
+| `ear_5`, `ear_10`, `ear_20`, `ear_64` | EAR mass restricted to the reference's top-K tokens. |
+| `ear_5_normalized`, `ear_10_normalized`, `ear_20_normalized`, `ear_64_normalized` | EAR after renormalizing both distributions over those reference top-K tokens. |
+| `target`, `argmax_ref`, `argmax_cand` | Saved target and each model's most likely token ID. |
 
-`A` and `B` must be completed collection directories for two candidates scored against the same reference. Example directories from the VLM command above:
+Header fields include `version`, `vocab`, `npos`, `n_prefill` and `n_past_actual`. Metric arrays have shape `(npos,)`; `npos` is the number of scored response positions. The calculations are in [core/company-vlmk-kernel.h](core/company-vlmk-kernel.h), and the format reader is [lib/kld_metrics_io.py](lib/kld_metrics_io.py).
+
+To inspect one completed file without aggregating the collection:
 
 ```bash
-export A="$COMPANY_WORK/vlm-kld/qwen35-pilot-v1/artifacts/qwen3.5-4b/mmstar-subsample-100-ins/kld/bartowski-Q4_0"
-export B="$COMPANY_WORK/vlm-kld/qwen35-pilot-v1/artifacts/qwen3.5-4b/mmstar-subsample-100-ins/kld/bartowski-Q4_1"
-export REPORTS="$COMPANY_WORK/analysis/qwen35-mmstar-pilot-q4_0-vs-q4_1"
-mkdir -p "$REPORTS"
-"$COMPANY_PYTHON" tools/gap/stats/cli/saved_metrics_paired_compare.py \
-  --candidate-a "$A" --candidate-b "$B" --ci-method t \
-  --out "$REPORTS/paired.md" --output-json "$REPORTS/paired.json"
+"$GAP_PYTHON" - <<'PY'
+import os
+from pathlib import Path
+import numpy as np
+
+path = sorted((Path(os.environ["COLLECTION_OUT"]) / "metrics").glob("*.npz"))[0]
+with np.load(path, allow_pickle=False) as metrics:
+    print(path.name)
+    print("positions:", int(metrics["npos"]))
+    print("KLD shape:", metrics["kld"].shape)
+    print("first target IDs:", metrics["target"][:5])
+    print("first KLD values:", metrics["kld"][:5])
+PY
 ```
 
-The default primary endpoint is item-weighted forward KLD with a paired Student-t confidence interval. For KLD, a negative mean difference B - A favors B. NLL, reverse KLD, JSD, EAR and other metrics have their own direction and interpretation; a lower KLD is fidelity to the reference, not answer accuracy.
-
-| Tool | Purpose | Key options |
-| --- | --- | --- |
-| `saved_metrics_paired_compare.py` | Paired differences, intervals, equivalence decisions and exploratory tails | `--metrics`, `--weighting`, `--ci-method`, `--equivalence-margin`, `--num-eval-tokens` |
-| Same comparison tool | Text-window, article or contiguous-block aggregation | `--unit window`, `--unit article`, `--unit block --block-windows 8` |
-| `campaign_compare.py` | Global quant-pair correction, cluster inference and training-only benchmark selection | `analyze` / `select`, `--manifest`, `--out`; [campaign design](docs/campaign-analysis.md) |
-| `reference_roster.py` | Verify native reference images and bind campaign roster fields to completed collection rows | `--reference`, `--collection`, `--out`; [roster preparation](docs/campaign-analysis.md#verified-reference-rosters) |
-| `power_analysis.py` | Prospective sample-size/token-cap planning; plug-in precision and Gaussian directional MDE without an assumed effect | `--token-caps`, `--sample-sizes`, `--sesoi`, `--reps`, `--outer-reps` |
-| `variance_decomposition.py` | Observed prefix length, effect and variance diagnostics | `--metric kld`, `--num-eval-tokens`, `--output-json` |
-| `random_subsample_power.py` | Verdict stability within an already observed finite pilot | `--mode reproducibility`, `--sizes`, `--reps` |
-
-For an LLM corpus comparison, use the same comparison command with the two text collection paths and `--unit article`, or `--unit block --block-windows 8`. Article/block analysis needs complete original windows; do not truncate those windows with an answer-prefix flag.
-
-A prospective planning example for a study whose saved horizon is at least 128 tokens:
-
-```bash
-"$COMPANY_PYTHON" tools/gap/stats/cli/power_analysis.py \
-  --candidate-a "$A" --candidate-b "$B" --metric kld --weighting item \
-  --token-caps 32 64 128 --sample-sizes 50 100 200 \
-  --sesoi=-0.0001 --reps 2000 --outer-reps 200 \
-  --out "$REPORTS/power.md" --output-json "$REPORTS/power.json"
-```
-
-The example SESOI is illustrative: choose a scientifically meaningful effect before interpreting prospective power. Omitting `--sesoi` gives precision/MDE planning. Finite-pilot reproducibility and observed-effect variance diagnostics do not estimate fresh-sample power. Prefixes only use existing positions; early EOS does not become zero-padded data. Read [statistics](docs/compare.md) for metrics, weighting, confidence methods, Holm adjustment and grouping, and [power planning](docs/power-analysis.md) for assumptions and limitations.
-
-## Validate and migrate
-
-```bash
-CUDA_VISIBLE_DEVICES='' COMPANY_TEST_BIN="$COMPANY_WORK/build/bin" \
-  "$COMPANY_PYTHON" -m pytest tools/gap/tests \
-  -q -m 'not external_model' --basetemp "$COMPANY_WORK/pytest-check"
-```
-
-Use a dedicated `--basetemp`: pytest clears that directory. Native integration checks require built binaries; external-model checks require model/data assets. Functional GPU helpers live in `verify_and_validation_scripts/`. Preserve numerical reduction order, RNG order, metric layout and report semantics during refactoring; the independent oracle and exact fixtures enforce [NUMERICAL_CONTRACT.md](NUMERICAL_CONTRACT.md).
-
-Version 0.2.0 moves C++ sources into `core/`, `compare/` into `stats/`, the four analysis commands into `stats/cli/`, and `review-functionality/` into `verify_and_validation_scripts/`. Workflow names and profile paths changed too. Existing reference datasets keep their format. Existing campaign archives remain immutable: resume them with their original archived code, or start a new study using their validated local dataset. Do not rewrite old archives to resemble a new release.
-
-For implementation review, follow the [architecture and invariant map](docs/architecture.md).
+These values measure fidelity to the reference model along its saved response trajectory. They do not measure task-answer accuracy. At this point, the complete metric collection is ready for downstream use.
