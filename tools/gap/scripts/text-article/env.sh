@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Runtime of the per-article text collection. Sourced by lib.sh (and directly by tests); prints nothing.
 # The collection settings follow the VLM main collection (collect_meta.json of every artifacts-collect-400 collection):
-# n_ctx 32768, n_batch 2048, tf_chunk 2048, 8 threads, 12 metric threads, all layers on the GPU, flash attention, no full
-# SWA cache, every answer token scored; n_ubatch 2048 for gemma-4-31b-it and 512 for every other model (ubatch_for).
+# n_ctx 32768, n_batch 2048, tf_chunk 2048, 8 threads, all layers on the GPU, flash attention, no full SWA cache, every
+# answer token scored; n_ubatch 2048 for gemma-4-31b-it and 512 for every other model (ubatch_for).
+# Exception: 16 metric threads instead of the VLM main collection's 12 (user decision 2026-10-03).
 
 _TA_SCRIPTS=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 
@@ -37,7 +38,7 @@ export N_CTX=32768          # longest article is about 18k tokens
 export N_BATCH=2048
 export TF_CHUNK=2048
 export N_THREADS=8
-export METRIC_THREADS=12
+export METRIC_THREADS=16    # records do not depend on it (metric self-test: parallel == serial)
 export N_GPU_LAYERS=-2      # llm-kld spelling of "all layers"
 
 # ubatch_for MODEL -> the VLM main collection's n_ubatch of that checkpoint

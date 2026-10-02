@@ -22,7 +22,7 @@ VOCABULARY = {
 }
 RUNTIME = {
     "n_ctx": 32768, "n_batch": 2048, "n_ubatch": 512, "tf_chunk": 2048,
-    "n_threads": 8, "metric_threads": 12, "n_gpu_layers": -2,
+    "n_threads": 8, "metric_threads": 16, "n_gpu_layers": -2,
 }
 CHECKS = ("manifest", "metrics_files", "lengths", "finite", "targets", "runtime", "reference_parity", "zero_kld")
 MODELS = (

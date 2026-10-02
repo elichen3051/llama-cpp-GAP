@@ -14,8 +14,9 @@ of the tokens; windows cross article boundaries). The old protocol and its tools
   appends anything else (EOS) is refused.
 - Scoring through the generic `cli/collect_llm_kld.py` path with `n_prefill = 1`: the logits of position 0 score token 1,
   teacher forcing scores tokens 2 … L − 1, so an article of L tokens gives L − 1 records.
-- Runtime of the VLM main collection: `n_ctx 32768`, `n_batch 2048`, `tf_chunk 2048`, 8 threads, 12 metric threads, all
-  layers on the GPU, flash attention, no full SWA cache, `n_ubatch` 2048 for `gemma-4-31b-it` and 512 otherwise (`env.sh`).
+- Runtime of the VLM main collection: `n_ctx 32768`, `n_batch 2048`, `tf_chunk 2048`, 8 threads, all layers on the GPU,
+  flash attention, no full SWA cache, `n_ubatch` 2048 for `gemma-4-31b-it` and 512 otherwise (`env.sh`); one exception,
+  16 metric threads instead of the VLM main collection's 12 (user decision 2026-10-03).
 
 ## Stages
 

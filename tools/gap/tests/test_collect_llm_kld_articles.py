@@ -90,7 +90,7 @@ def test_article_collection_generic_manifest_metrics_and_runtime(tmp_path, monke
     }
     assert {key: meta[key] for key in expected} == expected
     native = json.loads((tmp_path / "scorer-argv.json").read_text())
-    flags = {"-c": 32768, "-b": 2048, "-ub": ubatch, "--tf-chunk": 2048, "-t": 8, "--metric-threads": 12, "-ngl": -2, "--num-eval-tokens": -1}
+    flags = {"-c": 32768, "-b": 2048, "-ub": ubatch, "--tf-chunk": 2048, "-t": 8, "--metric-threads": 16, "-ngl": -2, "--num-eval-tokens": -1}
     for flag, value in flags.items():
         assert native.count(flag) == 1
         assert native[native.index(flag) + 1] == str(value)

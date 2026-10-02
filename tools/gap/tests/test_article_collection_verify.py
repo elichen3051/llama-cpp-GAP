@@ -530,7 +530,7 @@ def test_stage_env_constants_and_ubatch_for(tmp_path, model):
     command = 'source "$1"; printf "%s\\n" "$N_CTX" "$N_BATCH" "$TF_CHUNK" "$N_THREADS" "$METRIC_THREADS" "$N_GPU_LAYERS"; ubatch_for "$2"'
     result = subprocess.run(["bash", "-c", command, "article-test", str(script), model],
                             cwd=tmp_path, env=stage_env(tmp_path), capture_output=True, text=True, timeout=10)
-    assert result.stdout.splitlines()[:6] == ["32768", "2048", "2048", "8", "12", "-2"]
+    assert result.stdout.splitlines()[:6] == ["32768", "2048", "2048", "8", "16", "-2"]
     if model == "unknown-model":
         assert result.returncode != 0
     else:
