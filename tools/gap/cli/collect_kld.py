@@ -389,8 +389,10 @@ class _PrepState:
 
 def _prep(args, row, prep_dir, state):
     import cli.prep_vlm_score_from_hf as prep_lib
+    from lib import derived_corpus
     raw_images = None
-    if prep_lib.is_llamacpp_row(row):
+    derived = derived_corpus.is_derived_row(row)
+    if derived or prep_lib.is_llamacpp_row(row):
         if state.raw_images is None:
             if state.dataset is None:
                 raise prep_lib.PrepError(
@@ -403,7 +405,10 @@ def _prep(args, row, prep_dir, state):
         if model_name not in state.tok_cache:
             state.tok_cache[model_name] = prep_lib.load_tokenizer(model_name)
         tok = state.tok_cache[model_name]
-    if raw_images is None:
+    if derived:
+        # Derived corpora: checked against their corpus_protocol, then scored like a llama.cpp row.
+        meta = derived_corpus.write_prep(row, prep_dir, raw_images)
+    elif raw_images is None:
         meta = prep_lib.prep_row(row, tok, prep_dir)
     else:
         meta = prep_lib.prep_row(row, tok, prep_dir, raw_images=raw_images)

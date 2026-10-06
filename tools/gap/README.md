@@ -223,3 +223,48 @@ PY
 ```
 
 These values measure fidelity to the reference model along its saved response trajectory. They do not measure task-answer accuracy. At this point, the complete metric collection is ready for downstream use.
+
+## 5. Derived corpora: another model's answers under the tested model's prompt
+
+A derived corpus replays one model's reference answers (the source) through a tested model, under the tested model's own prompt. Both inputs are native reference datasets of the same subset, with the same items, questions and images. `--source` gives the answers; `--target` gives the tested model's own prompt, image layout and prefix token IDs. The output `dataset/` is collected with `collect_kld.py` exactly as in step 4: each derived row records how it was made in `corpus_protocol`, and the collector checks the row against it before scoring.
+
+| Kind | When | Answer tokens |
+| --- | --- | --- |
+| `same-family` | Source and tested model share one vocabulary (for example qwen3.6-35b-a3b answers for qwen3.5-4b). | Copied unchanged, including reasoning markers and end-of-turn tokens. |
+| `cross-family` | Thinking subsets with different families (Qwen <-> Gemma; Kimi-VL, GLM-4.6V, InternVL3.5 or Muse answers for Qwen or Gemma). | Rewritten in the tested model's thinking format and tokenized with its tokenizer. |
+
+The cross-family conversion ([lib/thinking_trajectory.py](lib/thinking_trajectory.py)) splits the source answer into reasoning and final answer at the source model's native markers, then writes them in the tested format:
+
+```text
+Qwen:   {reasoning}\n</think>\n\n{answer}<|im_end|>      (the Qwen thinking prompt already ends with "<think>\n")
+Gemma:  <|channel>thought\n{reasoning}\n<channel|>{answer}<turn|>
+```
+
+Only the structural markers are special tokens; reasoning and answer bytes are kept and encoded as ordinary text. The end-of-turn token is added only when the source stopped at EOS. Reasoning cut by the generation limit stays open: no closing marker or answer is added. For every row, the tested model's GGUF chat template renders the same reasoning and answer, and the converted text must equal that rendering; segmented tokenization must equal whole-text tokenization and decode back to the same bytes. Source rows that need an exception (a quoted marker kept as text, a direct answer, open reasoning at EOS) are listed in [lib/thinking_source_exceptions.json](lib/thinking_source_exceptions.json), keyed by the SHA256 of the source text; any other unusual row is rejected.
+
+Build the vocabulary-only helper together with the scorer:
+
+```bash
+cmake --build "$GAP_WORK/build" --target llama-trajectory -j8
+```
+
+Cross-family preparation reads the tested model's GGUF (the BF16 reference that generated `--target`) for its template and tokenizer; it loads no weights and runs on the CPU:
+
+```bash
+"$GAP_PYTHON" tools/gap/cli/prepare_derived_corpus.py cross-family \
+  --source /path/to/gemma-4-e4b-it/mmstar-subsample-100-think/dataset --source-model gemma-4-e4b-it \
+  --target /path/to/qwen3.5-4b/mmstar-subsample-100-think/dataset --target-model qwen3.5-4b \
+  --target-gguf "$REF_MODEL" --subset mmstar-subsample-100-think \
+  --llama-trajectory "$GAP_BIN/llama-trajectory" \
+  --out "$GAP_WORK/derived/qwen3.5-4b--on--gemma-4-e4b-it--mmstar-subsample-100-think"
+
+"$GAP_PYTHON" tools/gap/cli/prepare_derived_corpus.py same-family \
+  --source /path/to/qwen3.6-35b-a3b/mmstar-subsample-100-think/dataset --source-model qwen3.6-35b-a3b \
+  --target /path/to/qwen3.5-4b/mmstar-subsample-100-think/dataset --target-model qwen3.5-4b \
+  --subset mmstar-subsample-100-think \
+  --out "$GAP_WORK/derived/qwen3.5-4b--on--qwen3.6-35b-a3b--mmstar-subsample-100-think"
+```
+
+`--source` and `--target` accept a `save_to_disk` directory, a Parquet file, or `hf://<repo>@<revision>` (which reads `<subset>/train-00000-of-00001.parquet`). Native datasets written before the tool namespace was renamed carry the earlier schema name; set `LEGACY_REFERENCE_SCHEMA=1` to accept them (the row contract is unchanged). If a source item has no row in `--target`, pass the tested model's instruct dataset as `--target-instruct` (with `--target-gguf`): its prompt is rendered again with thinking enabled, and the rebuild is accepted only if it reproduces every existing thinking row's prompt, prefix token IDs and image layout exactly.
+
+The output directory holds `dataset/`, `freeze-receipt.json` and, for cross-family, the inspectable intermediates: `trajectories.jsonl` (converted segments), `template-requests.jsonl` / `template-rendered.jsonl` (native template oracle) and `tokenized.jsonl`. Then collect it with step 4, using `--dataset "$OUT/dataset"` and the tested model's reference and candidates.

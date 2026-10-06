@@ -25,3 +25,11 @@ target_compile_features(llama-reference PRIVATE cxx_std_17)
 if (LLAMA_TOOLS_INSTALL)
     install(TARGETS llama-reference RUNTIME)
 endif()
+
+# Derived corpora: native chat-template rendering and segmented tokenization (vocabulary only).
+add_executable(llama-trajectory core/trajectory.cpp)
+target_link_libraries(llama-trajectory PRIVATE llama-common)
+target_compile_features(llama-trajectory PRIVATE cxx_std_17)
+if (LLAMA_TOOLS_INSTALL)
+    install(TARGETS llama-trajectory RUNTIME)
+endif()

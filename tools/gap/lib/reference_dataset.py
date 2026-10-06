@@ -3,6 +3,7 @@
 import hashlib
 import json
 import math
+import os
 from numbers import Real
 from pathlib import Path
 
@@ -10,6 +11,17 @@ from lib.reference_contract import GTContractError, validate_gt_row
 from lib.model_files import model_files, sha256_file
 
 SCHEMA_VERSION = "company-reference-v2"
+# LEGACY_REFERENCE_SCHEMA=1 accepts native rows stored before the tool namespace was renamed: the same v2
+# row contract under its earlier name, identified here by SHA256 only.
+LEGACY_SCHEMA_ENV = "LEGACY_REFERENCE_SCHEMA"
+LEGACY_SCHEMA_SHA256 = "e97fc8a4c01025c07505904ef87401e8df022662e6c281a58a2889a0df5db328"
+
+
+def schema_supported(value):
+    if value == SCHEMA_VERSION:
+        return True
+    return (os.environ.get(LEGACY_SCHEMA_ENV) == "1" and isinstance(value, str)
+            and hashlib.sha256(value.encode()).hexdigest() == LEGACY_SCHEMA_SHA256)
 
 
 def canonical_json(value):
@@ -94,7 +106,7 @@ def build_row(source, request, result, metadata, images):
 def reference_provenance(row):
     if not row.get("generation_schema_version"):
         return {}
-    if row["generation_schema_version"] != SCHEMA_VERSION:
+    if not schema_supported(row["generation_schema_version"]):
         raise ValueError("native reference schema predates vocabulary identity; regenerate the reference")
     metadata = json.loads(row["generation_metadata"])
     vocabulary = metadata.get("vocabulary", {})
@@ -122,7 +134,7 @@ def reference_provenance(row):
 
 def validate_reference_row(row):
     violations = validate_gt_row(row)
-    if row.get("generation_schema_version") != SCHEMA_VERSION:
+    if not schema_supported(row.get("generation_schema_version")):
         violations.append("unsupported native reference schema")
     logprobs = row.get("generation_token_logprobs")
     if (not isinstance(logprobs, (list, tuple))

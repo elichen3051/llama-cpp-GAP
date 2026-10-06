@@ -1,0 +1,119 @@
+{
+  "note": "Reviewed source rows that the default thinking split rejects. pilot_literal_markers: pilot (Qwen/Gemma) sources, a quoted marker kept as reasoning text. source_rows: other sources, keyed by model/subset/id/text SHA256 and stop condition.",
+  "pilot_literal_markers": [
+    {
+      "model": "gemma-4-e4b-it",
+      "source": "ocrbench",
+      "id": "ocr-00068",
+      "source_text_sha256": "799b8868f4091202b71e79ffa17c46c9f71338b30fbf6b788c6a1c3bb59faa77",
+      "marker": "<|channel>",
+      "reason": "GPT-6-astra xhigh reviewed this quoted marker as literal reasoning content; retain bytes with parse_special=False"
+    },
+    {
+      "model": "gemma-4-e4b-it",
+      "source": "ocrbench-v2",
+      "id": "ocrv2-08626",
+      "source_text_sha256": "b41b5f86f8f67c52dfc8975dc5fb2fc225adfd17b70e7c91a69c2656df4d0974",
+      "marker": "<|channel>",
+      "reason": "GPT-6-astra xhigh reviewed this quoted marker as literal reasoning content; retain bytes with parse_special=False"
+    }
+  ],
+  "source_rows": [
+    {
+      "model": "internvl3.5-30b-a3b",
+      "subset": "blink-val-subsample-100-think",
+      "id": "val_Art_Style_89",
+      "text_sha256": "fd8b480b140b10b331ce560622e236f2524dc6b1cc65441698da5aa8b6452953",
+      "stop": [
+        "stop",
+        "eos"
+      ],
+      "action": "direct_answer",
+      "allow_qwen_literal_special": false
+    },
+    {
+      "model": "internvl3.5-30b-a3b",
+      "subset": "blink-val-subsample-100-think",
+      "id": "val_Visual_Similarity_14",
+      "text_sha256": "c14dd67b156e0de5fc8088f8c8166d2f18c648b7d904406d33d89d859175a1ce",
+      "stop": [
+        "stop",
+        "eos"
+      ],
+      "action": "direct_answer",
+      "allow_qwen_literal_special": false
+    },
+    {
+      "model": "internvl3.5-30b-a3b",
+      "subset": "ocrbench-v2-subsample-100-think",
+      "id": "ocrv2-08523",
+      "text_sha256": "7627b32a7165c7bad35d9129fc939084e4897b18d3e0fa19f382b18070035f9c",
+      "stop": [
+        "stop",
+        "eos"
+      ],
+      "action": "literal_markers",
+      "allow_qwen_literal_special": true
+    },
+    {
+      "model": "kimi-vl-a3b-thinking-2506",
+      "subset": "mmmu-pro-standard-10-subsample-100-think",
+      "id": "test_Manage_66",
+      "text_sha256": "63e366aabe17ece7c55fda645b36390d665276dbf4d6bbe08f71d034b607eb2d",
+      "stop": [
+        "stop",
+        "eos"
+      ],
+      "action": "literal_markers",
+      "allow_qwen_literal_special": true
+    },
+    {
+      "model": "muse-glimmer-30b",
+      "subset": "ocrbench-v2-subsample-100-think",
+      "id": "ocrv2-03803",
+      "text_sha256": "e41954de55378f2d335ff85947c0903868108d8b5a612782bf409254e8f50982",
+      "stop": [
+        "stop",
+        "eos"
+      ],
+      "action": "literal_markers",
+      "allow_qwen_literal_special": false
+    },
+    {
+      "model": "muse-glimmer-30b",
+      "subset": "ocrbench-v2-subsample-100-think",
+      "id": "ocrv2-06594",
+      "text_sha256": "3f3e5413365c76ca37d570e9da7c644499777a968154dc12db9b5e5d4461befc",
+      "stop": [
+        "stop",
+        "eos"
+      ],
+      "action": "literal_markers",
+      "allow_qwen_literal_special": false
+    },
+    {
+      "model": "internvl3.5-30b-a3b",
+      "subset": "mmmu-pro-standard-10-subsample-100-think",
+      "id": "test_Chemistry_560",
+      "text_sha256": "94cf4952af875e3200229502d1f62eab6942983c1c84212d12cde74bb7613f91",
+      "stop": [
+        "stop",
+        "eos"
+      ],
+      "action": "open_reasoning_eos",
+      "allow_qwen_literal_special": false
+    },
+    {
+      "model": "internvl3.5-30b-a3b",
+      "subset": "mmmu-pro-standard-10-subsample-100-think",
+      "id": "test_Physics_214",
+      "text_sha256": "4689cd8099d53b4a0ab56ff5dd6f02e057d7c915001398014c4cb4c7072f446c",
+      "stop": [
+        "stop",
+        "eos"
+      ],
+      "action": "open_reasoning_eos",
+      "allow_qwen_literal_special": false
+    }
+  ]
+}
